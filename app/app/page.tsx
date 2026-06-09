@@ -472,7 +472,7 @@ async function commitRename(id: string) {
                       ) : (
                         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                           <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, letterSpacing:1 }} className="sf-glow-c">{item.title}</div>
-                          <button className="sf-rename-btn" onClick={() => startRename(item)} title="Rename">✏</button>
+                          <button className="sf-rename-btn" onClick={() => { setRenamingId(item.id); setRenameVal(item.title) }} title="Rename">✏</button>
                         </div>
                       )}
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:4 }}>
