@@ -465,9 +465,9 @@ async function commitRename(id: string) {
                     <div style={{ flex:1, minWidth:180 }}>
                       {renamingId === item.id ? (
                         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                          <input ref={renameRef} className="sf-input" value={renameVal} onChange={e => setRenameVal(e.target.value)} onKeyDown={e => { if (e.key==='Enter') commitRename(item.id); if (e.key==='Escape') cancelRename() }} style={{ fontSize:15, padding:'6px 10px', fontFamily:"'Bebas Neue',sans-serif", maxWidth:260 }} />
+                          <input ref={renameRef} className="sf-input" value={renameVal} onChange={e => setRenameVal(e.target.value)} onKeyDown={e => { if (e.key==='Enter') commitRename(item.id); if (e.key==='Escape') { setRenamingId(null); setRenameVal('') } }} style={{ fontSize:15, padding:'6px 10px', fontFamily:"'Bebas Neue',sans-serif", maxWidth:260 }} />
                           <button onClick={() => commitRename(item.id)} style={{ background:C, color:'#06060c', border:'none', padding:'6px 12px', borderRadius:6, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>SAVE</button>
-                          <button className="sf-del-btn" onClick={cancelRename}>CANCEL</button>
+                          <button className="sf-del-btn" onClick={() => { setRenamingId(null); setRenameVal('') }}>CANCEL</button>
                         </div>
                       ) : (
                         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
