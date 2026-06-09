@@ -46,7 +46,7 @@ export default function LandingPage() {
     <div style={{ minHeight: '100vh', background: '#06060c', color: '#e8e8f0', fontFamily: 'system-ui, sans-serif', overflowX: 'hidden' }}>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap');
+       
         .sf-mono    { font-family: 'JetBrains Mono', monospace; }
         .sf-display { font-family: 'Bebas Neue', sans-serif; }
         .glow-c { text-shadow: 0 0 20px ${C}80; }

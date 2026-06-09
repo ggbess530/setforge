@@ -233,7 +233,7 @@ async function commitRename(id: string) {
   return (
     <div style={{ minHeight:'100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", overflowX:'hidden' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        
         .sf-glow-c  { text-shadow:0 0 8px ${C},0 0 24px ${C}80; }
         .sf-glow-m  { text-shadow:0 0 8px ${M},0 0 24px ${M}80; }
         .sf-input   { background:#0d0d18; border:1px solid #1f1f33; color:#e8e8f0; font-family:'JetBrains Mono',monospace; font-size:13px; padding:10px 12px; border-radius:8px; width:100%; outline:none; transition:.2s; box-sizing:border-box; }
