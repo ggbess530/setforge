@@ -193,23 +193,22 @@ export default function AppPage() {
     setDeleteConf(null)
   }
 
-  async function commitRename(id: string) {
-    const trimmed = renameVal.trim()
-    if (!trimmed) { cancelRename(); return }
-    try {
-      const res = await fetch(`/api/library/item?id=${id}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: trimmed }),
-      })
-      if (res.ok) {
-        setLibrary(prev => prev.map(s => s.id === id ? { ...s, title: trimmed } : s))
-        if (set?.title && renamingId === id) setSet(s => s ? { ...s, title: trimmed } : s)
-      }
-    } catch { /* non-fatal */ }
-    finally { cancelRename() }
-  }
-
+async function commitRename(id: string) {
+  const trimmed = renameVal.trim()
+  if (!trimmed) { setRenamingId(null); setRenameVal(''); return }
+  try {
+    const res = await fetch(`/api/library/item?id=${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed }),
+    })
+    if (res.ok) {
+      setLibrary(prev => prev.map(s => s.id === id ? { ...s, title: trimmed } : s))
+      if (set?.title && renamingId === id) setSet(s => s ? { ...s, title: trimmed } : s)
+    }
+  } catch { /* non-fatal */ }
+  finally { setRenamingId(null); setRenameVal('') }
+}
   // ── export ────────────────────────────────────────────────
   function exportText() {
     if (!set) return
