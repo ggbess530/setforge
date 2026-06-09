@@ -495,7 +495,7 @@ async function commitRename(id: string) {
                           <button className="sf-del-btn" onClick={() => setDeleteConf(null)}>NO</button>
                         </>
                       ) : (
-                        <button className="sf-del-btn" onClick={() => { setDeleteConf(item.id); cancelRename() }}>✕ DELETE</button>
+                        <button className="sf-del-btn" onClick={() => { setDeleteConf(item.id); setRenamingId(null); setRenameVal('') }}>✕ DELETE</button>
                       )}
                       <button onClick={() => loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'8px 16px', borderRadius:8, fontSize:12 }}>
                         {libLoading ? '…' : '▶ LOAD SET'}
