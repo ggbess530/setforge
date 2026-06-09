@@ -282,7 +282,7 @@ async function commitRename(id: string) {
                 <span style={{ color:C }}>{quota.remaining}</span> gens left
               </div>
             )}
-            <UserButton afterSignOutUrl="/" />
+            <UserButton />
           </div>
         </div>
       </nav>
