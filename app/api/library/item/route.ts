@@ -1,18 +1,23 @@
-// ▸ Place at: app/api/library/[id]/route.ts
+// ▸ Create folder: app/api/library/item/
+// ▸ Place at:      app/api/library/item/route.ts
+// ▸ DELETE the old app/api/library/[id]/ folder entirely
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 
-// Next.js 15+ — params is now a Promise, must be awaited
-type Params = { params: Promise<{ id: string }> }
+function getId(req: Request): string | null {
+  return new URL(req.url).searchParams.get('id')
+}
 
-// ── GET /api/library/[id] ─────────────────────────────────────
-export async function GET(_req: Request, { params }: Params) {
+// GET /api/library/item?id=xxx — load full set
+export async function GET(req: Request) {
   try {
-    const { id } = await params
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const id = getId(req)
+    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const db = createAdminClient()
     const { data: set, error } = await db
@@ -26,17 +31,19 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ set })
 
   } catch (err) {
-    console.error('[GET /api/library/[id]]', err)
+    console.error('[GET /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to load set.' }, { status: 500 })
   }
 }
 
-// ── PATCH /api/library/[id] — rename ─────────────────────────
-export async function PATCH(req: Request, { params }: Params) {
+// PATCH /api/library/item?id=xxx — rename set
+export async function PATCH(req: Request) {
   try {
-    const { id } = await params
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const id = getId(req)
+    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const { title } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'Title cannot be empty.' }, { status: 400 })
@@ -54,17 +61,19 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ set: updated })
 
   } catch (err) {
-    console.error('[PATCH /api/library/[id]]', err)
+    console.error('[PATCH /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to rename set.' }, { status: 500 })
   }
 }
 
-// ── DELETE /api/library/[id] ──────────────────────────────────
-export async function DELETE(_req: Request, { params }: Params) {
+// DELETE /api/library/item?id=xxx
+export async function DELETE(req: Request) {
   try {
-    const { id } = await params
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const id = getId(req)
+    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const db = createAdminClient()
     const { error } = await db
@@ -77,7 +86,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     return NextResponse.json({ deleted: true })
 
   } catch (err) {
-    console.error('[DELETE /api/library/[id]]', err)
+    console.error('[DELETE /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to delete set.' }, { status: 500 })
   }
 }

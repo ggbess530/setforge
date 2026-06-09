@@ -165,10 +165,12 @@ export default function AppPage() {
     finally { setLibLoaded(true) }
   }
 
+
+
   async function loadSet(id: string) {
     setLibLoading(true)
     try {
-      const res  = await fetch(`/api/library/${id}`)
+      const res  = await fetch(`/api/library/item?id=${id}`)
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Load failed.'); return }
       const saved: SetData = data.set.set_data
@@ -186,20 +188,16 @@ export default function AppPage() {
   }
 
   async function deleteSet(id: string) {
-    await fetch(`/api/library/${id}`, { method: 'DELETE' })
+    await fetch(`/api/library/item?id=${id}`, { method: 'DELETE' })
     setLibrary(prev => prev.filter(s => s.id !== id))
     setDeleteConf(null)
   }
-
-  // ── rename ────────────────────────────────────────────────
-  function startRename(item: LibItem) { setRenamingId(item.id); setRenameVal(item.title); setDeleteConf(null) }
-  function cancelRename()             { setRenamingId(null); setRenameVal('') }
 
   async function commitRename(id: string) {
     const trimmed = renameVal.trim()
     if (!trimmed) { cancelRename(); return }
     try {
-      const res = await fetch(`/api/library/${id}`, {
+      const res = await fetch(`/api/library/item?id=${id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: trimmed }),
