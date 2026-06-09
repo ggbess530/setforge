@@ -4,29 +4,25 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 
-type Params = { params: { id: string } }
+// Next.js 15+ — params is now a Promise, must be awaited
+type Params = { params: Promise<{ id: string }> }
 
-// ── GET /api/library/[id] — load full set data ────────────────
+// ── GET /api/library/[id] ─────────────────────────────────────
 export async function GET(_req: Request, { params }: Params) {
   try {
+    const { id } = await params
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const db = createAdminClient()
-
     const { data: set, error } = await db
       .from('sets')
       .select('*')
-      .eq('id', params.id)
-      .eq('user_id', userId)   // ensures users can only read their own sets
+      .eq('id', id)
+      .eq('user_id', userId)
       .single()
 
-    if (error || !set) {
-      return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
-    }
-
+    if (error || !set) return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
     return NextResponse.json({ set })
 
   } catch (err) {
@@ -35,33 +31,26 @@ export async function GET(_req: Request, { params }: Params) {
   }
 }
 
-// ── PATCH /api/library/[id] — rename a set ────────────────────
+// ── PATCH /api/library/[id] — rename ─────────────────────────
 export async function PATCH(req: Request, { params }: Params) {
   try {
+    const { id } = await params
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { title } = await req.json()
-    if (!title?.trim()) {
-      return NextResponse.json({ error: 'Title cannot be empty.' }, { status: 400 })
-    }
+    if (!title?.trim()) return NextResponse.json({ error: 'Title cannot be empty.' }, { status: 400 })
 
     const db = createAdminClient()
-
     const { data: updated, error } = await db
       .from('sets')
       .update({ title: title.trim(), updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', userId)
       .select('id, title, updated_at')
       .single()
 
-    if (error || !updated) {
-      return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
-    }
-
+    if (error || !updated) return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
     return NextResponse.json({ set: updated })
 
   } catch (err) {
@@ -70,24 +59,21 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 }
 
-// ── DELETE /api/library/[id] — delete a set ───────────────────
+// ── DELETE /api/library/[id] ──────────────────────────────────
 export async function DELETE(_req: Request, { params }: Params) {
   try {
+    const { id } = await params
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const db = createAdminClient()
-
     const { error } = await db
       .from('sets')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', userId)
 
     if (error) throw error
-
     return NextResponse.json({ deleted: true })
 
   } catch (err) {
