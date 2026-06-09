@@ -76,7 +76,7 @@ export default function LandingPage() {
                 <Link href="/app">
                   <button className="btn-primary sf-mono" style={{ padding:'8px 20px', borderRadius:8, fontSize:12 }}>OPEN APP</button>
                 </Link>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton />
               </>
             ) : (
               <>
