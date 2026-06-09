@@ -49,7 +49,11 @@ export default function AppPage() {
   const [error,    setError]    = useState<string|null>(null)
   const [set,      setSet]      = useState<SetData|null>(null)
   const [swapping, setSwapping] = useState<number|null>(null)
-  const [quota,    setQuota]    = useState<{tier:string;remaining:string|number}|null>(null)
+  const [quota, setQuota] = useState<{
+    tier: string;
+    remaining: string | number;
+    trial?: { active: boolean; daysLeft: number } | null
+  } | null>(null)
 
   // library
   const [view,       setView]       = useState<'forge'|'library'>('forge')
@@ -277,9 +281,21 @@ async function commitRename(id: string) {
             </div>
           </Link>
           <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-            {quota && quota.remaining !== 'unlimited' && (
-              <div style={{ fontSize:11, color:'#6a6a8a', fontFamily:"'JetBrains Mono',monospace" }}>
-                <span style={{ color:C }}>{quota.remaining}</span> gens left
+            {quota?.trial?.active && (
+              <div style={{
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+                padding: '5px 12px',
+                borderRadius: 999,
+                border: `1px solid ${quota.trial.daysLeft <= 2 ? M : quota.trial.daysLeft <= 4 ? '#f59e0b' : C}`,
+                color: quota.trial.daysLeft <= 2 ? M : quota.trial.daysLeft <= 4 ? '#f59e0b' : C,
+              }}>
+                {quota.trial.daysLeft}d left in trial
+              </div>
+            )}
+            {quota && !quota.trial?.active && quota.remaining !== 'unlimited' && (
+              <div style={{ fontSize: 11, color: C, fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ color: C }}>{quota.remaining}</span> gens left
               </div>
             )}
             <UserButton />
