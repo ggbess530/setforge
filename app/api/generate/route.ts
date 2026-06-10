@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     if (!genre || !crowd || !arc) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 })
     }
+    if (typeof genre !== 'string' || genre.length > 120) {
+      return NextResponse.json({ error: 'Genre must be under 120 characters.' }, { status: 400 })
+    }
 
     const lengthSpec = mode === 'time' ? `${minutes} minutes total` : `${count} tracks total`
     const vibeLine   = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}` : ''
