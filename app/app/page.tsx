@@ -112,7 +112,7 @@ export default function AppPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
-      setSet({ ...data.set, _meta: { genre, crowd, arc, vibe, refArtist } })
+      setSet({ ...data.set, _meta: { genre: effectiveGenre, crowd, arc, vibe, refArtist } })
       if (data.quota) setQuota(data.quota)
       // Re-lock the same positions if we reforged with locks
       if (keepLocks && lockedTracks.length > 0) {
@@ -493,7 +493,7 @@ async function commitRename(id: string) {
                   <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:38, margin:0, letterSpacing:1 }} className="sf-glow-c">{set.title}</h2>
                   <div style={{ fontSize:12, color:'#9a9ab8', maxWidth:480, lineHeight:1.5 }}>{set.summary}</div>
                   <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
-                    {[set._meta?.genre||genre, set._meta?.crowd||crowd, set._meta?.arc||arc].map(tag => tag && (
+                    {[set._meta?.genre||effectiveGenre, set._meta?.crowd||crowd, set._meta?.arc||arc].map(tag => tag && (
                       <span key={tag} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'2px 8px' }}>{tag}</span>
                     ))}
                   </div>
