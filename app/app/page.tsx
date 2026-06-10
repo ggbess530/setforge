@@ -523,14 +523,7 @@ async function commitRename(id: string) {
                         {new Date(item.meta?.savedAt ? Number(item.meta.savedAt) : item.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                       </div>
                     </div>
-                    <button
-                        onClick={() => shareSet(item.id)}
-                        disabled={sharingId !== null}
-                        className="sf-btn-ghost"
-                        style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color: copiedId === item.id ? '#00f0ff' : undefined, borderColor: copiedId === item.id ? '#00f0ff' : undefined }}
-                      >
-                        {sharingId === item.id ? '…' : copiedId === item.id ? '✓ LINK COPIED' : '⤴ SHARE'}
-                      </button>
+                    
                     <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
                       {deleteConf === item.id ? (
                         <>
@@ -544,6 +537,15 @@ async function commitRename(id: string) {
                       )}
                       <button onClick={() => loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'8px 16px', borderRadius:8, fontSize:12 }}>
                         {libLoading ? '…' : '▶ LOAD SET'}
+
+                      </button>
+                      <button
+                        onClick={() => shareSet(item.id)}
+                        disabled={sharingId !== null}
+                        className="sf-btn-ghost"
+                        style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color: copiedId === item.id ? '#00f0ff' : undefined, borderColor: copiedId === item.id ? '#00f0ff' : undefined }}
+                      >
+                        {sharingId === item.id ? '…' : copiedId === item.id ? '✓ LINK COPIED' : '⤴ SHARE'}
                       </button>
                     </div>
                   </div>
