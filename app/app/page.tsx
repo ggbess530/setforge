@@ -67,6 +67,8 @@ export default function AppPage() {
   const [copiedId,   setCopiedId]   = useState<string|null>(null)
   const [renamingId, setRenamingId] = useState<string|null>(null)
   const [renameVal,  setRenameVal]  = useState('')
+  const [locked,  setLocked]  = useState<Set<number>>(new Set())  // indices of locked tracks
+  const [copied,  setCopied]  = useState(false)                    // tracklist copied flash
 
   const resultRef = useRef<HTMLDivElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -85,21 +87,38 @@ export default function AppPage() {
   }, [renamingId])
 
   // ── generate ──────────────────────────────────────────────
-  async function generate() {
-    setLoading(true); setError(null); setSet(null)
+   async function generate(keepLocks = false) {
+    setLoading(true); setError(null)
+ 
+    // Collect locked track data BEFORE clearing the set
+    const lockedTracks = keepLocks && set
+      ? [...locked].map(i => set.tracks[i]).filter(Boolean)
+      : []
+ 
+    if (!keepLocks) setLocked(new Set())
+    setSet(null)
+ 
     try {
       const res = await fetch('/api/generate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch }),
+        body: JSON.stringify({ genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta: { genre, crowd, arc, vibe, refArtist } })
       if (data.quota) setQuota(data.quota)
+      // Re-lock the same positions if we reforged with locks
+      if (keepLocks && lockedTracks.length > 0) {
+        const newLocked = new Set<number>()
+        lockedTracks.forEach(lt => {
+          const idx = data.set.tracks.findIndex((t: { artist:string; title:string }) => t.artist === lt.artist && t.title === lt.title)
+          if (idx >= 0) newLocked.add(idx)
+        })
+        setLocked(newLocked)
+      }
     } catch { setError('Network error. Please try again.') }
     finally   { setLoading(false) }
-  }
 
   // ── hot-swap ──────────────────────────────────────────────
   async function swapTrack(index: number) {
@@ -246,6 +265,26 @@ async function commitRename(id: string) {
     })
     a.click()
   }
+  function toggleLock(index: number) {
+    setLocked(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+ 
+  async function copyTracklist() {
+    if (!set) return
+    const text = set.tracks
+      .map(t => `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title} [${t.bpm} BPM · ${t.key}]`)
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(`${set.title.toUpperCase()}\n\n${text}\n\nForged with SetForge — setforge.online`)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { setError('Copy failed — your browser may be blocking clipboard access.') }
+  }
 
   // ─────────────────────────────────────────────────────────
   // RENDER
@@ -391,7 +430,7 @@ async function commitRename(id: string) {
               </div>
             </div>
 
-            <button className="sf-btn-primary" onClick={generate} disabled={loading} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
+            <button className="sf-btn-primary" onClick={() => generate(false)} disabled={loading} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
               {loading ? 'FORGING SET…' : '⚡ FORGE SET'}
             </button>
           </div>
@@ -430,6 +469,14 @@ async function commitRename(id: string) {
                     {saving?'SAVING…':savedFlash?'✓ SAVED':'◈ SAVE TO LIBRARY'}
                   </button>
                   <button onClick={exportText} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12 }}>↓ EXPORT .TXT</button>
+                   <button onClick={copyTracklist} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12, color: copied ? '#00f0ff' : undefined, borderColor: copied ? '#00f0ff' : undefined }}>
+                    {copied ? '✓ COPIED' : '⧉ COPY LIST'}
+                  </button>
+                  {locked.size > 0 && (
+                    <button onClick={() => generate(true)} disabled={loading} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12, color:'#f59e0b', borderColor:'#f59e0b' }}>
+                      ↻ REFORGE ({locked.size} locked)
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -458,7 +505,7 @@ async function commitRename(id: string) {
               {/* track list */}
               <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:8 }}>
                 {set.tracks.map((t,i) => (
-                  <div key={`${t.n}-${t.title}`} className="sf-row sf-track" style={{ animationDelay:`${i*0.03}s`, display:'grid', gridTemplateColumns:'36px 1fr auto auto', gap:12, alignItems:'center', background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:'12px 16px', opacity:swapping===i?0.45:1, transition:'.2s' }}>
+                  <div key={`${t.n}-${t.title}`} className="sf-row sf-track" style={{ animationDelay:`${i*0.03}s`, display:'grid', gridTemplateColumns:'36px 1fr auto auto auto', gap:12, alignItems:'center', background:'#0a0a14', border: locked.has(i) ? '1px solid #f59e0b55' : '1px solid #16162a', borderRadius:10, padding:'12px 16px', opacity:swapping===i?0.45:1, transition:'.2s' }}>
                     <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                     <div>
                       <div style={{ fontSize:14, fontWeight:700 }}>{t.title}</div>
@@ -470,6 +517,21 @@ async function commitRename(id: string) {
                       <div>{t.key}</div>
                       <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
                     </div>
+                     <button
+                      onClick={() => toggleLock(i)}
+                      title={locked.has(i) ? 'Unlock track' : 'Lock track — survives reforge'}
+                      style={{
+                        background:'transparent',
+                        border:`1px solid ${locked.has(i) ? '#f59e0b' : '#23233a'}`,
+                        color: locked.has(i) ? '#f59e0b' : '#5a5a78',
+                        width:36, height:36, borderRadius:8, cursor:'pointer',
+                        fontSize:15, display:'flex', alignItems:'center', justifyContent:'center',
+                        transition:'.18s', flexShrink:0,
+                        boxShadow: locked.has(i) ? '0 0 10px #f59e0b44' : 'none',
+                      }}
+                    >
+                      {locked.has(i) ? '🔒' : '🔓'}
+                    </button>
                     <button className="sf-swap" onClick={() => swapTrack(i)} disabled={swapping!==null} title="Swap for a fresh pick" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:36, height:36, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                       <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
                     </button>
