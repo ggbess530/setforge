@@ -119,6 +119,7 @@ export default function AppPage() {
       }
     } catch { setError('Network error. Please try again.') }
     finally   { setLoading(false) }
+  }
 
   // ── hot-swap ──────────────────────────────────────────────
   async function swapTrack(index: number) {
