@@ -50,6 +50,8 @@ export default function AppPage() {
   const [error,    setError]    = useState<string|null>(null)
   const [set,      setSet]      = useState<SetData|null>(null)
   const [swapping, setSwapping] = useState<number|null>(null)
+  const [dragIndex,     setDragIndex]     = useState<number|null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number|null>(null)
   const [quota, setQuota] = useState<{
     tier: string;
     remaining: string | number;
@@ -296,6 +298,32 @@ async function commitRename(id: string) {
       const next = new Set(prev)
       if (next.has(index)) next.delete(index)
       else next.add(index)
+      return next
+    })
+  }
+  function reorderTracks(from: number, to: number) {
+    if (!set || from === to) return
+
+    setSet(s => {
+      if (!s) return s
+      const tracks = [...s.tracks]
+      const [moved] = tracks.splice(from, 1)
+      tracks.splice(to, 0, moved)
+      // renumber positions
+      const renumbered = tracks.map((t, i) => ({ ...t, n: i + 1 }))
+      return { ...s, tracks: renumbered }
+    })
+
+    // remap locked indices so locks follow their tracks
+    setLocked(prev => {
+      const next = new Set<number>()
+      prev.forEach(idx => {
+        let newIdx = idx
+        if (idx === from) newIdx = to
+        else if (from < idx && idx <= to) newIdx = idx - 1
+        else if (to <= idx && idx < from) newIdx = idx + 1
+        next.add(newIdx)
+      })
       return next
     })
   }
@@ -565,8 +593,31 @@ async function commitRename(id: string) {
               {/* track list */}
               <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:8 }}>
                 {set.tracks.map((t,i) => (
-                  <div key={`${t.n}-${t.title}`} className="sf-row sf-track" style={{ animationDelay:`${i*0.03}s`, display:'grid', gridTemplateColumns:'36px 1fr auto auto auto', gap:12, alignItems:'center', background:'#0a0a14', border: locked.has(i) ? '1px solid #f59e0b55' : '1px solid #16162a', borderRadius:10, padding:'12px 16px', opacity:swapping===i?0.45:1, transition:'.2s' }}>
-                    <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
+<div
+    key={`${t.n}-${t.title}`}
+    className="sf-row sf-track"
+    draggable
+    onDragStart={() => setDragIndex(i)}
+    onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
+    onDragLeave={() => setDragOverIndex(null)}
+    onDrop={() => { if (dragIndex !== null) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
+    onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+    style={{
+      animationDelay:`${i*0.03}s`,
+      display:'grid',
+      gridTemplateColumns:'20px 36px 1fr auto auto auto',
+      gap:12, alignItems:'center',
+      background: dragOverIndex === i && dragIndex !== i ? '#10102a' : '#0a0a14',
+      border: dragOverIndex === i && dragIndex !== i
+        ? `1px solid ${C}`
+        : locked.has(i) ? '1px solid #f59e0b55' : '1px solid #16162a',
+      borderRadius:10, padding:'12px 16px',
+      opacity: dragIndex === i ? 0.4 : swapping === i ? 0.45 : 1,
+      transition:'.2s',
+    }}
+  >
+    <div title="Drag to reorder" style={{ cursor:'grab', color:'#3a3a58', fontSize:14, userSelect:'none', textAlign:'center' }}>⠿</div>
+                        <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                     <div>
                       <div style={{ fontSize:14, fontWeight:700 }}>{t.title}</div>
                       <div style={{ fontSize:12, color:'#8a8aa8', display:'flex', alignItems:'center', gap:8 }}>
@@ -581,7 +632,7 @@ async function commitRename(id: string) {
                         </a>
                       </div>
                       <div style={{ fontSize:11, color:'#5a5a78', marginTop:3 }}>↳ {t.transition}</div>
-                    </div>
+                    </div>          
                     <div style={{ textAlign:'right', fontSize:12, lineHeight:1.7 }}>
                       <div style={{ color:C }}>{t.bpm} <span style={{ color:'#5a5a78' }}>BPM</span></div>
                       <div>{t.key}</div>
