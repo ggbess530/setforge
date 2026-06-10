@@ -63,6 +63,8 @@ export default function AppPage() {
   const [savedFlash, setSavedFlash] = useState(false)
   const [libLoading, setLibLoading] = useState(false)
   const [deleteConf, setDeleteConf] = useState<string|null>(null)
+  const [sharingId,  setSharingId]  = useState<string|null>(null)  // id being shared
+  const [copiedId,   setCopiedId]   = useState<string|null>(null)
   const [renamingId, setRenamingId] = useState<string|null>(null)
   const [renameVal,  setRenameVal]  = useState('')
 
@@ -189,6 +191,24 @@ export default function AppPage() {
       setView('forge')
     } catch { setError('Network error. Please try again.') }
     finally   { setLibLoading(false) }
+  }
+  async function shareSet(setId: string) {
+    setSharingId(setId)
+    try {
+      const res  = await fetch('/api/share', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Share failed.'); return }
+ 
+      const url = `${window.location.origin}/s?id=${data.shareId}`
+      await navigator.clipboard.writeText(url)
+      setCopiedId(setId)
+      setTimeout(() => setCopiedId(null), 2500)
+    } catch { setError('Failed to copy share link.') }
+    finally   { setSharingId(null) }
   }
 
   async function deleteSet(id: string) {
@@ -507,6 +527,14 @@ async function commitRename(id: string) {
                       {deleteConf === item.id ? (
                         <>
                           <span style={{ fontSize:11, color:M }}>Delete?</span>
+                          <button
+                        onClick={() => shareSet(item.id)}
+                        disabled={sharingId !== null}
+                        className="sf-btn-ghost"
+                        style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color: copiedId === item.id ? '#00f0ff' : undefined, borderColor: copiedId === item.id ? '#00f0ff' : undefined }}
+                      >
+                        {sharingId === item.id ? '…' : copiedId === item.id ? '✓ LINK COPIED' : '⤴ SHARE'}
+                      </button>
                           <button onClick={() => deleteSet(item.id)} style={{ background:M, color:'#06060c', border:'none', padding:'6px 12px', borderRadius:6, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>YES</button>
                           <button className="sf-del-btn" onClick={() => setDeleteConf(null)}>NO</button>
                         </>

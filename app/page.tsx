@@ -138,7 +138,9 @@ export default function LandingPage() {
             ))}
           </div>
         </section>
+
 	<ExampleGallery />
+
         {/* features */}
         <section style={{ padding:'60px 24px', maxWidth:1100, margin:'0 auto' }}>
           <h2 className="sf-display" style={{ textAlign:'center', fontSize:48, letterSpacing:2, marginBottom:48 }}>EVERYTHING YOU NEED</h2>
