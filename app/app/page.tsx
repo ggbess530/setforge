@@ -322,6 +322,13 @@ async function commitRename(id: string) {
         .sf-rename-btn:hover { color:${C}; }
         .sf-scan { background:linear-gradient(180deg,transparent,${C},transparent); animation:pulse 1.1s infinite; }
         .sf-row  { animation:rise .42s ease backwards; }
+        .sf-slider { -webkit-appearance:none; appearance:none; width:100%; height:10px; border-radius:999px; background:linear-gradient(90deg, ${M}33, ${C}33); border:1px solid #23233a; outline:none; cursor:pointer; transition:.2s; }
+        .sf-slider:hover { border-color:${C}66; box-shadow:0 0 16px ${C}22; }
+        .sf-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 12px ${C}88, 0 0 24px ${M}44; cursor:grab; transition:.15s; }
+        .sf-slider::-webkit-slider-thumb:hover { transform:scale(1.15); box-shadow:0 0 18px ${C}cc, 0 0 32px ${M}66; }
+        .sf-slider::-webkit-slider-thumb:active { cursor:grabbing; transform:scale(1.05); }
+        .sf-slider::-moz-range-thumb { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 12px ${C}88, 0 0 24px ${M}44; cursor:grab; }
+        .sf-slider::-moz-range-track { height:10px; border-radius:999px; background:linear-gradient(90deg, ${M}33, ${C}33); }
         @keyframes rise  { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
         @keyframes spin  { from{transform:rotate(0)} to{transform:rotate(360deg)} }
@@ -413,13 +420,22 @@ async function commitRename(id: string) {
               <div className={`sf-chip ${mode==='time'?'on':''}`} onClick={() => setMode('time')}>By Time</div>
               <div className={`sf-chip ${mode==='count'?'on':''}`} onClick={() => setMode('count')}>By Track Count</div>
             </div>
-            <div style={{ marginBottom:20 }}>
+              <div style={{ marginBottom:20, padding:'16px 18px', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:12 }}>
               {mode === 'time' ? (<>
-                <input type="range" min={15} max={240} step={15} value={minutes} onChange={e => setMinutes(+e.target.value)} style={{ width:'100%', accentColor:C }} />
-                <div style={{ fontSize:13, color:C }} className="sf-glow-c">{minutes} min · ~{Math.round(minutes/4.5)} tracks</div>
+                <input type="range" min={15} max={240} step={15} value={minutes} onChange={e => setMinutes(+e.target.value)} className="sf-slider" />
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:12 }}>
+                  <div>
+                    <span className="sf-glow-c" style={{ fontSize:26, color:C, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:1 }}>{minutes} MIN</span>
+                    <span style={{ fontSize:12, color:'#6a6a8a', marginLeft:10 }}>~{Math.round(minutes/4.5)} tracks</span>
+                  </div>
+                  <span style={{ fontSize:10, color:'#4a4a66', letterSpacing:1 }}>15 MIN – 4 HR</span>
+                </div>
               </>) : (<>
-                <input type="range" min={4} max={50} value={count} onChange={e => setCount(+e.target.value)} style={{ width:'100%', accentColor:C }} />
-                <div style={{ fontSize:13, color:C }} className="sf-glow-c">{count} tracks</div>
+                <input type="range" min={4} max={50} value={count} onChange={e => setCount(+e.target.value)} className="sf-slider" />
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:12 }}>
+                  <span className="sf-glow-c" style={{ fontSize:26, color:C, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:1 }}>{count} TRACKS</span>
+                  <span style={{ fontSize:10, color:'#4a4a66', letterSpacing:1 }}>4 – 50</span>
+                </div>
               </>)}
             </div>
 
