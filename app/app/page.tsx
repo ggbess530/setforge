@@ -91,7 +91,26 @@ export default function AppPage() {
   const effectiveGenre = genre === '__custom__'
     ? customGenre.trim()
     : genre
-
+  function tryExample() {
+    setGenre('Tech House')
+    setCrowd('Club Peak Hour')
+    setArc('Slow Build')
+    setVibe('dark and groovy, late night warehouse')
+    setRefArtist('Fisher, Chris Lake')
+    setMode('time')
+    setMinutes(60)
+    setBpmLow(122)
+    setBpmHigh(128)
+    setKeyMatch(true)
+    // generate after state settles
+    setTimeout(() => generate(false), 50)
+  }
+  function trackSearchUrl(t: Track, platform: 'beatport' | 'spotify') {
+    const q = encodeURIComponent(`${t.artist} ${t.title}`)
+    return platform === 'beatport'
+      ? `https://www.beatport.com/search?q=${q}`
+      : `https://open.spotify.com/search/${q}`
+  }
   // ── generate ──────────────────────────────────────────────
    async function generate(keepLocks = false) {
     setLoading(true); setError(null)
@@ -463,7 +482,14 @@ async function commitRename(id: string) {
                 ♪ Harmonic {keyMatch?'ON':'OFF'}
               </div>
             </div>
-
+            <button
+              onClick={tryExample}
+              disabled={loading}
+              className="sf-btn-ghost"
+              style={{ width:'100%', marginTop:10, padding:12, borderRadius:10, fontSize:12, letterSpacing:2 }}
+            >
+              ✦ NOT SURE? TRY AN EXAMPLE SET
+            </button>
             <button className="sf-btn-primary" onClick={() => generate(false)} disabled={loading || (genre === '__custom__' && !customGenre.trim())} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
               {loading ? 'FORGING SET…' : '⚡ FORGE SET'}
             </button>
@@ -543,7 +569,17 @@ async function commitRename(id: string) {
                     <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                     <div>
                       <div style={{ fontSize:14, fontWeight:700 }}>{t.title}</div>
-                      <div style={{ fontSize:12, color:'#8a8aa8' }}>{t.artist}</div>
+                      <div style={{ fontSize:12, color:'#8a8aa8', display:'flex', alignItems:'center', gap:8 }}>
+                        {t.artist}
+                        <a href={trackSearchUrl(t,'beatport')} target="_blank" rel="noopener noreferrer" title="Find on Beatport"
+                           style={{ fontSize:9, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:4, padding:'1px 6px', letterSpacing:1 }}>
+                          BP
+                        </a>
+                        <a href={trackSearchUrl(t,'spotify')} target="_blank" rel="noopener noreferrer" title="Find on Spotify"
+                           style={{ fontSize:9, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:4, padding:'1px 6px', letterSpacing:1 }}>
+                          SP
+                        </a>
+                      </div>
                       <div style={{ fontSize:11, color:'#5a5a78', marginTop:3 }}>↳ {t.transition}</div>
                     </div>
                     <div style={{ textAlign:'right', fontSize:12, lineHeight:1.7 }}>
