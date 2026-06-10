@@ -33,6 +33,7 @@ export default function AppPage() {
 
   // form
   const [genre,     setGenre]     = useState('Tech House')
+  const [customGenre, setCustomGenre] = useState('')
   const [crowd,     setCrowd]     = useState('Club Peak Hour')
   const [arc,       setArc]       = useState('Slow Build')
   const [vibe,      setVibe]      = useState('')
@@ -86,6 +87,11 @@ export default function AppPage() {
     if (renamingId && renameRef.current) renameRef.current.focus()
   }, [renamingId])
 
+  // The genre actually sent to the AI — custom text wins when Custom mode is on
+  const effectiveGenre = genre === '__custom__'
+    ? customGenre.trim()
+    : genre
+
   // ── generate ──────────────────────────────────────────────
    async function generate(keepLocks = false) {
     setLoading(true); setError(null)
@@ -102,7 +108,7 @@ export default function AppPage() {
       const res = await fetch('/api/generate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks }),
+        body: JSON.stringify({ effectiveGenre, genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
@@ -135,7 +141,7 @@ export default function AppPage() {
           prev:     set.tracks[index - 1] ?? null,
           next:     set.tracks[index + 1] ?? null,
           existing: set.tracks,
-          genre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch,
+          effectiveGenre, genre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch,
         }),
       })
       const data = await res.json()
@@ -395,10 +401,21 @@ async function commitRename(id: string) {
             <SFLabel>GENRE</SFLabel>
             <div style={{ marginBottom:20 }}>
               <select className="sf-input sf-select" value={genre} onChange={e => setGenre(e.target.value)}>
+                <option value="__custom__">✦ Custom — describe your own…</option>
                 {Object.entries(GENRE_GROUPS).map(([grp,items]) => (
                   <optgroup key={grp} label={grp}>{items.map(g => <option key={g} value={g}>{g}</option>)}</optgroup>
                 ))}
               </select>
+              {genre === '__custom__' && (
+                <input
+                  className="sf-input"
+                  value={customGenre}
+                  onChange={e => setCustomGenre(e.target.value.slice(0, 120))}
+                  placeholder="e.g. 90s French house with disco edits, latin-influenced minimal, anime-core dubstep…"
+                  style={{ marginTop:10, borderColor: customGenre.trim() ? '#00f0ff44' : undefined }}
+                  autoFocus
+                />
+              )}
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
@@ -447,7 +464,7 @@ async function commitRename(id: string) {
               </div>
             </div>
 
-            <button className="sf-btn-primary" onClick={() => generate(false)} disabled={loading} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
+            <button className="sf-btn-primary" onClick={() => generate(false)} disabled={loading || (genre === '__custom__' && !customGenre.trim())} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
               {loading ? 'FORGING SET…' : '⚡ FORGE SET'}
             </button>
           </div>
