@@ -7,7 +7,7 @@ import Link from 'next/link'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
-<ExampleGallery />
+
 const FEATURES = [
   { icon: '⚡', title: 'AI-Powered Curation',  desc: 'Claude selects real tracks matched to your genre, crowd, BPM range, and energy arc — not random shuffles.' },
   { icon: '♪',  title: 'Harmonic Key Matching', desc: 'Camelot wheel logic orders every track so transitions are always harmonically compatible.' },
@@ -138,7 +138,7 @@ export default function LandingPage() {
             ))}
           </div>
         </section>
-
+	<ExampleGallery />
         {/* features */}
         <section style={{ padding:'60px 24px', maxWidth:1100, margin:'0 auto' }}>
           <h2 className="sf-display" style={{ textAlign:'center', fontSize:48, letterSpacing:2, marginBottom:48 }}>EVERYTHING YOU NEED</h2>
