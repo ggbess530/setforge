@@ -1,13 +1,13 @@
 // ▸ Replace: app/page.tsx
 
 'use client'
-
+import ExampleGallery from './components/ExampleGallery'
 import { useAuth, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
-
+<ExampleGallery />
 const FEATURES = [
   { icon: '⚡', title: 'AI-Powered Curation',  desc: 'Claude selects real tracks matched to your genre, crowd, BPM range, and energy arc — not random shuffles.' },
   { icon: '♪',  title: 'Harmonic Key Matching', desc: 'Camelot wheel logic orders every track so transitions are always harmonically compatible.' },
