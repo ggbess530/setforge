@@ -526,8 +526,7 @@ async function commitRename(id: string) {
                     <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
                       {deleteConf === item.id ? (
                         <>
-                          <span style={{ fontSize:11, color:M }}>Delete?</span>
-                          <button
+                        <button
                         onClick={() => shareSet(item.id)}
                         disabled={sharingId !== null}
                         className="sf-btn-ghost"
@@ -535,6 +534,7 @@ async function commitRename(id: string) {
                       >
                         {sharingId === item.id ? '…' : copiedId === item.id ? '✓ LINK COPIED' : '⤴ SHARE'}
                       </button>
+                          <span style={{ fontSize:11, color:M }}>Delete?</span>
                           <button onClick={() => deleteSet(item.id)} style={{ background:M, color:'#06060c', border:'none', padding:'6px 12px', borderRadius:6, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>YES</button>
                           <button className="sf-del-btn" onClick={() => setDeleteConf(null)}>NO</button>
                         </>
