@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
+import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
 // ── constants ────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
@@ -44,6 +45,11 @@ export default function AppPage() {
   const [bpmLow,    setBpmLow]    = useState(120)
   const [bpmHigh,   setBpmHigh]   = useState(128)
   const [keyMatch,  setKeyMatch]  = useState(true)
+    const [showWizard,       setShowWizard]       = useState(() => {
+    if (typeof window === 'undefined') return false
+    return !localStorage.getItem('sf_onboarded')
+  })
+  const [firstSetCelebration, setFirstSetCelebration] = useState(false)
 
   // generator
   const [loading,  setLoading]  = useState(false)
@@ -206,6 +212,26 @@ export default function AppPage() {
       setTimeout(() => setSavedFlash(false), 2000)
     } catch { setError('Network error. Please try again.') }
     finally   { setSaving(false) }
+  }
+
+  function handleWizardComplete(result: WizardResult) {
+    // Apply all wizard selections to the form
+    setGenre(result.genre)
+    setCrowd(result.crowd)
+    setArc(result.arc)
+    setVibe(result.vibe)
+    setRefArtist(result.refArtist)
+    setMinutes(result.minutes)
+    setMode('time')
+    setShowWizard(false)
+    setFirstSetCelebration(true)
+    // Small delay so state settles before generating
+    setTimeout(() => generate(false), 80)
+  }
+ 
+  function handleWizardSkip() {
+    try { localStorage.setItem('sf_onboarded', 'true') } catch {}
+    setShowWizard(false)
   }
 
   // ── library ───────────────────────────────────────────────
@@ -392,6 +418,13 @@ async function commitRename(id: string) {
       <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${C}0a 1px,transparent 1px),linear-gradient(90deg,${C}0a 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 0%,black,transparent 75%)', pointerEvents:'none', zIndex:0 }} />
       <div style={{ position:'fixed', top:-200, left:'50%', transform:'translateX(-50%)', width:600, height:400, background:`radial-gradient(circle,${M}22,transparent 70%)`, filter:'blur(40px)', pointerEvents:'none', zIndex:0 }} />
 
+             {showWizard && (
+        <OnboardingWizard
+          onComplete={handleWizardComplete}
+          onSkip={handleWizardSkip}
+        />
+      )}
+
       {/* ── TOP NAV ── */}
       <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(12px)', background:'#06060ccc', padding:'0 24px' }}>
         <div style={{ maxWidth:900, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:56 }}>
@@ -542,6 +575,18 @@ async function commitRename(id: string) {
           {/* ── RESULTS ── */}
           {set && (
             <div ref={resultRef} style={{ marginTop:40 }}>
+                    {firstSetCelebration && (
+                <div style={{ background:`linear-gradient(135deg,${M}18,${C}18)`, border:`1px solid ${C}44`, borderRadius:14, padding:'20px 24px', marginBottom:24, display:'flex', alignItems:'center', gap:16 }}>
+                  <div style={{ fontSize:32, flexShrink:0 }}>🎉</div>
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'#e8e8f0', marginBottom:4 }}>Your first set is ready!</div>
+                    <div style={{ fontSize:13, color:'#9a9ab8', lineHeight:1.5 }}>
+                      The AI picked tracks that flow together harmonically, shaped the energy across your set, and wrote transition notes for each song. Swap any track you don't love, drag to reorder, then save or share it.
+                    </div>
+                  </div>
+                  <button onClick={() => setFirstSetCelebration(false)} style={{ background:'none', border:'none', color:'#4a4a66', cursor:'pointer', fontSize:18, flexShrink:0, padding:4 }}>✕</button>
+                </div>
+              )}
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16, flexWrap:'wrap', gap:12 }}>
                 <div>
                   <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:38, margin:0, letterSpacing:1 }} className="sf-glow-c">{set.title}</h2>
