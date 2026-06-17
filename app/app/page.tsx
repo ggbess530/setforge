@@ -1,406 +1,832 @@
-// ▸ Replace: app/page.tsx
+// ▸ Create folder: app/app/
+// ▸ Place at:      app/app/page.tsx
 
 'use client'
 
-import { useAuth, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
+import { useState, useEffect, useRef } from 'react'
+import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
-import { useState } from 'react'
-import ExampleGallery from './components/ExampleGallery'
 
+// ── constants ────────────────────────────────────────────────
+const GENRE_GROUPS: Record<string, string[]> = {
+  'House':          ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
+  'Techno':         ['Techno','Melodic Techno','Peak Time Techno','Minimal / Deep Tech','Hard Techno','Industrial Techno','Dub Techno'],
+  'Bass & Breaks':  ['Drum & Bass','Dubstep','UK Garage / UKG','Breakbeat','Jungle','Bassline','Future Bass'],
+  'Trance':         ['Trance','Progressive Trance','Psytrance','Uplifting Trance','Hard Trance'],
+  'Urban / Hip Hop':['Hip Hop','Trap','R&B','Afrobeats','Amapiano','Reggaeton','Dancehall'],
+  'Classic / Groove':['Disco / Funk','Nu-Disco','Funky House','Acid House','Old School / 90s','Italo Disco'],
+  'Open Format':    ['Open Format / Multi-Genre','Top 40 / Pop','Latin','Reggae / Dub'],
+}
+const CROWDS  = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
+const ARCS    = ['Slow Build','Peak Time Energy','Cool Down','Wave (up & down)']
+const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
-// ── Beginner-friendly feature descriptions ─────────────────
-const FEATURES = [
-  {
-    icon: '🎵',
-    title: 'Picks the perfect tracks for you',
-    plain: 'No more hours of searching for songs that go together.',
-    desc:  'Our AI listens to your vibe — genre, mood, crowd — and selects real tracks that actually flow together. Like having a DJ friend who knows everything.',
-  },
-  {
-    icon: '🔗',
-    title: 'Songs that sound amazing back-to-back',
-    plain: 'Ever noticed how some songs clash when mixed? This stops that.',
-    desc:  'SetForge automatically orders tracks so the musical keys are compatible. Every transition sounds intentional — even if you\'ve never mixed before.',
-  },
-  {
-    icon: '🔄',
-    title: 'Don\'t like a song? Swap it instantly',
-    plain: 'You\'re always in control.',
-    desc:  'If one track doesn\'t feel right, hit swap. The AI replaces it with something that fits the same energy and sound — without breaking the flow.',
-  },
-  {
-    icon: '📈',
-    title: 'Sets that build to a peak',
-    plain: 'Great DJ sets tell a story. Yours will too.',
-    desc:  'Choose how your set should feel — a slow build to peak energy, a consistent vibe, or a cool-down. SetForge shapes every track selection around that journey.',
-  },
-  {
-    icon: '☁️',
-    title: 'Your sets saved forever',
-    plain: 'Come back any time and pick up where you left off.',
-    desc:  'Every set you create is saved to your personal library in the cloud. Rename them, load them, share them — they\'re yours forever.',
-  },
-  {
-    icon: '📤',
-    title: 'Ready to take to your DJ software',
-    plain: 'Works with Rekordbox, Serato, Traktor, and more.',
-    desc:  'Export any set as a formatted list you can take straight into your DJ software — or just copy and paste it anywhere you need it.',
-  },
-]
+// ── types ─────────────────────────────────────────────────────
+type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string }
+type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
+type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 
-// ── FAQ ────────────────────────────────────────────────────
-const FAQS = [
-  {
-    q: 'Do I need to be a DJ to use SetForge?',
-    a: 'Not at all. SetForge was built with beginners in mind. If you love music and want to put together a great playlist or DJ set — even your first one ever — SetForge will do the hard work for you. No experience needed.',
-  },
-  {
-    q: 'What is BPM and why does it matter?',
-    a: 'BPM stands for Beats Per Minute — it\'s basically how fast a song is. Most club and dance music sits between 120–130 BPM. When songs in a DJ set have similar BPMs, the mix sounds smooth instead of jarring. SetForge handles all of this automatically.',
-  },
-  {
-    q: 'What is harmonic mixing? Do I need to understand it?',
-    a: 'Harmonic mixing means choosing songs that are in compatible musical keys — so they sound good played back-to-back. Professional DJs spend years learning this. SetForge does it instantly for every track in your set, so you get pro-quality transitions without knowing any music theory.',
-  },
-  {
-    q: 'Do I need any DJ equipment or software?',
-    a: 'No equipment needed to use SetForge — it works in any web browser on any device. If you do have DJ software like Rekordbox or Serato, you can export your set directly to it. But you can also just use SetForge to plan your set and find great music.',
-  },
-  {
-    q: 'Will the AI suggest real songs I can actually find?',
-    a: 'Yes. SetForge suggests real, well-known tracks that exist on Beatport, Spotify, and major platforms. Every track card has direct links so you can preview and buy the songs instantly. Think of it as AI-powered music discovery.',
-  },
-  {
-    q: 'What is an "energy arc" and which should I pick?',
-    a: '"Energy arc" is just how your set builds and flows over time. "Slow Build" means starting mellow and getting more intense — great for warming up a crowd. "Peak Time" keeps energy high throughout. "Cool Down" works for the end of a night. "Wave" goes up and down. When in doubt, pick Slow Build — it\'s the most crowd-pleasing.',
-  },
-  {
-    q: 'How is SetForge different from just making a Spotify playlist?',
-    a: 'A Spotify playlist is just songs in a row. SetForge creates a DJ set — every track is chosen for its BPM, musical key, energy level, and how it flows into the next one. You also get detailed transition notes telling you exactly how to mix between tracks. It\'s the difference between a list and a performance.',
-  },
-  {
-    q: 'Is there a free trial?',
-    a: 'Yes — every new account gets a full 7-day free trial with complete Pro access. No credit card required to start. Try it, forge some sets, and see if you love it before paying anything.',
-  },
-]
+// ── main component ────────────────────────────────────────────
+export default function AppPage() {
 
-// ── Stats ──────────────────────────────────────────────────
-const STATS = [
-  { n: '60s',  label: 'to generate your first set' },
-  { n: '42',   label: 'genres to choose from' },
-  { n: '0',    label: 'experience needed' },
-  { n: '7',    label: 'day free trial' },
-]
+  // form
+  const [genre,     setGenre]     = useState('Tech House')
+  const [customGenre, setCustomGenre] = useState('')
+  const [crowd,     setCrowd]     = useState('Club Peak Hour')
+  const [arc,       setArc]       = useState('Slow Build')
+  const [vibe,      setVibe]      = useState('')
+  const [refArtist, setRefArtist] = useState('')
+  const [mode,      setMode]      = useState<'time'|'count'>('time')
+  const [minutes,   setMinutes]   = useState(60)
+  const [count,     setCount]     = useState(12)
+  const [bpmLow,    setBpmLow]    = useState(120)
+  const [bpmHigh,   setBpmHigh]   = useState(128)
+  const [keyMatch,  setKeyMatch]  = useState(true)
 
-export default function LandingPage() {
-  const { isSignedIn } = useAuth()
-  const [openFaq, setOpenFaq] = useState<number|null>(null)
+  // generator
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState<string|null>(null)
+  const [set,      setSet]      = useState<SetData|null>(null)
+  const [swapping, setSwapping] = useState<number|null>(null)
+  const [dragIndex,     setDragIndex]     = useState<number|null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number|null>(null)
+  const [quota, setQuota] = useState<{
+    tier: string;
+    remaining: string | number;
+    trial?: { active: boolean; daysLeft: number } | null
+  } | null>(null)
 
+  // library
+  const [view,       setView]       = useState<'forge'|'library'>('forge')
+  const [library,    setLibrary]    = useState<LibItem[]>([])
+  const [libLoaded,  setLibLoaded]  = useState(false)
+  const [saving,     setSaving]     = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [libLoading, setLibLoading] = useState(false)
+  const [deleteConf, setDeleteConf] = useState<string|null>(null)
+  const [sharingId,  setSharingId]  = useState<string|null>(null)  // id being shared
+  const [copiedId,   setCopiedId]   = useState<string|null>(null)
+  const [renamingId, setRenamingId] = useState<string|null>(null)
+  const [renameVal,  setRenameVal]  = useState('')
+  const [locked,  setLocked]  = useState<Set<number>>(new Set())  // indices of locked tracks
+  const [copied,  setCopied]  = useState(false)                    // tracklist copied flash
+
+  const resultRef = useRef<HTMLDivElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
+
+  // load library index on mount
+  useEffect(() => { loadLibrary() }, [])
+
+  // scroll to results after generation
+  useEffect(() => {
+    if (set && resultRef.current) resultRef.current.scrollIntoView({ behavior:'smooth', block:'start' })
+  }, [set])
+
+  // focus rename input
+  useEffect(() => {
+    if (renamingId && renameRef.current) renameRef.current.focus()
+  }, [renamingId])
+
+  // The genre actually sent to the AI — custom text wins when Custom mode is on
+  const effectiveGenre = genre === '__custom__'
+    ? customGenre.trim()
+    : genre
+  function tryExample() {
+    setGenre('Tech House')
+    setCrowd('Club Peak Hour')
+    setArc('Slow Build')
+    setVibe('dark and groovy, late night warehouse')
+    setRefArtist('Fisher, Chris Lake')
+    setMode('time')
+    setMinutes(60)
+    setBpmLow(122)
+    setBpmHigh(128)
+    setKeyMatch(true)
+    // generate after state settles
+    setTimeout(() => generate(false), 50)
+  }
+  function trackSearchUrl(t: Track, platform: 'beatport' | 'spotify') {
+    const q = encodeURIComponent(`${t.artist} ${t.title}`)
+    return platform === 'beatport'
+      ? `https://www.beatport.com/search?q=${q}`
+      : `https://open.spotify.com/search/${q}`
+  }
+  // ── generate ──────────────────────────────────────────────
+   async function generate(keepLocks = false) {
+    setLoading(true); setError(null)
+ 
+    // Collect locked track data BEFORE clearing the set
+    const lockedTracks = keepLocks && set
+      ? [...locked].map(i => set.tracks[i]).filter(Boolean)
+      : []
+ 
+    if (!keepLocks) setLocked(new Set())
+    setSet(null)
+ 
+    try {
+      const res = await fetch('/api/generate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ effectiveGenre, genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Generation failed.'); return }
+      setSet({ ...data.set, _meta: { genre: effectiveGenre, crowd, arc, vibe, refArtist } })
+      if (data.quota) setQuota(data.quota)
+      // Re-lock the same positions if we reforged with locks
+      if (keepLocks && lockedTracks.length > 0) {
+        const newLocked = new Set<number>()
+        lockedTracks.forEach(lt => {
+          const idx = data.set.tracks.findIndex((t: { artist:string; title:string }) => t.artist === lt.artist && t.title === lt.title)
+          if (idx >= 0) newLocked.add(idx)
+        })
+        setLocked(newLocked)
+      }
+    } catch { setError('Network error. Please try again.') }
+    finally   { setLoading(false) }
+  }
+
+  // ── hot-swap ──────────────────────────────────────────────
+  async function swapTrack(index: number) {
+    if (!set) return
+    setSwapping(index); setError(null)
+    const target = set.tracks[index]
+    try {
+      const res = await fetch('/api/swap', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target,
+          prev:     set.tracks[index - 1] ?? null,
+          next:     set.tracks[index + 1] ?? null,
+          existing: set.tracks,
+          effectiveGenre, genre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Swap failed.'); return }
+      setSet(s => {
+        if (!s) return s
+        const tracks = [...s.tracks]
+        tracks[index] = { ...data.track, n: target.n }
+        return { ...s, tracks }
+      })
+    } catch { setError('Network error. Please try again.') }
+    finally   { setSwapping(null) }
+  }
+
+  // ── save ──────────────────────────────────────────────────
+  async function saveSet() {
+    if (!set || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/library', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:   set.title,
+          setData: set,
+          meta: {
+            genre:      set._meta?.genre      || genre,
+            crowd:      set._meta?.crowd      || crowd,
+            arc:        set._meta?.arc        || arc,
+            vibe:       set._meta?.vibe       || vibe,
+            refArtist:  set._meta?.refArtist  || refArtist,
+            trackCount: set.tracks.length,
+            savedAt:    Date.now(),
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Save failed.'); return }
+      setLibrary(prev => [data.set, ...prev])
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 2000)
+    } catch { setError('Network error. Please try again.') }
+    finally   { setSaving(false) }
+  }
+
+  // ── library ───────────────────────────────────────────────
+  async function loadLibrary() {
+    try {
+      const res  = await fetch('/api/library')
+      const data = await res.json()
+      if (res.ok) setLibrary(data.sets || [])
+    } catch { /* non-fatal */ }
+    finally { setLibLoaded(true) }
+  }
+
+
+
+  async function loadSet(id: string) {
+    setLibLoading(true)
+    try {
+      const res  = await fetch(`/api/library/item?id=${id}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Load failed.'); return }
+      const saved: SetData = data.set.set_data
+      setSet(saved)
+      if (saved._meta) {
+        setGenre(saved._meta.genre || genre)
+        setCrowd(saved._meta.crowd || crowd)
+        setArc(saved._meta.arc     || arc)
+        setVibe(saved._meta.vibe   || '')
+        setRefArtist(saved._meta.refArtist || '')
+      }
+      setView('forge')
+    } catch { setError('Network error. Please try again.') }
+    finally   { setLibLoading(false) }
+  }
+  async function shareSet(setId: string) {
+    setSharingId(setId)
+    try {
+      const res  = await fetch('/api/share', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Share failed.'); return }
+ 
+      const url = `${window.location.origin}/s?id=${data.shareId}`
+      await navigator.clipboard.writeText(url)
+      setCopiedId(setId)
+      setTimeout(() => setCopiedId(null), 2500)
+    } catch { setError('Failed to copy share link.') }
+    finally   { setSharingId(null) }
+  }
+
+  async function deleteSet(id: string) {
+    await fetch(`/api/library/item?id=${id}`, { method: 'DELETE' })
+    setLibrary(prev => prev.filter(s => s.id !== id))
+    setDeleteConf(null)
+  }
+
+async function commitRename(id: string) {
+  const trimmed = renameVal.trim()
+  if (!trimmed) { setRenamingId(null); setRenameVal(''); return }
+  try {
+    const res = await fetch(`/api/library/item?id=${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed }),
+    })
+    if (res.ok) {
+      setLibrary(prev => prev.map(s => s.id === id ? { ...s, title: trimmed } : s))
+      if (set?.title && renamingId === id) setSet(s => s ? { ...s, title: trimmed } : s)
+    }
+  } catch { /* non-fatal */ }
+  finally { setRenamingId(null); setRenameVal('') }
+}
+  // ── export ────────────────────────────────────────────────
+  function exportText() {
+    if (!set) return
+    const lines = [set.title.toUpperCase(), set.summary, '',
+      ...set.tracks.map(t => `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}  [${t.bpm} BPM · ${t.key} · E${t.energy}]\n     ↳ ${t.transition}`),
+      '', 'Generated with SetForge',
+    ]
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' })),
+      download: `${set.title.replace(/\s+/g,'_')}.txt`,
+    })
+    a.click()
+  }
+  function toggleLock(index: number) {
+    setLocked(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+  function reorderTracks(from: number, to: number) {
+    if (!set || from === to) return
+
+    setSet(s => {
+      if (!s) return s
+      const tracks = [...s.tracks]
+      const [moved] = tracks.splice(from, 1)
+      tracks.splice(to, 0, moved)
+      // renumber positions
+      const renumbered = tracks.map((t, i) => ({ ...t, n: i + 1 }))
+      return { ...s, tracks: renumbered }
+    })
+
+    // remap locked indices so locks follow their tracks
+    setLocked(prev => {
+      const next = new Set<number>()
+      prev.forEach(idx => {
+        let newIdx = idx
+        if (idx === from) newIdx = to
+        else if (from < idx && idx <= to) newIdx = idx - 1
+        else if (to <= idx && idx < from) newIdx = idx + 1
+        next.add(newIdx)
+      })
+      return next
+    })
+  }
+ 
+  async function copyTracklist() {
+    if (!set) return
+    const text = set.tracks
+      .map(t => `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title} [${t.bpm} BPM · ${t.key}]`)
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(`${set.title.toUpperCase()}\n\n${text}\n\nForged with SetForge — setforge.online`)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { setError('Copy failed — your browser may be blocking clipboard access.') }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflowX:'hidden' }}>
+    <div style={{ minHeight:'100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", overflowX:'hidden' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
-        .sf-mono    { font-family:'JetBrains Mono',monospace; }
-        .sf-display { font-family:'Bebas Neue',sans-serif; }
-        .glow-c { text-shadow:0 0 20px ${C}80; }
-        .glow-m { text-shadow:0 0 20px ${M}80; }
-        .btn-primary { background:linear-gradient(100deg,${M},${C}); color:#06060c; font-weight:700; border:none; cursor:pointer; font-family:'Inter',sans-serif; transition:box-shadow .2s, transform .15s; }
-        .btn-primary:hover { box-shadow:0 0 32px ${C}66,0 0 32px ${M}44; transform:translateY(-1px); }
-        .btn-ghost { background:transparent; border:1.5px solid #2a2a42; color:#e8e8f0; cursor:pointer; font-family:'Inter',sans-serif; transition:border-color .2s,color .2s,transform .15s; }
-        .btn-ghost:hover { border-color:${C}; color:${C}; transform:translateY(-1px); }
-        .feature-card { transition:transform .2s,border-color .2s,box-shadow .2s; }
-        .feature-card:hover { transform:translateY(-4px); border-color:#2a2a42!important; box-shadow:0 8px 40px rgba(0,0,0,.4); }
-        .faq-row { cursor:pointer; transition:background .15s; }
-        .faq-row:hover { background:#0d0d1a!important; }
-        .stat-card { transition:transform .2s; }
-        .stat-card:hover { transform:translateY(-3px); }
-        .beginners-badge { background:linear-gradient(90deg,${M}22,${C}22); border:1px solid ${C}44; border-radius:999px; }
-        * { box-sizing:border-box; }
-        ::selection { background:${C}44; }
+        
+        .sf-glow-c  { text-shadow:0 0 8px ${C},0 0 24px ${C}80; }
+        .sf-glow-m  { text-shadow:0 0 8px ${M},0 0 24px ${M}80; }
+        .sf-input   { background:#0d0d18; border:1px solid #1f1f33; color:#e8e8f0; font-family:'JetBrains Mono',monospace; font-size:13px; padding:10px 12px; border-radius:8px; width:100%; outline:none; transition:.2s; box-sizing:border-box; }
+        .sf-input:focus { border-color:${C}; box-shadow:0 0 0 3px ${C}22; }
+        .sf-select  { -webkit-appearance:none; appearance:none; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%2300f0ff' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:34px; }
+        .sf-select optgroup { background:#06060c; color:${M}; font-style:normal; font-weight:700; }
+        .sf-select option   { background:#0d0d18; color:#e8e8f0; }
+        .sf-chip  { cursor:pointer; padding:8px 14px; border-radius:999px; border:1px solid #23233a; background:#0d0d18; font-size:12px; transition:.18s; user-select:none; white-space:nowrap; }
+        .sf-chip:hover { border-color:#39395c; }
+        .sf-chip.on { border-color:${C}; color:${C}; box-shadow:0 0 12px ${C}33; }
+        .sf-nav-tab { cursor:pointer; padding:10px 20px; font-size:11px; letter-spacing:3px; border-bottom:2px solid transparent; transition:.2s; user-select:none; }
+        .sf-nav-tab.on { border-color:${C}; color:${C}; }
+        .sf-nav-tab:hover:not(.on) { color:#9a9ab8; }
+        .sf-btn-primary { background:linear-gradient(100deg,${M},${C}); color:#06060c; font-weight:700; border:none; cursor:pointer; font-family:'JetBrains Mono',monospace; }
+        .sf-btn-primary:hover:enabled { box-shadow:0 0 28px ${C}66,0 0 28px ${M}44; }
+        .sf-btn-primary:disabled { opacity:.5; cursor:default; }
+        .sf-btn-ghost { background:transparent; border:1px solid #23233a; color:#8a8aa8; cursor:pointer; font-family:'JetBrains Mono',monospace; transition:.18s; }
+        .sf-btn-ghost:hover:enabled { border-color:${C}; color:${C}; }
+        .sf-btn-ghost:disabled { opacity:.4; cursor:default; }
+        .sf-track:hover { border-color:#23233a!important; }
+        .sf-swap:hover:enabled { border-color:${C}!important; color:${C}!important; box-shadow:0 0 12px ${C}33; }
+        .sf-lib-card:hover { border-color:#23233a!important; }
+        .sf-del-btn  { background:transparent; border:1px solid #23233a; color:#5a5a78; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 10px; border-radius:6px; transition:.18s; }
+        .sf-del-btn:hover { border-color:${M}; color:${M}; }
+        .sf-rename-btn { background:transparent; border:none; color:#4a4a66; cursor:pointer; font-size:13px; padding:2px 6px; border-radius:4px; transition:.15s; line-height:1; }
+        .sf-rename-btn:hover { color:${C}; }
+        .sf-scan { background:linear-gradient(180deg,transparent,${C},transparent); animation:pulse 1.1s infinite; }
+        .sf-row  { animation:rise .42s ease backwards; }
+        .sf-slider { -webkit-appearance:none; appearance:none; width:100%; height:10px; border-radius:999px; background:linear-gradient(90deg, ${M}33, ${C}33); border:1px solid #23233a; outline:none; cursor:pointer; transition:.2s; }
+        .sf-slider:hover { border-color:${C}66; box-shadow:0 0 16px ${C}22; }
+        .sf-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 12px ${C}88, 0 0 24px ${M}44; cursor:grab; transition:.15s; }
+        .sf-slider::-webkit-slider-thumb:hover { transform:scale(1.15); box-shadow:0 0 18px ${C}cc, 0 0 32px ${M}66; }
+        .sf-slider::-webkit-slider-thumb:active { cursor:grabbing; transform:scale(1.05); }
+        .sf-slider::-moz-range-thumb { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 12px ${C}88, 0 0 24px ${M}44; cursor:grab; }
+        .sf-slider::-moz-range-track { height:10px; border-radius:999px; background:linear-gradient(90deg, ${M}33, ${C}33); }
+        @keyframes rise  { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+        @keyframes spin  { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        @keyframes flash { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px ${C}88} }
       `}</style>
 
-      {/* fixed bg */}
-      <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${C}07 1px,transparent 1px),linear-gradient(90deg,${C}07 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 0%,black,transparent 70%)', pointerEvents:'none', zIndex:0 }} />
-      <div style={{ position:'fixed', top:-200, left:'50%', transform:'translateX(-50%)', width:900, height:600, background:`radial-gradient(circle,${M}15,transparent 65%)`, filter:'blur(80px)', pointerEvents:'none', zIndex:0 }} />
+      {/* bg */}
+      <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${C}0a 1px,transparent 1px),linear-gradient(90deg,${C}0a 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 0%,black,transparent 75%)', pointerEvents:'none', zIndex:0 }} />
+      <div style={{ position:'fixed', top:-200, left:'50%', transform:'translateX(-50%)', width:600, height:400, background:`radial-gradient(circle,${M}22,transparent 70%)`, filter:'blur(40px)', pointerEvents:'none', zIndex:0 }} />
 
-      {/* ── NAV ── */}
-      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.85)', padding:'0 24px' }}>
-        <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
-          <div className="sf-display" style={{ fontSize:30, letterSpacing:2 }}>
-            <span className="glow-c" style={{ color:C }}>SET</span><span className="glow-m" style={{ color:M }}>FORGE</span>
-          </div>
-          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-            {isSignedIn ? (
-              <>
-                <Link href="/app">
-                  <button className="btn-primary" style={{ padding:'9px 22px', borderRadius:8, fontSize:14, fontWeight:600 }}>Open App →</button>
-                </Link>
-                <UserButton />
-              </>
-            ) : (
-              <>
-                <SignInButton mode="modal">
-                  <button className="btn-ghost" style={{ padding:'9px 18px', borderRadius:8, fontSize:14 }}>Log in</button>
-                </SignInButton>
-                <SignUpButton mode="modal">
-                  <button className="btn-primary" style={{ padding:'9px 22px', borderRadius:8, fontSize:14, fontWeight:600 }}>Try free for 7 days →</button>
-                </SignUpButton>
-              </>
+      {/* ── TOP NAV ── */}
+      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(12px)', background:'#06060ccc', padding:'0 24px' }}>
+        <div style={{ maxWidth:900, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:56 }}>
+          <Link href="/" style={{ textDecoration:'none' }}>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, letterSpacing:2 }}>
+              <span className="sf-glow-c" style={{ color:C }}>SET</span><span className="sf-glow-m" style={{ color:M }}>FORGE</span>
+            </div>
+          </Link>
+          <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+            {quota?.trial?.active && (
+              <div style={{
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+                padding: '5px 12px',
+                borderRadius: 999,
+                border: `1px solid ${quota.trial.daysLeft <= 2 ? M : quota.trial.daysLeft <= 4 ? '#f59e0b' : C}`,
+                color: quota.trial.daysLeft <= 2 ? M : quota.trial.daysLeft <= 4 ? '#f59e0b' : C,
+              }}>
+                {quota.trial.daysLeft}d left in trial
+              </div>
             )}
+            {quota && !quota.trial?.active && quota.remaining !== 'unlimited' && (
+              <div style={{ fontSize: 11, color: C, fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ color: C }}>{quota.remaining}</span> gens left
+              </div>
+            )}
+            <UserButton />
           </div>
         </div>
       </nav>
 
-      <div style={{ position:'relative', zIndex:1 }}>
+      <div style={{ position:'relative', zIndex:1, maxWidth:900, margin:'0 auto', padding:'40px 20px 80px' }}>
 
-        {/* ── HERO ── */}
-        <section style={{ textAlign:'center', padding:'90px 24px 70px', maxWidth:780, margin:'0 auto' }}>
-          {/* beginner badge */}
-          <div className="beginners-badge sf-mono" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'6px 16px', fontSize:12, color:C, marginBottom:28 }}>
-            ✦ No DJ experience needed — seriously
-          </div>
-
-          <h1 style={{ fontSize:'clamp(38px,6vw,72px)', fontWeight:700, lineHeight:1.15, margin:'0 0 24px', letterSpacing:'-0.02em' }}>
-            Build a professional DJ set<br />
-            <span style={{ background:`linear-gradient(90deg,${M},${C})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-              in about 60 seconds.
-            </span>
+        {/* ── HEADER ── */}
+        <div style={{ textAlign:'center', marginBottom:4 }}>
+          <div style={{ fontSize:10, letterSpacing:6, color:M, marginBottom:4 }} className="sf-glow-m">PERSONALIZED SET CREATION</div>
+          <h1 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:72, lineHeight:.9, margin:0, letterSpacing:2 }}>
+            <span className="sf-glow-c">SET</span><span className="sf-glow-m">FORGE</span>
           </h1>
+        </div>
 
-          <p style={{ fontSize:19, color:'#9a9ab8', maxWidth:560, margin:'0 auto 16px', lineHeight:1.7, fontWeight:400 }}>
-            Tell SetForge your vibe — genre, mood, how long your set is — and the AI builds you a complete, professionally structured tracklist. No music theory. No DJ software. No experience.
-          </p>
-          <p style={{ fontSize:15, color:'#6a6a8a', maxWidth:500, margin:'0 auto 44px', lineHeight:1.6 }}>
-            Perfect for beginners learning to DJ, producers planning sets, and anyone who loves music.
-          </p>
-
-          <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
-            {isSignedIn ? (
-              <Link href="/app">
-                <button className="btn-primary" style={{ padding:'16px 36px', borderRadius:10, fontSize:16, fontWeight:700 }}>Open SetForge →</button>
-              </Link>
-            ) : (
-              <SignUpButton mode="modal">
-                <button className="btn-primary" style={{ padding:'16px 36px', borderRadius:10, fontSize:16, fontWeight:700 }}>Start free — no card needed →</button>
-              </SignUpButton>
-            )}
-            <a href="#how-it-works" style={{ textDecoration:'none' }}>
-              <button className="btn-ghost" style={{ padding:'16px 32px', borderRadius:10, fontSize:15 }}>See how it works</button>
-            </a>
+        {/* ── TABS ── */}
+        <div style={{ display:'flex', justifyContent:'center', borderBottom:'1px solid #16162a', marginTop:20 }}>
+          <div className={`sf-nav-tab ${view==='forge'?'on':''}`} onClick={() => setView('forge')}>⚡ FORGE</div>
+          <div className={`sf-nav-tab ${view==='library'?'on':''}`} onClick={() => { setView('library'); if (!libLoaded) loadLibrary() }}>
+            ◈ LIBRARY{library.length > 0 && <span style={{ marginLeft:6, background:M, color:'#06060c', borderRadius:999, fontSize:9, padding:'1px 6px', fontWeight:700 }}>{library.length}</span>}
           </div>
+        </div>
 
-          <p style={{ marginTop:24, fontSize:13, color:'#4a4a66' }}>7-day free trial · No credit card · Cancel anytime</p>
-        </section>
+        {/* ══════ FORGE VIEW ══════ */}
+        {view === 'forge' && (<>
+          <div style={{ background:'#0a0a14cc', border:'1px solid #1a1a2e', borderRadius:16, padding:24, marginTop:24, backdropFilter:'blur(8px)' }}>
 
-        {/* ── STATS BAR ── */}
-        <section style={{ padding:'0 24px 60px' }}>
-          <div style={{ maxWidth:800, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:16 }}>
-            {STATS.map(s => (
-              <div key={s.n} className="stat-card" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding:'24px 16px', textAlign:'center' }}>
-                <div className="sf-display" style={{ fontSize:48, letterSpacing:1, color:C }} >{s.n}</div>
-                <div style={{ fontSize:13, color:'#6a6a8a', marginTop:4, lineHeight:1.4 }}>{s.label}</div>
+            <SFLabel>GENRE</SFLabel>
+            <div style={{ marginBottom:20 }}>
+              <select className="sf-input sf-select" value={genre} onChange={e => setGenre(e.target.value)}>
+                <option value="__custom__">✦ Custom — describe your own…</option>
+                {Object.entries(GENRE_GROUPS).map(([grp,items]) => (
+                  <optgroup key={grp} label={grp}>{items.map(g => <option key={g} value={g}>{g}</option>)}</optgroup>
+                ))}
+              </select>
+              {genre === '__custom__' && (
+                <input
+                  className="sf-input"
+                  value={customGenre}
+                  onChange={e => setCustomGenre(e.target.value.slice(0, 120))}
+                  placeholder="e.g. 90s French house with disco edits, latin-influenced minimal, anime-core dubstep…"
+                  style={{ marginTop:10, borderColor: customGenre.trim() ? '#00f0ff44' : undefined }}
+                  autoFocus
+                />
+              )}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
+              <div><SFLabel>CROWD / CONTEXT</SFLabel><select className="sf-input sf-select" value={crowd} onChange={e => setCrowd(e.target.value)}>{CROWDS.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div><SFLabel>ENERGY ARC</SFLabel><select className="sf-input sf-select" value={arc} onChange={e => setArc(e.target.value)}>{ARCS.map(a => <option key={a}>{a}</option>)}</select></div>
+            </div>
+
+            <div style={{ marginBottom:20 }}>
+              <SFLabel>VIBE / MOOD <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>
+              <input className="sf-input" value={vibe} onChange={e => setVibe(e.target.value)} placeholder="e.g. dark & hypnotic, summery rooftop, raw & driving…" />
+            </div>
+            <div style={{ marginBottom:20 }}>
+              <SFLabel>REFERENCE ARTISTS <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>
+              <input className="sf-input" value={refArtist} onChange={e => setRefArtist(e.target.value)} placeholder="e.g. Boris Brejcha, Tale Of Us, Charlotte de Witte…" />
+            </div>
+
+            <SFLabel>SET LENGTH</SFLabel>
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              <div className={`sf-chip ${mode==='time'?'on':''}`} onClick={() => setMode('time')}>By Time</div>
+              <div className={`sf-chip ${mode==='count'?'on':''}`} onClick={() => setMode('count')}>By Track Count</div>
+            </div>
+              <div style={{ marginBottom:20, padding:'16px 18px', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:12 }}>
+              {mode === 'time' ? (<>
+                <input type="range" min={15} max={240} step={15} value={minutes} onChange={e => setMinutes(+e.target.value)} className="sf-slider" />
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:12 }}>
+                  <div>
+                    <span className="sf-glow-c" style={{ fontSize:26, color:C, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:1 }}>{minutes} MIN</span>
+                    <span style={{ fontSize:12, color:'#6a6a8a', marginLeft:10 }}>~{Math.round(minutes/4.5)} tracks</span>
+                  </div>
+                  <span style={{ fontSize:10, color:'#4a4a66', letterSpacing:1 }}>15 MIN – 4 HR</span>
+                </div>
+              </>) : (<>
+                <input type="range" min={4} max={50} value={count} onChange={e => setCount(+e.target.value)} className="sf-slider" />
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:12 }}>
+                  <span className="sf-glow-c" style={{ fontSize:26, color:C, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:1 }}>{count} TRACKS</span>
+                  <span style={{ fontSize:10, color:'#4a4a66', letterSpacing:1 }}>4 – 50</span>
+                </div>
+              </>)}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:20, alignItems:'end' }}>
+              <div><SFLabel>BPM LOW</SFLabel><input className="sf-input" type="number" value={bpmLow} onChange={e => setBpmLow(+e.target.value)} /></div>
+              <div><SFLabel>BPM HIGH</SFLabel><input className="sf-input" type="number" value={bpmHigh} onChange={e => setBpmHigh(+e.target.value)} /></div>
+              <div className={`sf-chip ${keyMatch?'on':''}`} onClick={() => setKeyMatch(!keyMatch)} style={{ height:40, display:'flex', alignItems:'center' }}>
+                ♪ Harmonic {keyMatch?'ON':'OFF'}
               </div>
-            ))}
+            </div>
+            <button
+              onClick={tryExample}
+              disabled={loading}
+              className="sf-btn-ghost"
+              style={{ width:'100%', marginTop:10, padding:12, borderRadius:10, fontSize:12, letterSpacing:2 }}
+            >
+              ✦ NOT SURE? TRY AN EXAMPLE SET
+            </button>
+            <button className="sf-btn-primary" onClick={() => generate(false)} disabled={loading || (genre === '__custom__' && !customGenre.trim())} style={{ width:'100%', marginTop:28, padding:16, borderRadius:10, fontSize:15, letterSpacing:2, transition:'.2s' }}>
+              {loading ? 'FORGING SET…' : '⚡ FORGE SET'}
+            </button>
           </div>
-        </section>
 
-        {/* ── FOR BEGINNERS CALLOUT ── */}
-        <section style={{ padding:'20px 24px 60px', maxWidth:900, margin:'0 auto' }}>
-          <div style={{ background:'linear-gradient(135deg,#0d0d1a,#0a0a14)', border:'1px solid #1f1f38', borderRadius:20, padding:'48px 40px', position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:-60, right:-60, width:250, height:250, background:`radial-gradient(circle,${C}12,transparent 70%)`, filter:'blur(30px)', pointerEvents:'none' }} />
-            <div style={{ position:'relative' }}>
-              <div style={{ fontSize:13, color:C, fontWeight:600, letterSpacing:2, marginBottom:12, textTransform:'uppercase' }}>✦ Made for beginners</div>
-              <h2 style={{ fontSize:'clamp(26px,4vw,40px)', fontWeight:700, margin:'0 0 16px', lineHeight:1.2 }}>
-                You don't need to know anything about DJing to start.
-              </h2>
-              <p style={{ fontSize:16, color:'#9a9ab8', maxWidth:580, lineHeight:1.7, marginBottom:28 }}>
-                Setflow, Rekordbox, Traktor — those tools assume you already have a massive music library and years of experience. SetForge assumes nothing. Just tell it what you like and it handles everything else: picking the songs, matching the tempo, making sure the transitions sound smooth.
-              </p>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
-                {[
-                  { icon:'✅', text:'No library to import' },
-                  { icon:'✅', text:'No music theory knowledge' },
-                  { icon:'✅', text:'No DJ software required' },
-                  { icon:'✅', text:'No experience necessary' },
-                ].map(item => (
-                  <div key={item.text} style={{ display:'flex', alignItems:'center', gap:10, fontSize:15, color:'#c8c8e0' }}>
-                    <span>{item.icon}</span>{item.text}
+          {error && (
+            <div style={{ marginTop:16, padding:14, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:13 }}>
+              {error}
+              {error.includes('subscription') && (
+                <Link href="/#pricing" style={{ color:C, marginLeft:8, textDecoration:'underline' }}>View plans →</Link>
+              )}
+            </div>
+          )}
+
+          {loading && (
+            <div style={{ marginTop:32, textAlign:'center' }}>
+              <div className="sf-scan" style={{ height:2, width:'100%', borderRadius:2 }} />
+              <div style={{ marginTop:16, fontSize:11, letterSpacing:3, color:'#6a6a8a', animation:'pulse 1.2s infinite' }}>BEAT-MATCHING · KEY-SORTING · SHAPING ENERGY</div>
+            </div>
+          )}
+
+          {/* ── RESULTS ── */}
+          {set && (
+            <div ref={resultRef} style={{ marginTop:40 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16, flexWrap:'wrap', gap:12 }}>
+                <div>
+                  <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:38, margin:0, letterSpacing:1 }} className="sf-glow-c">{set.title}</h2>
+                  <div style={{ fontSize:12, color:'#9a9ab8', maxWidth:480, lineHeight:1.5 }}>{set.summary}</div>
+                  <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+                    {[set._meta?.genre||effectiveGenre, set._meta?.crowd||crowd, set._meta?.arc||arc].map(tag => tag && (
+                      <span key={tag} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'2px 8px' }}>{tag}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  <button onClick={saveSet} disabled={saving} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12, animation:savedFlash?'flash .6s ease':'none', color:savedFlash?C:undefined, borderColor:savedFlash?C:undefined }}>
+                    {saving?'SAVING…':savedFlash?'✓ SAVED':'◈ SAVE TO LIBRARY'}
+                  </button>
+                  <button onClick={exportText} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12 }}>↓ EXPORT .TXT</button>
+                   <button onClick={copyTracklist} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12, color: copied ? '#00f0ff' : undefined, borderColor: copied ? '#00f0ff' : undefined }}>
+                    {copied ? '✓ COPIED' : '⧉ COPY LIST'}
+                  </button>
+                  {locked.size > 0 && (
+                    <button onClick={() => generate(true)} disabled={loading} className="sf-btn-ghost" style={{ padding:'10px 16px', borderRadius:8, fontSize:12, color:'#f59e0b', borderColor:'#f59e0b' }}>
+                      ↻ REFORGE ({locked.size} locked)
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <EnergyBar tracks={set.tracks} />
+
+              {/* camelot + key sequence */}
+              <div style={{ marginTop:16, display:'grid', gridTemplateColumns:'auto 1fr', gap:20, alignItems:'start' }}>
+                <CamelotWheel tracks={set.tracks} />
+                <div style={{ display:'flex', flexDirection:'column', gap:6, paddingTop:28 }}>
+                  <div style={{ fontSize:10, letterSpacing:2, color:'#6a6a8a', marginBottom:4 }}>KEY SEQUENCE</div>
+                  {set.tracks.map((t,i) => {
+                    const m = (t.key||'').toUpperCase().match(/^(\d+)([AB])$/)
+                    const hue = m ? CAM_HUES[parseInt(m[1])-1] : null
+                    return (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:11 }}>
+                        <span style={{ color:M, fontFamily:"'Bebas Neue',sans-serif", fontSize:14, minWidth:24 }}>{String(t.n).padStart(2,'0')}</span>
+                        {hue !== null && <span style={{ width:8, height:8, borderRadius:'50%', background:`hsl(${hue},85%,58%)`, flexShrink:0, boxShadow:`0 0 6px hsl(${hue},85%,58%)` }} />}
+                        <span style={{ color:'#e8e8f0', fontWeight:700, minWidth:32 }}>{t.key}</span>
+                        <span style={{ color:'#6a6a8a', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.artist} — {t.title}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* track list */}
+              <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:8 }}>
+                {set.tracks.map((t,i) => (
+<div
+    key={`${t.n}-${t.title}`}
+    className="sf-row sf-track"
+    draggable
+    onDragStart={() => setDragIndex(i)}
+    onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
+    onDragLeave={() => setDragOverIndex(null)}
+    onDrop={() => { if (dragIndex !== null) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
+    onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+    style={{
+      animationDelay:`${i*0.03}s`,
+      display:'grid',
+      gridTemplateColumns:'20px 36px 1fr auto auto auto',
+      gap:12, alignItems:'center',
+      background: dragOverIndex === i && dragIndex !== i ? '#10102a' : '#0a0a14',
+      border: dragOverIndex === i && dragIndex !== i
+        ? `1px solid ${C}`
+        : locked.has(i) ? '1px solid #f59e0b55' : '1px solid #16162a',
+      borderRadius:10, padding:'12px 16px',
+      opacity: dragIndex === i ? 0.4 : swapping === i ? 0.45 : 1,
+      transition:'.2s',
+    }}
+  >
+    <div title="Drag to reorder" style={{ cursor:'grab', color:'#3a3a58', fontSize:14, userSelect:'none', textAlign:'center' }}>⠿</div>
+                        <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700 }}>{t.title}</div>
+                      <div style={{ fontSize:12, color:'#8a8aa8', display:'flex', alignItems:'center', gap:8 }}>
+                        {t.artist}
+                        <a href={trackSearchUrl(t,'beatport')} target="_blank" rel="noopener noreferrer" title="Find on Beatport"
+                           style={{ fontSize:9, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:4, padding:'1px 6px', letterSpacing:1 }}>
+                          BP
+                        </a>
+                        <a href={trackSearchUrl(t,'spotify')} target="_blank" rel="noopener noreferrer" title="Find on Spotify"
+                           style={{ fontSize:9, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:4, padding:'1px 6px', letterSpacing:1 }}>
+                          SP
+                        </a>
+                      </div>
+                      <div style={{ fontSize:11, color:'#5a5a78', marginTop:3 }}>↳ {t.transition}</div>
+                    </div>          
+                    <div style={{ textAlign:'right', fontSize:12, lineHeight:1.7 }}>
+                      <div style={{ color:C }}>{t.bpm} <span style={{ color:'#5a5a78' }}>BPM</span></div>
+                      <div>{t.key}</div>
+                      <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
+                    </div>
+                     <button
+                      onClick={() => toggleLock(i)}
+                      title={locked.has(i) ? 'Unlock track' : 'Lock track — survives reforge'}
+                      style={{
+                        background:'transparent',
+                        border:`1px solid ${locked.has(i) ? '#f59e0b' : '#23233a'}`,
+                        color: locked.has(i) ? '#f59e0b' : '#5a5a78',
+                        width:36, height:36, borderRadius:8, cursor:'pointer',
+                        fontSize:15, display:'flex', alignItems:'center', justifyContent:'center',
+                        transition:'.18s', flexShrink:0,
+                        boxShadow: locked.has(i) ? '0 0 10px #f59e0b44' : 'none',
+                      }}
+                    >
+                      {locked.has(i) ? '🔒' : '🔓'}
+                    </button>
+                    <button className="sf-swap" onClick={() => swapTrack(i)} disabled={swapping!==null} title="Swap for a fresh pick" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:36, height:36, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                      <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
+                    </button>
                   </div>
                 ))}
               </div>
+              <div style={{ marginTop:16, fontSize:11, color:'#4a4a66', textAlign:'center' }}>
+                AI-curated blueprints — verify BPM & key in your library before performing.
+              </div>
             </div>
-          </div>
-        </section>
+          )}
+        </>)}
 
-        {/* ── HOW IT WORKS ── */}
-        <section id="how-it-works" style={{ padding:'40px 24px 60px', maxWidth:1000, margin:'0 auto' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
-            <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:700, margin:'0 0 12px' }}>How it works</h2>
-            <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:480, margin:'0 auto' }}>Three steps from blank page to ready-to-play set.</p>
-          </div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:20 }}>
-            {[
-              {
-                n:'1', color:M,
-                title:'Tell it your vibe',
-                desc:'Pick a genre (or describe your own), choose your crowd type, set the mood. Even something like "dark and hypnotic warehouse techno" works perfectly.',
-                tag:'Takes 30 seconds',
-              },
-              {
-                n:'2', color:C,
-                title:'AI builds your set',
-                desc:'SetForge picks real tracks, orders them so they flow together musically, shapes the energy across your set, and writes transition notes for each song.',
-                tag:'Ready in ~20 seconds',
-              },
-              {
-                n:'3', color:M,
-                title:'Tweak and take it',
-                desc:'Swap tracks you don\'t love, drag them into your preferred order, lock your favourites. Then copy, export, or share your finished set.',
-                tag:'Your set, your way',
-              },
-            ].map(step => (
-              <div key={step.n} style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:32, position:'relative', overflow:'hidden' }}>
-                <div style={{ position:'absolute', top:-20, right:-10, fontFamily:"'Bebas Neue',sans-serif", fontSize:120, color:step.color, opacity:0.06, lineHeight:1, pointerEvents:'none', userSelect:'none' }}>{step.n}</div>
-                <div style={{ position:'relative' }}>
-                  <div style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:36, height:36, borderRadius:999, background:`${step.color}22`, border:`1px solid ${step.color}44`, fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:step.color, marginBottom:16 }}>{step.n}</div>
-                  <h3 style={{ fontSize:19, fontWeight:700, margin:'0 0 10px' }}>{step.title}</h3>
-                  <p style={{ fontSize:14, color:'#6a6a8a', lineHeight:1.7, margin:'0 0 16px' }}>{step.desc}</p>
-                  <div style={{ fontSize:12, color:step.color, fontWeight:600, background:`${step.color}11`, borderRadius:999, padding:'4px 12px', display:'inline-block' }}>{step.tag}</div>
-                </div>
+        {/* ══════ LIBRARY VIEW ══════ */}
+        {view === 'library' && (
+          <div style={{ marginTop:24 }}>
+            {!libLoaded ? (
+              <div style={{ textAlign:'center', color:'#6a6a8a', padding:60, fontSize:12, letterSpacing:2, animation:'pulse 1.2s infinite' }}>LOADING LIBRARY…</div>
+            ) : library.length === 0 ? (
+              <div style={{ textAlign:'center', padding:80 }}>
+                <div style={{ fontSize:36, marginBottom:12, opacity:.3 }}>◈</div>
+                <div style={{ color:'#6a6a8a', fontSize:13 }}>No saved sets yet.</div>
+                <div style={{ color:'#4a4a66', fontSize:12, marginTop:6 }}>Forge a set and hit <span style={{ color:C }}>Save to Library</span> to store it here.</div>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── EXAMPLE GALLERY ── */}
-        <ExampleGallery />
-
-        {/* ── FEATURES ── */}
-        <section style={{ padding:'40px 24px 60px', maxWidth:1100, margin:'0 auto' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
-            <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:700, margin:'0 0 12px' }}>Everything you need to build great sets</h2>
-            <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:500, margin:'0 auto' }}>Professional DJ tools, explained in plain English.</p>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:18 }}>
-            {FEATURES.map(f => (
-              <div key={f.title} className="feature-card" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:28 }}>
-                <div style={{ fontSize:32, marginBottom:14 }}>{f.icon}</div>
-                <div style={{ fontSize:16, fontWeight:700, marginBottom:6, color:'#e8e8f0' }}>{f.title}</div>
-                <div style={{ fontSize:13, color:C, marginBottom:10, fontWeight:500 }}>{f.plain}</div>
-                <div style={{ fontSize:14, color:'#6a6a8a', lineHeight:1.7 }}>{f.desc}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── FAQ ── */}
-        <section style={{ padding:'40px 24px 60px', maxWidth:780, margin:'0 auto' }}>
-          <div style={{ textAlign:'center', marginBottom:40 }}>
-            <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:700, margin:'0 0 12px' }}>Questions beginners always ask</h2>
-            <p style={{ fontSize:16, color:'#6a6a8a' }}>No jargon. Just honest answers.</p>
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {FAQS.map((faq, i) => (
-              <div key={i} className="faq-row" onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ background:'#0a0a14', borderRadius: i===0?'14px 14px 0 0':i===FAQS.length-1?'0 0 14px 14px':'0', border:'1px solid #1a1a2e', borderTop: i===0?undefined:'none', overflow:'hidden' }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 24px', gap:16 }}>
-                  <div style={{ fontSize:15, fontWeight:600, color:'#e8e8f0', lineHeight:1.4 }}>{faq.q}</div>
-                  <div style={{ fontSize:20, color: openFaq===i ? C : '#4a4a66', transition:'transform .2s,color .2s', transform:openFaq===i?'rotate(45deg)':'none', flexShrink:0 }}>+</div>
-                </div>
-                {openFaq === i && (
-                  <div style={{ padding:'0 24px 20px', fontSize:15, color:'#9a9ab8', lineHeight:1.75 }}>{faq.a}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── PRICING ── */}
-        <section id="pricing" style={{ padding:'40px 24px 60px', maxWidth:1000, margin:'0 auto' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
-            <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:700, margin:'0 0 12px' }}>Simple pricing</h2>
-            <p style={{ fontSize:16, color:'#6a6a8a' }}>Start free. No credit card. Cancel whenever you want.</p>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:20 }}>
-            {[
-              {
-                name:'Starter', price:'$9', period:'/month', highlight:false,
-                badge:null, color:C,
-                desc:'Great for DJs learning the craft.',
-                perks:['30 sets per month','Swap tracks as much as you want','Save & organise your sets','Export to DJ software'],
-              },
-              {
-                name:'Pro', price:'$19', period:'/month', highlight:true,
-                badge:'Most popular', color:M,
-                desc:'For DJs who create sets regularly.',
-                perks:['Unlimited sets','Unlimited track swaps','Cloud library','Export to DJ software','Priority generation'],
-              },
-              {
-                name:'Agency', price:'$39', period:'/month', highlight:false,
-                badge:null, color:C,
-                desc:'For teams, agencies, and promoters.',
-                perks:['Everything in Pro','Whole team access','Custom branding on exports','Early feature access'],
-              },
-            ].map(tier => (
-              <div key={tier.name} style={{ background:'#0a0a14', border:`1.5px solid ${tier.highlight ? M : '#1a1a2e'}`, borderRadius:18, padding:32, position:'relative', boxShadow:tier.highlight?`0 0 50px ${M}18`:'none', transition:'transform .2s' }}>
-                {tier.badge && (
-                  <div style={{ position:'absolute', top:-13, left:'50%', transform:'translateX(-50%)', background:M, color:'#06060c', fontSize:11, padding:'4px 16px', borderRadius:999, fontWeight:700, whiteSpace:'nowrap' }}>{tier.badge}</div>
-                )}
-                <div style={{ fontSize:20, fontWeight:700, color:tier.color, marginBottom:4 }}>{tier.name}</div>
-                <div style={{ fontSize:13, color:'#6a6a8a', marginBottom:20 }}>{tier.desc}</div>
-                <div style={{ marginBottom:24 }}>
-                  <span style={{ fontSize:52, fontWeight:700, color:'#e8e8f0', letterSpacing:'-0.02em' }}>{tier.price}</span>
-                  <span style={{ fontSize:14, color:'#6a6a8a' }}>{tier.period}</span>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:28 }}>
-                  {tier.perks.map(p => (
-                    <div key={p} style={{ display:'flex', gap:10, alignItems:'flex-start', fontSize:14, color:'#c8c8e0' }}>
-                      <span style={{ color:tier.color, flexShrink:0, marginTop:1 }}>✓</span>{p}
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {library.map((item,i) => (
+                  <div key={item.id} className="sf-row sf-lib-card" style={{ animationDelay:`${i*0.04}s`, background:'#0a0a14', border:'1px solid #16162a', borderRadius:12, padding:'16px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
+                    <div style={{ flex:1, minWidth:180 }}>
+                      {renamingId === item.id ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                          <input ref={renameRef} className="sf-input" value={renameVal} onChange={e => setRenameVal(e.target.value)} onKeyDown={e => { if (e.key==='Enter') commitRename(item.id); if (e.key==='Escape') { setRenamingId(null); setRenameVal('') } }} style={{ fontSize:15, padding:'6px 10px', fontFamily:"'Bebas Neue',sans-serif", maxWidth:260 }} />
+                          <button onClick={() => commitRename(item.id)} style={{ background:C, color:'#06060c', border:'none', padding:'6px 12px', borderRadius:6, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>SAVE</button>
+                          <button className="sf-del-btn" onClick={() => { setRenamingId(null); setRenameVal('') }}>CANCEL</button>
+                        </div>
+                      ) : (
+                        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, letterSpacing:1 }} className="sf-glow-c">{item.title}</div>
+                          <button className="sf-rename-btn" onClick={() => { setRenamingId(item.id); setRenameVal(item.title) }} title="Rename">✏</button>
+                        </div>
+                      )}
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:4 }}>
+                        {[item.meta?.genre, item.meta?.crowd, item.meta?.arc].map(tag => tag && (
+                          <span key={String(tag)} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'2px 8px' }}>{String(tag)}</span>
+                        ))}
+                      </div>
+                      {item.meta?.vibe      && <div style={{ fontSize:11, color:'#5a5a78', fontStyle:'italic' }}>"{item.meta.vibe}"</div>}
+                      {item.meta?.refArtist && <div style={{ fontSize:11, color:'#5a5a78' }}>Ref: {item.meta.refArtist}</div>}
+                      <div style={{ fontSize:11, color:'#4a4a66', marginTop:4 }}>
+                        {item.meta?.trackCount && `${item.meta.trackCount} tracks · `}
+                        {new Date(item.meta?.savedAt ? Number(item.meta.savedAt) : item.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <SignUpButton mode="modal">
-                  <button className={tier.highlight?'btn-primary':'btn-ghost'} style={{ width:'100%', padding:'14px 0', borderRadius:10, fontSize:15, fontWeight:600 }}>
-                    Start 7-day free trial
-                  </button>
-                </SignUpButton>
+                    
+                    <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+                      {deleteConf === item.id ? (
+                        <>
+                        
+                          <span style={{ fontSize:11, color:M }}>Delete?</span>
+                          <button onClick={() => deleteSet(item.id)} style={{ background:M, color:'#06060c', border:'none', padding:'6px 12px', borderRadius:6, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>YES</button>
+                          <button className="sf-del-btn" onClick={() => setDeleteConf(null)}>NO</button>
+                        </>
+                      ) : (
+                        <button className="sf-del-btn" onClick={() => { setDeleteConf(item.id); setRenamingId(null); setRenameVal('') }}>✕ DELETE</button>
+                      )}
+                      <button onClick={() => loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'8px 16px', borderRadius:8, fontSize:12 }}>
+                        {libLoading ? '…' : '▶ LOAD SET'}
+
+                      </button>
+                      <button
+                        onClick={() => shareSet(item.id)}
+                        disabled={sharingId !== null}
+                        className="sf-btn-ghost"
+                        style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color: copiedId === item.id ? '#00f0ff' : undefined, borderColor: copiedId === item.id ? '#00f0ff' : undefined }}
+                      >
+                        {sharingId === item.id ? '…' : copiedId === item.id ? '✓ LINK COPIED' : '⤴ SHARE'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-          <p style={{ textAlign:'center', fontSize:13, color:'#4a4a66', marginTop:24 }}>All plans include a 7-day free trial. No credit card required to start.</p>
-        </section>
+        )}
+      </div>
+    </div>
+  )
+}
 
-        {/* ── BOTTOM CTA ── */}
-        <section style={{ padding:'60px 24px 100px', textAlign:'center' }}>
-          <div style={{ maxWidth:600, margin:'0 auto', background:'linear-gradient(135deg,#0d0d1a,#0a0a14)', border:'1px solid #1f1f38', borderRadius:24, padding:'56px 40px', position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 100%,${C}0e,transparent 70%)`, pointerEvents:'none' }} />
-            <div style={{ position:'relative' }}>
-              <div style={{ fontSize:13, color:C, fontWeight:600, letterSpacing:2, marginBottom:16, textTransform:'uppercase' }}>✦ Free for 7 days</div>
-              <h2 style={{ fontSize:'clamp(28px,5vw,44px)', fontWeight:700, margin:'0 0 16px', lineHeight:1.2 }}>
-                Ready to build your first set?
-              </h2>
-              <p style={{ fontSize:16, color:'#6a6a8a', marginBottom:32, lineHeight:1.6 }}>
-                Join DJs and music lovers already using SetForge. Your first set is one minute away.
-              </p>
-              <SignUpButton mode="modal">
-                <button className="btn-primary" style={{ padding:'18px 48px', borderRadius:12, fontSize:16, fontWeight:700 }}>Start free — no card needed →</button>
-              </SignUpButton>
-            </div>
-          </div>
-        </section>
+// ── sub-components ────────────────────────────────────────────
+function SFLabel({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize:10, letterSpacing:2, color:'#6a6a8a', marginBottom:8 }}>{children}</div>
+}
 
-        {/* ── FOOTER ── */}
-        <footer style={{ borderTop:'1px solid #16162a', padding:'32px 24px', textAlign:'center' }}>
-          <div className="sf-display" style={{ fontSize:26, letterSpacing:2, marginBottom:8 }}>
-            <span style={{ color:C }}>SET</span><span style={{ color:M }}>FORGE</span>
-          </div>
-          <p style={{ fontSize:13, color:'#4a4a66', letterSpacing:.5 }}>
-            © {new Date().getFullYear()} SetForge · AI-powered DJ set creation for everyone
-          </p>
-        </footer>
+function EnergyBar({ tracks }: { tracks: Track[] }) {
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:52, background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:'6px 10px' }}>
+      {tracks.map((t,i) => (
+        <div key={i} title={`${t.artist} — ${t.title} · E${t.energy}`} style={{ flex:1, height:`${(t.energy/10)*100}%`, minHeight:3, background:`linear-gradient(180deg,${M},${C})`, borderRadius:2, opacity:.85 }} />
+      ))}
+    </div>
+  )
+}
 
+function CamelotWheel({ tracks }: { tracks: Track[] }) {
+  const [hovered, setHovered] = useState<string|null>(null)
+  const SZ=260, CX=130, CY=130, RO=122, RM=84, RI=50
+
+  const keyMap: Record<string, Track[]> = {}
+  tracks.forEach(t => {
+    const k = (t.key||'').toUpperCase().trim()
+    if (!k) return
+    if (!keyMap[k]) keyMap[k] = []
+    keyMap[k].push(t)
+  })
+  const usedKeys = new Set(Object.keys(keyMap))
+
+  function polar(r:number, deg:number) {
+    const rad = ((deg-90)*Math.PI)/180
+    return { x: CX+r*Math.cos(rad), y: CY+r*Math.sin(rad) }
+  }
+  function segPath(num:number, type:'A'|'B') {
+    const s=(num-1)*30, e=num*30
+    const r1=type==='B'?RM+1:RI, r2=type==='B'?RO:RM-1
+    const p1=polar(r2,s), p2=polar(r2,e), p3=polar(r1,e), p4=polar(r1,s)
+    return `M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} A${r2} ${r2} 0 0 1 ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L${p3.x.toFixed(1)} ${p3.y.toFixed(1)} A${r1} ${r1} 0 0 0 ${p4.x.toFixed(1)} ${p4.y.toFixed(1)}Z`
+  }
+  function segCenter(num:number, type:'A'|'B') {
+    return polar(type==='B'?(RO+RM)/2:(RM+RI)/2, (num-0.5)*30)
+  }
+  const seqPoints = tracks.map(t => {
+    const m=(t.key||'').toUpperCase().trim().match(/^(\d+)([AB])$/)
+    if (!m) return null
+    const c=segCenter(parseInt(m[1]),m[2] as 'A'|'B')
+    return `${c.x.toFixed(1)},${c.y.toFixed(1)}`
+  }).filter(Boolean).join(' ')
+
+  const hovTracks = hovered ? (keyMap[hovered]||[]) : []
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+      <div style={{ fontSize:10, letterSpacing:2, color:'#6a6a8a' }}>CAMELOT WHEEL</div>
+      <svg width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} style={{ overflow:'visible' }}>
+        {Array.from({length:12},(_,i)=>i+1).map(num => {
+          const hue = CAM_HUES[num-1]
+          return (['B','A'] as const).map(type => {
+            const key=`${num}${type}`, used=usedKeys.has(key), isHov=hovered===key
+            const c=segCenter(num,type)
+            return (
+              <g key={key} onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} style={{ cursor:'pointer' }}>
+                <path d={segPath(num,type)} fill={used?`hsl(${hue},88%,${type==='B'?60:50}%)`:`hsl(${hue},28%,16%)`} stroke="#06060c" strokeWidth={1.5} opacity={isHov?1:used?0.88:0.5} />
+                <text x={c.x} y={c.y-(used&&keyMap[key].length>0?5:0)} textAnchor="middle" dominantBaseline="middle" fontSize={type==='B'?10:8} fontWeight={used?'700':'400'} fill={used?'#fff':'#3a3a58'} fontFamily="'JetBrains Mono',monospace" pointerEvents="none">{key}</text>
+                {used && <text x={c.x} y={c.y+7} textAnchor="middle" dominantBaseline="middle" fontSize={6} fill={type==='B'?'rgba(0,0,0,0.75)':'rgba(255,255,255,0.8)'} fontFamily="'JetBrains Mono',monospace" pointerEvents="none">{keyMap[key].map(t=>t.n).join('·')}</text>}
+              </g>
+            )
+          })
+        })}
+        {seqPoints && <polyline points={seqPoints} fill="none" stroke={C} strokeWidth={1.5} strokeDasharray="5 3" opacity={0.55} strokeLinejoin="round" />}
+        {tracks.map((t,i) => {
+          const m=(t.key||'').toUpperCase().trim().match(/^(\d+)([AB])$/)
+          if (!m) return null
+          const c=segCenter(parseInt(m[1]),m[2] as 'A'|'B')
+          return <circle key={i} cx={c.x} cy={c.y} r={3} fill={`hsl(${CAM_HUES[parseInt(m[1])-1]},90%,70%)`} stroke="#06060c" strokeWidth={1} opacity={0.9} />
+        })}
+        <circle cx={CX} cy={CY} r={RI-2} fill="#08080f" stroke="#1a1a2e" strokeWidth={1} />
+        <text x={CX} y={CY-7} textAnchor="middle" fontSize={14} fontFamily="'Bebas Neue',sans-serif" fill="#4a4a66">{usedKeys.size}</text>
+        <text x={CX} y={CY+7} textAnchor="middle" fontSize={7} fontFamily="'JetBrains Mono',monospace" fill="#3a3a58">KEYS</text>
+      </svg>
+      <div style={{ minHeight:36, fontSize:11, textAlign:'center', color:'#9a9ab8', lineHeight:1.5, maxWidth:260 }}>
+        {hovered
+          ? hovTracks.length>0
+            ? <><span style={{ color:C, fontWeight:700 }}>{hovered}</span>{' — '}{hovTracks.map(t=>`${t.n}. ${t.title}`).join(' · ')}</>
+            : <span style={{ color:'#4a4a66' }}>Not used in this set</span>
+          : <span style={{ color:'#4a4a66', fontSize:10, letterSpacing:1 }}>HOVER A KEY TO INSPECT</span>}
       </div>
     </div>
   )
