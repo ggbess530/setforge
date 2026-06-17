@@ -2,12 +2,13 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-export type Tier = 'starter' | 'pro' | 'agency'
+export type Tier = 'free' | 'pro' | 'team'
 
+// Monthly generation limits — null means unlimited
 const MONTHLY_LIMITS: Record<Tier, number | null> = {
-  starter: 30,
-  pro:     null,
-  agency:  null,
+  free: 5,
+  pro:  null,
+  team: null,
 }
 
 export interface TrialInfo {
@@ -18,11 +19,11 @@ export interface TrialInfo {
 export interface SubscriptionStatus {
   active:               boolean
   tier:                 Tier
-  remainingGenerations: number | null
+  remainingGenerations: number | null  // null = unlimited
   trial?:               TrialInfo
+  isFree?:              boolean        // true when on permanent free tier
 }
 
-// ── Supabase client ───────────────────────────────────────────
 function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,28 +32,42 @@ function createAdminClient() {
   )
 }
 
-// ── Admin bypass ──────────────────────────────────────────────
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS || '')
     .split(',').map(id => id.trim()).filter(Boolean)
     .includes(userId)
 }
 
+async function getMonthlyUsage(userId: string): Promise<number> {
+  const db = createAdminClient()
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+  const { count } = await db
+    .from('usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('action', 'generate')
+    .gte('created_at', startOfMonth.toISOString())
+  return count ?? 0
+}
+
 // ── Main check ────────────────────────────────────────────────
 export async function checkSubscription(userId: string): Promise<SubscriptionStatus> {
+
+  // Admin bypass — unlimited agency-level access
   if (isAdmin(userId)) {
-    return { active: true, tier: 'agency', remainingGenerations: null }
+    return { active: true, tier: 'pro', remainingGenerations: null }
   }
 
   const db = createAdminClient()
-
   const { data: sub } = await db
     .from('subscriptions')
     .select('tier, status, trial_ends_at')
     .eq('user_id', userId)
     .single()
 
-  // ── New user — auto-create 7-day trial ────────────────────
+  // ── Brand new user — start 7-day Pro trial ────────────────
   if (!sub) {
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     await db.from('subscriptions').insert({
@@ -62,61 +77,53 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
       trial_ends_at: trialEndsAt,
       updated_at:    new Date().toISOString(),
     })
-    return {
-      active:               true,
-      tier:                 'pro',
-      remainingGenerations: null,
-      trial:                { active: true, daysLeft: 7 },
-    }
+    return { active: true, tier: 'pro', remainingGenerations: null, trial: { active: true, daysLeft: 7 } }
   }
 
   // ── Active paid subscription ──────────────────────────────
   if (sub.status === 'active') {
-    const tier  = (sub.tier ?? 'starter') as Tier
-    const limit = MONTHLY_LIMITS[tier]
-    if (limit === null) return { active: true, tier, remainingGenerations: null }
-
-    const startOfMonth = new Date()
-    startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0)
-
-    const { count } = await db
-      .from('usage')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('action', 'generate')
-      .gte('created_at', startOfMonth.toISOString())
-
-    const used      = count ?? 0
-    const remaining = Math.max(0, limit - used)
+    const tier = (sub.tier ?? 'free') as Tier
+    if (MONTHLY_LIMITS[tier] === null) {
+      return { active: true, tier, remainingGenerations: null }
+    }
+    const used      = await getMonthlyUsage(userId)
+    const remaining = Math.max(0, (MONTHLY_LIMITS[tier] ?? 5) - used)
     return { active: true, tier, remainingGenerations: remaining }
   }
 
-  // ── Trial period check ────────────────────────────────────
+  // ── Active trial ──────────────────────────────────────────
   if (sub.status === 'trial' && sub.trial_ends_at) {
     const now      = new Date()
     const trialEnd = new Date(sub.trial_ends_at)
 
     if (now < trialEnd) {
       const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-      return {
-        active:               true,
-        tier:                 'pro',
-        remainingGenerations: null,
-        trial:                { active: true, daysLeft },
-      }
+      return { active: true, tier: 'pro', remainingGenerations: null, trial: { active: true, daysLeft } }
     }
 
-    // Trial expired
-    return {
-      active:               false,
-      tier:                 'starter',
-      remainingGenerations: 0,
-      trial:                { active: false, daysLeft: 0 },
-    }
+    // Trial just expired — auto-downgrade to free tier
+    await db.from('subscriptions').update({
+      status:     'free',
+      tier:       'free',
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId)
+
+    const used      = await getMonthlyUsage(userId)
+    const remaining = Math.max(0, 5 - used)
+    return { active: true, tier: 'free', remainingGenerations: remaining, isFree: true, trial: { active: false, daysLeft: 0 } }
   }
 
-  // ── Inactive / cancelled ──────────────────────────────────
-  return { active: false, tier: 'starter', remainingGenerations: 0 }
+  // ── Permanent free tier ───────────────────────────────────
+  if (sub.status === 'free') {
+    const used      = await getMonthlyUsage(userId)
+    const remaining = Math.max(0, 5 - used)
+    return { active: true, tier: 'free', remainingGenerations: remaining, isFree: true }
+  }
+
+  // ── Inactive / cancelled — drop to free tier ──────────────
+  const used      = await getMonthlyUsage(userId)
+  const remaining = Math.max(0, 5 - used)
+  return { active: true, tier: 'free', remainingGenerations: remaining, isFree: true }
 }
 
 // ── Usage recorder ────────────────────────────────────────────

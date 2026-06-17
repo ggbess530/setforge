@@ -1,5 +1,4 @@
-// ▸ Replace: app/api/generate/route.ts
-// ▸ Adds support for locked tracks — regeneration keeps them in place
+// ▸ Place at: app/api/generate/route.ts
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
@@ -13,22 +12,16 @@ export async function POST(req: Request) {
 
     const sub = await checkSubscription(userId)
 
-    if (!sub.active) {
-      const trialExpired = sub.trial && !sub.trial.active
-      return NextResponse.json(
-        {
-          error: trialExpired
-            ? 'Your 7-day free trial has ended. Subscribe to keep forging sets.'
-            : 'No active subscription. Subscribe to start forging sets.',
-          code: trialExpired ? 'TRIAL_EXPIRED' : 'NO_SUBSCRIPTION',
-        },
-        { status: 403 }
-      )
-    }
-
+    // Free tier limit reached
     if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
       return NextResponse.json(
-        { error: `Monthly limit reached on your ${sub.tier} plan. Upgrade to Pro for unlimited sets.`, code: 'LIMIT_REACHED' },
+        {
+          error: sub.isFree
+            ? 'You\'ve used all 5 free sets this month. Upgrade to Pro for unlimited sets.'
+            : `Monthly limit reached on your ${sub.tier} plan. Upgrade to Pro for unlimited sets.`,
+          code: 'LIMIT_REACHED',
+          isFree: sub.isFree,
+        },
         { status: 429 }
       )
     }
@@ -47,14 +40,13 @@ export async function POST(req: Request) {
     const vibeLine   = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}` : ''
     const refLine    = refArtist?.trim() ? `\n- Reference artists / style anchor: ${refArtist.trim()} (curate tracks that would fit alongside these artists)` : ''
 
-    // ── Locked tracks — must stay at their exact positions ────
     let lockedSection = ''
     if (Array.isArray(lockedTracks) && lockedTracks.length > 0) {
       const lockedList = lockedTracks
         .map((t: { n:number; artist:string; title:string; bpm:number; key:string; energy:number }) =>
           `  Position ${t.n}: "${t.artist} - ${t.title}" (${t.bpm} BPM, ${t.key}, energy ${t.energy}) — KEEP EXACTLY AS IS`)
         .join('\n')
-      lockedSection = `\n\nLOCKED TRACKS (these MUST appear in the output at their exact positions, completely unchanged — same artist, title, bpm, key, energy):\n${lockedList}\n\nBuild the rest of the set AROUND these locked tracks. Adjacent tracks must flow into and out of the locked positions with compatible BPM${keyMatch ? ' and Camelot keys' : ''}.`
+      lockedSection = `\n\nLOCKED TRACKS (keep at their exact positions, unchanged):\n${lockedList}\n\nBuild the rest of the set around these locked tracks.`
     }
 
     const prompt = `You are a world-class DJ and set curator. Build a professional DJ set blueprint.
@@ -101,6 +93,7 @@ Rules:
         tier:      sub.tier,
         remaining: sub.remainingGenerations === null ? 'unlimited' : sub.remainingGenerations - 1,
         trial:     sub.trial ?? null,
+        isFree:    sub.isFree ?? false,
       },
     })
 
