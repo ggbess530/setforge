@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
-import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
+import LibraryImporter, { LibTrack } from '../components/LibraryImporter'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -179,7 +179,7 @@ export default function AppPage() {
   }
 
   // ── Import ────────────────────────────────────────────────
-  async function handleImport(tracks: ImportedTrack[]) {
+  async function handleImport(tracks: LibTrack[]) {
     setImportLoading(true); setError(null); setSet(null)
     try {
       const res=await fetch('/api/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tracks,bpmLow,bpmHigh,keyMatch}) }); const data=await res.json()
@@ -483,10 +483,12 @@ export default function AppPage() {
               <div>
                 <div style={{ marginBottom:14 }}>
                   <div style={{ fontSize:9, letterSpacing:2, color:M, marginBottom:4 }}>BRING YOUR OWN TRACKS</div>
-                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', marginBottom:4 }}>Import from Rekordbox or Serato</div>
-                  <div style={{ fontSize:11, color:'#6a6a8a', lineHeight:1.6 }}>Upload a playlist and AI builds the optimal set ordering.</div>
+                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', marginBottom:4 }}>Import Your Library</div>
+                  <div style={{ fontSize:11, color:'#6a6a8a', lineHeight:1.6 }}>
+                    Upload your Rekordbox, Traktor, or Serato library. Browse your crates and build a set from tracks you already own.
+                  </div>
                 </div>
-                <SetlistImporter onImport={handleImport} loading={importLoading} />
+                <LibraryImporter onBuildSet={handleImport} loading={importLoading} />
                 {error && <div style={{ marginTop:10, padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
               </div>
             )}
