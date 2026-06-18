@@ -8,6 +8,7 @@ import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
+import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
 
 // ── constants ────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
@@ -46,6 +47,7 @@ export default function AppPage() {
   const [bpmLow,    setBpmLow]    = useState(120)
   const [bpmHigh,   setBpmHigh]   = useState(128)
   const [keyMatch,  setKeyMatch]  = useState(true)
+  const [importLoading, setImportLoading] = useState(false)
   const [energyPoints, setEnergyPoints] = useState<number[]>([3, 5, 6, 8, 9])
     const [showWizard,       setShowWizard]       = useState(() => {
     if (typeof window === 'undefined') return false
@@ -67,7 +69,7 @@ export default function AppPage() {
   } | null>(null)
 
   // library
-  const [view,       setView]       = useState<'forge'|'library'>('forge')
+  const [view,       setView]       = useState<'forge'|'library'|'import'>('forge')
   const [library,    setLibrary]    = useState<LibItem[]>([])
   const [libLoaded,  setLibLoaded]  = useState(false)
   const [saving,     setSaving]     = useState(false)
@@ -215,6 +217,25 @@ export default function AppPage() {
       setTimeout(() => setSavedFlash(false), 2000)
     } catch { setError('Network error. Please try again.') }
     finally   { setSaving(false) }
+  }
+
+  async function handleImport(tracks: ImportedTrack[]) {
+    setImportLoading(true)
+    setError(null)
+    setSet(null)
+    try {
+      const res  = await fetch('/api/import', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracks, bpmLow, bpmHigh, keyMatch }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Import failed.'); return }
+      setSet({ ...data.set, _meta: { genre: 'Imported', crowd: '', arc: '', vibe: '', refArtist: '' } })
+      if (data.quota) setQuota(data.quota)
+      setView('forge')  // switch to forge view to show the results
+    } catch { setError('Network error. Please try again.') }
+    finally   { setImportLoading(false) }
   }
 
   function handleWizardComplete(result: WizardResult) {
@@ -479,6 +500,9 @@ async function commitRename(id: string) {
           <div className={`sf-nav-tab ${view==='forge'?'on':''}`} onClick={() => setView('forge')}>⚡ FORGE</div>
           <div className={`sf-nav-tab ${view==='library'?'on':''}`} onClick={() => { setView('library'); if (!libLoaded) loadLibrary() }}>
             ◈ LIBRARY{library.length > 0 && <span style={{ marginLeft:6, background:M, color:'#06060c', borderRadius:999, fontSize:9, padding:'1px 6px', fontWeight:700 }}>{library.length}</span>}
+          </div>
+                    <div className={`sf-nav-tab ${view==='import'?'on':''}`} onClick={() => setView('import')}>
+            ↑ IMPORT
           </div>
         </div>
 
@@ -789,6 +813,25 @@ async function commitRename(id: string) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+        {view === 'import' && (
+          <div style={{ marginTop:24 }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:10, letterSpacing:3, color:M, marginBottom:6 }}>BRING YOUR OWN TRACKS</div>
+              <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, margin:'0 0 8px', letterSpacing:1, color:'#e8e8f0' }}>
+                Import from Rekordbox or Serato
+              </h2>
+              <p style={{ fontSize:13, color:'#6a6a8a', lineHeight:1.6, maxWidth:560 }}>
+                Already have tracks in your DJ software? Upload your playlist and the AI will find the optimal order, add transition notes, and analyse the harmonic flow — all from your existing library.
+              </p>
+            </div>
+            <SetlistImporter onImport={handleImport} loading={importLoading} />
+            {error && (
+              <div style={{ marginTop:14, padding:14, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:13 }}>
+                {error}
               </div>
             )}
           </div>
