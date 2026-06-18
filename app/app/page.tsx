@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
+import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
 
 // ── constants ────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
@@ -45,6 +46,7 @@ export default function AppPage() {
   const [bpmLow,    setBpmLow]    = useState(120)
   const [bpmHigh,   setBpmHigh]   = useState(128)
   const [keyMatch,  setKeyMatch]  = useState(true)
+  const [energyPoints, setEnergyPoints] = useState<number[]>([3, 5, 6, 8, 9])
     const [showWizard,       setShowWizard]       = useState(() => {
     if (typeof window === 'undefined') return false
     return !localStorage.getItem('sf_onboarded')
@@ -135,8 +137,9 @@ export default function AppPage() {
       const res = await fetch('/api/generate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ effectiveGenre, genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks }),
-      })
+        body: JSON.stringify({ genre: effectiveGenre, crowd, arc, vibe, refArtist,
+                               mode, minutes, count, bpmLow, bpmHigh, keyMatch,
+                               lockedTracks, energyPoints }),      })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta: { genre: effectiveGenre, crowd, arc, vibe, refArtist } })
@@ -219,6 +222,11 @@ export default function AppPage() {
     setGenre(result.genre)
     setCrowd(result.crowd)
     setArc(result.arc)
+    // Set energy points to match the chosen arc preset
+    const presetName = Object.entries(ENERGY_PRESETS).find(([name]) =>
+      name.toLowerCase().includes(result.arc.toLowerCase().split(' ')[0].toLowerCase())
+    )
+    if (presetName) setEnergyPoints([...presetName[1]])
     setVibe(result.vibe)
     setRefArtist(result.refArtist)
     setMinutes(result.minutes)
@@ -500,8 +508,11 @@ async function commitRename(id: string) {
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
               <div><SFLabel>CROWD / CONTEXT</SFLabel><select className="sf-input sf-select" value={crowd} onChange={e => setCrowd(e.target.value)}>{CROWDS.map(c => <option key={c}>{c}</option>)}</select></div>
-              <div><SFLabel>ENERGY ARC</SFLabel><select className="sf-input sf-select" value={arc} onChange={e => setArc(e.target.value)}>{ARCS.map(a => <option key={a}>{a}</option>)}</select></div>
-            </div>
+              <div style={{ gridColumn:'1 / -1' }}>
+              <SFLabel>ENERGY ARC — <span style={{ color:'#6a6a8a', fontWeight:400 }}>drag the points to shape your set</span></SFLabel>
+              <EnergyEditor points={energyPoints} onChange={setEnergyPoints} />
+                </div>            
+                </div>
 
             <div style={{ marginBottom:20 }}>
               <SFLabel>VIBE / MOOD <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>

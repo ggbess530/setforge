@@ -1,9 +1,24 @@
-// ▸ Place at: app/api/generate/route.ts
+// ▸ Replace: app/api/generate/route.ts
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
+
+// Interpolates 5 control points to N evenly-spaced energy values
+function interpolateEnergy(points: number[], trackCount: number): number[] {
+  if (trackCount <= 1) return [points[2]]
+  const result: number[] = []
+  for (let i = 0; i < trackCount; i++) {
+    const t   = i / (trackCount - 1)          // 0→1
+    const seg = t * (points.length - 1)
+    const lo  = Math.floor(seg)
+    const hi  = Math.min(points.length - 1, lo + 1)
+    const frac = seg - lo
+    result.push(Math.round(points[lo] + (points[hi] - points[lo]) * frac))
+  }
+  return result
+}
 
 export async function POST(req: Request) {
   try {
@@ -11,42 +26,54 @@ export async function POST(req: Request) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const sub = await checkSubscription(userId)
-
-    // Free tier limit reached
     if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
       return NextResponse.json(
         {
           error: sub.isFree
-            ? 'You\'ve used all 5 free sets this month. Upgrade to Pro for unlimited sets.'
+            ? "You've used all 5 free sets this month. Upgrade to Pro for unlimited sets."
             : `Monthly limit reached on your ${sub.tier} plan. Upgrade to Pro for unlimited sets.`,
-          code: 'LIMIT_REACHED',
-          isFree: sub.isFree,
+          code: 'LIMIT_REACHED', isFree: sub.isFree,
         },
         { status: 429 }
       )
     }
 
     const body = await req.json()
-    const { genre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks } = body
+    const {
+      genre, crowd, arc, vibe, refArtist,
+      mode, minutes, count, bpmLow, bpmHigh,
+      keyMatch, lockedTracks, energyPoints,
+    } = body
 
-    if (!genre || !crowd || !arc) {
+    if (!genre || !crowd) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 })
     }
     if (typeof genre !== 'string' || genre.length > 120) {
       return NextResponse.json({ error: 'Genre must be under 120 characters.' }, { status: 400 })
     }
 
-    const lengthSpec = mode === 'time' ? `${minutes} minutes total` : `${count} tracks total`
-    const vibeLine   = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}` : ''
-    const refLine    = refArtist?.trim() ? `\n- Reference artists / style anchor: ${refArtist.trim()} (curate tracks that would fit alongside these artists)` : ''
+    // ── Build energy instruction ──────────────────────────────
+    const lengthSpec      = mode === 'time' ? `${minutes} minutes total` : `${count} tracks total`
+    const estimatedTracks = mode === 'time' ? Math.round(minutes / 4.5) : count
+    const vibeLine        = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}` : ''
+    const refLine         = refArtist?.trim() ? `\n- Reference artists: ${refArtist.trim()} (pick tracks that sit naturally alongside these artists)` : ''
 
+    // If the user has drawn a custom energy curve, interpolate it to track count
+    let energyInstruction = `- Energy arc: ${arc || 'Slow Build'}`
+    if (Array.isArray(energyPoints) && energyPoints.length === 5) {
+      const curve = interpolateEnergy(energyPoints, estimatedTracks)
+      const curveStr = curve.map((e, i) => `Track ${i+1}: ${e}/10`).join(', ')
+      energyInstruction = `- Custom energy curve (follow EXACTLY — this is the user's hand-drawn arc):\n  ${curveStr}\n  Do not impose your own energy arc — use these values precisely.`
+    }
+
+    // ── Locked tracks ─────────────────────────────────────────
     let lockedSection = ''
     if (Array.isArray(lockedTracks) && lockedTracks.length > 0) {
-      const lockedList = lockedTracks
+      const list = lockedTracks
         .map((t: { n:number; artist:string; title:string; bpm:number; key:string; energy:number }) =>
-          `  Position ${t.n}: "${t.artist} - ${t.title}" (${t.bpm} BPM, ${t.key}, energy ${t.energy}) — KEEP EXACTLY AS IS`)
+          `  Position ${t.n}: "${t.artist} - ${t.title}" (${t.bpm} BPM, ${t.key}, energy ${t.energy}) — KEEP EXACTLY`)
         .join('\n')
-      lockedSection = `\n\nLOCKED TRACKS (keep at their exact positions, unchanged):\n${lockedList}\n\nBuild the rest of the set around these locked tracks.`
+      lockedSection = `\n\nLOCKED TRACKS (reproduce unchanged at their exact positions):\n${list}`
     }
 
     const prompt = `You are a world-class DJ and set curator. Build a professional DJ set blueprint.
@@ -54,22 +81,22 @@ export async function POST(req: Request) {
 Parameters:
 - Genre: ${genre}
 - Crowd / context: ${crowd}
-- Energy arc: ${arc}${vibeLine}${refLine}
+${energyInstruction}${vibeLine}${refLine}
 - Length: ${lengthSpec}
 - BPM range: ${bpmLow}–${bpmHigh}
-- Harmonic (Camelot) key matching: ${keyMatch ? 'YES — order tracks so adjacent keys are compatible' : 'not required'}${lockedSection}
+- Harmonic (Camelot) key matching: ${keyMatch ? 'YES — adjacent keys must be compatible' : 'not required'}${lockedSection}
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
   "title": "short evocative set name",
-  "summary": "1 sentence describing the journey",
+  "summary": "1 sentence describing the energy journey",
   "tracks": [
     { "n": 1, "artist": "Artist Name", "title": "Track Title", "bpm": 124, "key": "8A", "energy": 4, "transition": "short cue/mix note into the next track" }
   ]
 }
 
 Rules:
-- energy is 1–10. Shape the energy curve to match the "${arc}" arc.
+- energy is 1–10. If a custom energy curve was provided, match each track's energy to the specified value for that position.
 - Keep BPMs within or progressing naturally through the range.
 - If key matching is on, adjacent Camelot keys must be compatible (same number, ±1, or same number A↔B).
 - Pick real, well-known tracks that fit the genre.
