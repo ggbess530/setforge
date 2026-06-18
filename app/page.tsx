@@ -100,16 +100,22 @@ export default function LandingPage() {
         .blob2 { animation:blob2 22s ease-in-out infinite; }
         .blob3 { animation:blob3 15s ease-in-out infinite; }
 
-        /* ── Button shimmer ── */
-        @keyframes shimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
-        .btn-shimmer {
-          background: linear-gradient(100deg,${M},${C},${M},${C});
-          background-size: 300% auto;
-          animation: shimmer 4s linear infinite;
+        /* ── CTA button — clean gradient, no animation at rest ── */
+        .btn-cta {
+          background: linear-gradient(110deg,${M},${C});
           color:#06060c; font-weight:700; border:none; cursor:pointer;
-          font-family:'Inter',sans-serif; transition:box-shadow .2s,transform .15s;
+          font-family:'Inter',sans-serif;
+          box-shadow: 0 4px 24px ${M}28, 0 2px 8px ${C}18;
+          transition: box-shadow .25s, transform .15s;
         }
-        .btn-shimmer:hover { box-shadow:0 0 40px ${C}55,0 0 40px ${M}33; transform:translateY(-2px); }
+        .btn-cta:hover {
+          box-shadow: 0 0 0 3px ${C}44, 0 8px 40px ${C}44, 0 8px 40px ${M}28;
+          transform: translateY(-2px);
+        }
+        /* ── Scrolling ticker ── */
+        @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        .ticker-track { display:flex; animation:ticker 38s linear infinite; white-space:nowrap; }
+        .ticker-track:hover { animation-play-state:paused; }
 
         /* ── Ghost button ── */
         .btn-ghost { background:transparent; border:1.5px solid #2a2a42; color:#e8e8f0; cursor:pointer; font-family:'Inter',sans-serif; transition:border-color .2s,color .2s,box-shadow .2s,transform .15s; }
@@ -180,6 +186,44 @@ export default function LandingPage() {
         <div className="blob3" style={{ position:'absolute', top:'30%', right:'-5%', width:500, height:500, background:`radial-gradient(circle,#7c3aed14,transparent 65%)`, filter:'blur(70px)' }} />
       </div>
 
+      {/* ── TICKER BAR ── */}
+      <div style={{ background:'#08080f', borderBottom:'1px solid #1a1a2e', overflow:'hidden', position:'relative', zIndex:51 }}>
+        <div style={{ position:'absolute', left:0, top:0, bottom:0, width:60, background:'linear-gradient(90deg,#08080f,transparent)', zIndex:2, pointerEvents:'none' }} />
+        <div style={{ position:'absolute', right:0, top:0, bottom:0, width:60, background:'linear-gradient(270deg,#08080f,transparent)', zIndex:2, pointerEvents:'none' }} />
+        <div className="ticker-track" style={{ padding:'10px 0' }}>
+          {[
+            '✦ No DJ experience needed',
+            '✦ AI harmonic key matching',
+            '✦ 42 genres available',
+            '✦ Free forever plan',
+            '✦ Rekordbox & Serato import',
+            '✦ Real tracks from real artists',
+            '✦ Custom energy curves',
+            '✦ 7-day Pro trial',
+            '✦ Public set sharing',
+            '✦ Drag to reorder tracks',
+            '✦ Lock your favourite tracks',
+            '✦ Works in any browser',
+            '✦ No DJ experience needed',
+            '✦ AI harmonic key matching',
+            '✦ 42 genres available',
+            '✦ Free forever plan',
+            '✦ Rekordbox & Serato import',
+            '✦ Real tracks from real artists',
+            '✦ Custom energy curves',
+            '✦ 7-day Pro trial',
+            '✦ Public set sharing',
+            '✦ Drag to reorder tracks',
+            '✦ Lock your favourite tracks',
+            '✦ Works in any browser',
+          ].map((item, i) => (
+            <span key={i} style={{ fontSize:12, color: i % 4 === 0 ? C : i % 4 === 2 ? M : '#6a6a8a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5, paddingRight:48, flexShrink:0 }}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* ── NAV ── */}
       <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(20px)', background:'rgba(6,6,12,.88)', padding:'0 24px' }}>
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
@@ -189,13 +233,13 @@ export default function LandingPage() {
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
             {isSignedIn ? (
               <>
-                <Link href="/app"><button className="btn-shimmer" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Open App →</button></Link>
+                <Link href="/app"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Open App →</button></Link>
                 <UserButton />
               </>
             ) : (
               <>
                 <SignInButton mode="modal"><button className="btn-ghost" style={{ padding:'9px 18px', borderRadius:8, fontSize:14 }}>Log in</button></SignInButton>
-                <SignUpButton mode="modal"><button className="btn-shimmer" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Start free →</button></SignUpButton>
+                <SignUpButton mode="modal"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Start free →</button></SignUpButton>
               </>
             )}
           </div>
@@ -230,9 +274,9 @@ export default function LandingPage() {
 
           <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
             {isSignedIn ? (
-              <Link href="/app"><button className="btn-shimmer" style={{ padding:'17px 40px', borderRadius:12, fontSize:17, fontWeight:700 }}>Open SetForge →</button></Link>
+              <Link href="/app"><button className="btn-cta" style={{ padding:'17px 40px', borderRadius:12, fontSize:17, fontWeight:700 }}>Open SetForge →</button></Link>
             ) : (
-              <SignUpButton mode="modal"><button className="btn-shimmer" style={{ padding:'17px 40px', borderRadius:12, fontSize:17, fontWeight:700 }}>Start free — no card needed →</button></SignUpButton>
+              <SignUpButton mode="modal"><button className="btn-cta" style={{ padding:'17px 40px', borderRadius:12, fontSize:17, fontWeight:700 }}>Start free — no card needed →</button></SignUpButton>
             )}
             <a href="#how-it-works" style={{ textDecoration:'none' }}>
               <button className="btn-ghost" style={{ padding:'17px 34px', borderRadius:12, fontSize:16 }}>See how it works</button>
@@ -394,7 +438,7 @@ export default function LandingPage() {
                     ))}
                   </div>
                   <SignUpButton mode="modal">
-                    <button className={tier.highlight ? 'btn-shimmer' : 'btn-ghost'} style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700 }}>{tier.cta}</button>
+                    <button className={tier.highlight ? 'btn-cta' : 'btn-ghost'} style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700 }}>{tier.cta}</button>
                   </SignUpButton>
                 </div>
               ))}
@@ -417,7 +461,7 @@ export default function LandingPage() {
                   Join DJs and music lovers using SetForge. Start free — no credit card, no time limit.
                 </p>
                 <SignUpButton mode="modal">
-                  <button className="btn-shimmer" style={{ padding:'18px 52px', borderRadius:14, fontSize:17, fontWeight:800 }}>Start free — no card needed →</button>
+                  <button className="btn-cta" style={{ padding:'18px 52px', borderRadius:14, fontSize:17, fontWeight:800 }}>Start free — no card needed →</button>
                 </SignUpButton>
               </div>
             </div>
