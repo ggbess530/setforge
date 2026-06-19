@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
-import LibraryImporter, { LibTrack } from '../components/LibraryImporter'
+import UserLibrary, { LibTrack } from '../components/UserLibrary'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -307,8 +307,8 @@ export default function AppPage() {
             <div className={`sf-tab ${view==='library'?'on':''}`} onClick={()=>{ setView('library'); if(!libLoaded) loadLibrary() }}>
               ◈ LIBRARY{library.length>0&&<span style={{ marginLeft:5, background:M, color:'#06060c', borderRadius:999, fontSize:8, padding:'1px 5px', fontWeight:700 }}>{library.length}</span>}
             </div>
-            <div className={`sf-tab ${view==='import'?'on':''}`} onClick={()=>setView('import')}>↑ IMPORT</div>
-          </div>
+            <div className={`sf-tab ${view==='import'?'on':''}`} onClick={()=>setView('import')}>  ◉ LIBRARY </div>
+            </div>
 
           {/* Scrollable panel content */}
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
@@ -480,18 +480,8 @@ export default function AppPage() {
 
             {/* ══ IMPORT ══ */}
             {view==='import' && (
-              <div>
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ fontSize:9, letterSpacing:2, color:M, marginBottom:4 }}>BRING YOUR OWN TRACKS</div>
-                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', marginBottom:4 }}>Import Your Library</div>
-                  <div style={{ fontSize:11, color:'#6a6a8a', lineHeight:1.6 }}>
-                    Upload your Rekordbox, Traktor, or Serato library. Browse your crates and build a set from tracks you already own.
-                  </div>
-                </div>
-                <LibraryImporter onBuildSet={handleImport} loading={importLoading} />
-                {error && <div style={{ marginTop:10, padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
-              </div>
-            )}
+          <UserLibrary onBuildSet={handleImport} loading={importLoading} />
+        )}
 
           </div>
         </div>
