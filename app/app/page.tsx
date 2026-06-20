@@ -9,6 +9,7 @@ import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
 import UserLibrary, { LibTrack } from '../components/UserLibrary'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
+
 // ── Constants ─────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
   'House':          ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
@@ -48,6 +49,12 @@ export default function AppPage() {
   const [energyPoints, setEnergyPoints] = useState<number[]>([3,5,6,8,9])
   const [customGenre,  setCustomGenre]  = useState('')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
+    // Track history
+  const [trackHistory,  setTrackHistory]  = useState<Set<string>>(new Set())
+  const [whyTrack,      setWhyTrack]      = useState<number|null>(null)        
+  // index of track showing why panel
+  const [whyData,       setWhyData]       = useState<Record<number,{
+    why:string; inbound:string; outbound:string; tip:string; keyNote:string; loading?:boolean }>>({})
 
   // generator
   const [loading,  setLoading]  = useState(false)
@@ -79,6 +86,21 @@ export default function AppPage() {
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadLibrary() }, [])
+  useEffect(() => {
+    fetch('/api/track-history')
+      .then(r => r.json())
+      .then(data => {
+        if (data.tracks) {
+          const seen = new Set<string>(
+            data.tracks.map((t: { artist:string; title:string }) =>
+              `${t.artist.toLowerCase()}::${t.title.toLowerCase()}`
+            )
+          )
+          setTrackHistory(seen)
+        }
+      })
+      .catch(() => {})
+  }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
 
   // ── Generate ──────────────────────────────────────────────
@@ -92,6 +114,28 @@ export default function AppPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, arc, vibe, refArtist } })
+      // Log tracks to history (non-blocking)
+      if (data.set?.tracks?.length) {
+        fetch('/api/track-history', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracks:  data.set.tracks,
+            context: `${effectiveGenre} / ${crowd}`,
+          }),
+        }).then(r => r.json()).then(logged => {
+          // Update local history set immediately
+          if (logged.logged) {
+            setTrackHistory(prev => {
+              const next = new Set(prev)
+              data.set.tracks.forEach((t: { artist:string; title:string }) =>
+                next.add(`${t.artist.toLowerCase()}::${t.title.toLowerCase()}`)
+              )
+              return next
+            })
+          }
+        }).catch(() => {})
+      }
       if (data.quota) setQuota(data.quota)
       if (keepLocks && lockedTracks.length > 0) {
         const newLocked = new Set<number>()
@@ -197,6 +241,46 @@ export default function AppPage() {
     const text = set.tracks.map(t=>`${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title} [${t.bpm} BPM · ${t.key}]`).join('\n')
     try { await navigator.clipboard.writeText(`${set.title.toUpperCase()}\n\n${text}\n\nForged with SetForge — setforge.online`); setCopied(true); setTimeout(()=>setCopied(false),2000) }
     catch { setError('Copy failed.') }
+  }
+   async function fetchWhyThisTrack(index: number) {
+    if (!set) return
+    if (whyData[index]) {
+      // Toggle — close if already open
+      setWhyTrack(prev => prev === index ? null : index)
+      return
+    }
+ 
+    setWhyTrack(index)
+    setWhyData(prev => ({ ...prev, [index]: { loading: true, why:'', inbound:'', outbound:'', tip:'', keyNote:'' } }))
+ 
+    try {
+      const track    = set.tracks[index]
+      const prevTrack = set.tracks[index - 1] || null
+      const nextTrack = set.tracks[index + 1] || null
+ 
+      const res  = await fetch('/api/why', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track, prevTrack, nextTrack,
+          genre:     set._meta?.genre || genre,
+          crowd:     set._meta?.crowd || crowd,
+          arc:       set._meta?.arc   || arc,
+          setLength: set.tracks.length,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setWhyData(prev => ({ ...prev, [index]: { ...data, loading: false } }))
+      } else {
+        setWhyData(prev => ({ ...prev, [index]: { loading: false, why: 'Could not load explanation. Try again.', inbound:'', outbound:'', tip:'', keyNote:'' } }))
+      }
+    } catch {
+      setWhyData(prev => ({ ...prev, [index]: { loading: false, why: 'Network error.', inbound:'', outbound:'', tip:'', keyNote:'' } }))
+    }
+  }
+  function isSeenBefore(track: { artist:string; title:string }): boolean {
+    return trackHistory.has(`${track.artist.toLowerCase()}::${track.title.toLowerCase()}`)
   }
 
   function exportText() {
@@ -581,14 +665,77 @@ export default function AppPage() {
                     {/* drag handle */}
                     <div draggable title="Drag to reorder" style={{ cursor:'grab', color:'#2a2a48', fontSize:12, textAlign:'center', userSelect:'none' }}>⠿</div>
                     <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
-                      <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                        <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
+                        {isSeenBefore(t) && (
+                          <span style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b44', borderRadius:999, padding:'1px 6px', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
+                            seen before
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7, marginTop:2 }}>
                         <span>{t.artist}</span>
                         <a href={trackSearchUrl(t,'beatport')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
-                        <a href={trackSearchUrl(t,'spotify')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
+                        <a href={trackSearchUrl(t,'spotify')}  target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
                       </div>
                       <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>
+ 
+                      {/* Why this track panel */}
+                      <button
+                        onClick={() => fetchWhyThisTrack(i)}
+                        style={{ marginTop:6, background:'transparent', border:`1px solid ${whyTrack===i ? '#a78bfa44' : '#1f1f33'}`, color: whyTrack===i ? '#a78bfa' : '#4a4a66', padding:'3px 10px', borderRadius:6, fontSize:10, cursor:'pointer', fontFamily:"'JetBrains Mono',monospace", transition:'.15s', display:'flex', alignItems:'center', gap:5 }}
+                      >
+                        <span>?</span>
+                        <span>{whyTrack===i ? 'CLOSE' : 'WHY THIS TRACK'}</span>
+                      </button>
+ 
+                      {/* Why panel content */}
+                      {whyTrack === i && (
+                        <div style={{ marginTop:8, background:'#08081a', border:'1px solid #a78bfa33', borderRadius:10, padding:'12px 14px', fontSize:11, lineHeight:1.7 }}>
+                          {whyData[i]?.loading ? (
+                            <div style={{ color:'#6a6a8a', animation:'pulse 1.2s infinite', textAlign:'center' }}>Analysing track choice…</div>
+                          ) : (
+                            <>
+                              {/* Why chosen */}
+                              {whyData[i]?.why && (
+                                <div style={{ marginBottom:10 }}>
+                                  <div style={{ fontSize:9, letterSpacing:2, color:'#a78bfa', marginBottom:4, fontWeight:700 }}>WHY THIS TRACK</div>
+                                  <div style={{ color:'#c8c8e0' }}>{whyData[i].why}</div>
+                                </div>
+                              )}
+                              {/* Key note */}
+                              {whyData[i]?.keyNote && (
+                                <div style={{ marginBottom:10 }}>
+                                  <div style={{ fontSize:9, letterSpacing:2, color:C, marginBottom:4, fontWeight:700 }}>KEY COMPATIBILITY</div>
+                                  <div style={{ color:'#9a9ab8' }}>{whyData[i].keyNote}</div>
+                                </div>
+                              )}
+                              {/* Inbound mix */}
+                              {whyData[i]?.inbound && (
+                                <div style={{ marginBottom:10 }}>
+                                  <div style={{ fontSize:9, letterSpacing:2, color:M, marginBottom:4, fontWeight:700 }}>MIXING IN</div>
+                                  <div style={{ color:'#9a9ab8' }}>{whyData[i].inbound}</div>
+                                </div>
+                              )}
+                              {/* Outbound setup */}
+                              {whyData[i]?.outbound && (
+                                <div style={{ marginBottom:10 }}>
+                                  <div style={{ fontSize:9, letterSpacing:2, color:'#6a6a8a', marginBottom:4, fontWeight:700 }}>SETTING UP THE NEXT MIX</div>
+                                  <div style={{ color:'#9a9ab8' }}>{whyData[i].outbound}</div>
+                                </div>
+                              )}
+                              {/* Tip */}
+                              {whyData[i]?.tip && (
+                                <div style={{ background:'#f59e0b11', border:'1px solid #f59e0b33', borderRadius:8, padding:'8px 10px' }}>
+                                  <div style={{ fontSize:9, letterSpacing:2, color:'#f59e0b', marginBottom:4, fontWeight:700 }}>💡 PRO TIP</div>
+                                  <div style={{ color:'#e8c875' }}>{whyData[i].tip}</div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
                       <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
