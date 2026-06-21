@@ -83,7 +83,23 @@ const TIERS = [
 
 export default function LandingPage() {
   const { isSignedIn } = useAuth()
-  const [openFaq, setOpenFaq] = useState<number|null>(null)
+  const [openFaq,   setOpenFaq]   = useState<number|null>(null)
+  const [upgrading, setUpgrading] = useState<string|null>(null)
+
+  async function handleUpgrade(tier: string) {
+    if (!isSignedIn) return
+    setUpgrading(tier)
+    try {
+      const res  = await fetch('/api/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch {}
+    finally { setUpgrading(null) }
+  }
 
   return (
     <div style={{ minHeight:'100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflowX:'hidden' }}>
@@ -437,9 +453,26 @@ export default function LandingPage() {
                       </div>
                     ))}
                   </div>
-                  <SignUpButton mode="modal">
-                    <button className={tier.highlight ? 'btn-cta' : 'btn-ghost'} style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700 }}>{tier.cta}</button>
-                  </SignUpButton>
+                  {isSignedIn ? (
+                    tier.name === 'Free' ? (
+                      <Link href="/app" style={{ textDecoration:'none' }}>
+                        <button className="btn-ghost" style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700 }}>Open SetForge →</button>
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => handleUpgrade(tier.name.toLowerCase())}
+                        disabled={upgrading !== null}
+                        className={tier.highlight ? 'btn-cta' : 'btn-ghost'}
+                        style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700, opacity: upgrading ? .7 : 1 }}
+                      >
+                        {upgrading === tier.name.toLowerCase() ? 'Opening checkout…' : tier.cta}
+                      </button>
+                    )
+                  ) : (
+                    <SignUpButton mode="modal">
+                      <button className={tier.highlight ? 'btn-cta' : 'btn-ghost'} style={{ width:'100%', padding:'14px 0', borderRadius:12, fontSize:15, fontWeight:700 }}>{tier.cta}</button>
+                    </SignUpButton>
+                  )}
                 </div>
               ))}
             </div>
