@@ -326,6 +326,11 @@ export default function AppPage() {
               </a>
             </div>
           )}
+          <Link href="/analyse" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>
+              🔍 ANALYSE
+            </button>
+          </Link>
           <UserButton />
         </div>
       </nav>

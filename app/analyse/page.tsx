@@ -193,28 +193,50 @@ export default function AnalysePage() {
     finally   { setLoading(false) }
   }
 
-  // Called from library picker — takes full set object, no second fetch needed
-  function analyseFromLibrary(s: typeof libSets[0]) {
+  // Called from library picker — fetches full set data by ID then runs analysis
+  async function analyseFromLibrary(id: string) {
     setShowLibPicker(false)
     setShowHistory(false)
+    setReport(null)
+    setError(null)
+    setLoading(true)
 
-    const tracks = s.set_data?.tracks || []
-    if (!tracks.length) { setError('This set has no tracks to analyse.'); return }
+    try {
+      // Fetch the full set (list view doesn't include set_data)
+      const res  = await fetch(`/api/library/item?id=${id}`)
+      const json = await res.json()
 
-    const lines = tracks
-      .map((t: {n:number;artist:string;title:string;bpm?:number;key?:string}) =>
-        `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`)
-      .join('\n')
+      if (!res.ok || !json.set) {
+        setError('Could not load this set. Please try again.')
+        return
+      }
 
-    const ctx = [
-      s.meta?.genre    || s.set_data?._meta?.genre,
-      s.meta?.crowd    || s.set_data?._meta?.crowd,
-      s.meta?.arc      || s.set_data?._meta?.arc,
-    ].filter(Boolean).join(' / ')
+      const setData = json.set.set_data
+      const meta    = json.set.meta || {}
+      const tracks  = setData?.tracks || []
 
-    setRawText(lines)
-    setContext(ctx || '')
-    runAnalysis(lines, ctx || '')
+      if (!tracks.length) {
+        setError('No tracks found in this set. Try saving a newly generated set and trying again.')
+        return
+      }
+
+      const lines = tracks
+        .map((t: {n:number;artist:string;title:string;bpm?:number;key?:string}) =>
+          `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`)
+        .join('\n')
+
+      const ctx = [meta.genre, meta.crowd, meta.arc].filter(Boolean).join(' / ')
+
+      setRawText(lines)
+      setContext(ctx)
+      setLoading(false)       // runAnalysis will take over loading state
+      await runAnalysis(lines, ctx)
+
+    } catch {
+      setError('Something went wrong loading this set. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function exportPDF() {
@@ -383,7 +405,7 @@ export default function AnalysePage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:280, overflowY:'auto' }}>
                     {libSets.map(s => (
                       <div key={s.id}
-                        onClick={() => analyseFromLibrary(s)}
+                        onClick={() => analyseFromLibrary(s.id)}
                         style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px', cursor:'pointer', transition:'.15s' }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = C}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#1a1a2e'}>
