@@ -141,9 +141,13 @@ export default function AnalysePage() {
   const [error,     setError]     = useState<string|null>(null)
   const [report,    setReport]    = useState<Report|null>(null)
   const [tracks,    setTracks]    = useState<{ n:number; artist:string; title:string; bpm?:number; key?:string }[]>([])
-  const [exporting, setExporting] = useState(false)
+  const [exporting,         setExporting]         = useState(false)
+  const [includeMixingNotes, setIncludeMixingNotes] = useState(true)
   const [history,   setHistory]   = useState<{ grade:string; track_count:number; context:string; created_at:string }[]>([])
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory,   setShowHistory]   = useState(false)
+  const [libSets,       setLibSets]       = useState<{id:string;title:string;set_data:{title:string;tracks:{artist:string;title:string;bpm?:number;key?:string;n:number}[];_meta?:Record<string,string>};meta:Record<string,string>}[]>([])
+  const [showLibPicker, setShowLibPicker] = useState(false)
+  const [loadingLib,    setLoadingLib]    = useState(false)
 
   async function analyse() {
     if (!rawText.trim()) return
@@ -171,6 +175,43 @@ export default function AnalysePage() {
     setShowHistory(true)
   }
 
+  async function loadLibSets() {
+    setLoadingLib(true)
+    try {
+      const res  = await fetch('/api/library')
+      const data = await res.json()
+      if (res.ok) setLibSets(data.sets || [])
+    } catch {}
+    finally { setLoadingLib(false); setShowLibPicker(true) }
+  }
+
+  async function analyseFromLibrary(setData: { title:string; tracks:{artist:string;title:string;bpm?:number;key?:string;n:number}[]; _meta?:Record<string,string> }) {
+    // Build a tracklist string from the saved set
+    const lines = setData.tracks.map(t =>
+      `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`
+    ).join('\n')
+    const ctx = [setData._meta?.genre, setData._meta?.crowd, setData._meta?.arc].filter(Boolean).join(' / ')
+    setRawText(lines)
+    setContext(ctx || '')
+    setReport(null)
+    // Small delay so state settles, then run analysis
+    setTimeout(async () => {
+      setLoading(true); setError(null)
+      try {
+        const res  = await fetch('/api/analyse', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawText: lines, context: ctx }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || 'Analysis failed.'); return }
+        setReport(data.report)
+        setTracks(data.tracks || [])
+      } catch { setError('Network error.') }
+      finally   { setLoading(false) }
+    }, 80)
+  }
+
   async function exportPDF() {
     if (!report) return
     setExporting(true)
@@ -178,7 +219,7 @@ export default function AnalysePage() {
       const res  = await fetch('/api/analyse/export', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report, tracks }),
+        body: JSON.stringify({ report, tracks, includeMixingNotes }),
       })
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
@@ -301,6 +342,13 @@ export default function AnalysePage() {
               >
                 {showHistory ? 'Hide history' : '📋 Past analyses'}
               </button>
+              <button
+                onClick={showLibPicker ? () => setShowLibPicker(false) : loadLibSets}
+                className="btn-ghost"
+                style={{ padding:'11px 20px', borderRadius:10, fontSize:13 }}
+              >
+                {loadingLib ? 'Loading…' : showLibPicker ? 'Hide library' : '◈ From my library'}
+              </button>
             </div>
 
             {loading && (
@@ -312,6 +360,37 @@ export default function AnalysePage() {
             {error && (
               <div style={{ marginTop:14, padding:12, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:13 }}>
                 {error}
+              </div>
+            )}
+
+            {/* Library picker panel */}
+            {showLibPicker && (
+              <div style={{ marginTop:20, borderTop:'1px solid #1a1a2e', paddingTop:16 }}>
+                <div style={{ fontSize:11, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:12 }}>YOUR SAVED SETS</div>
+                {libSets.length === 0 ? (
+                  <div style={{ fontSize:13, color:'#4a4a66' }}>No saved sets yet. Forge and save a set first.</div>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:280, overflowY:'auto' }}>
+                    {libSets.map(s => (
+                      <div key={s.id}
+                        onClick={() => { setShowLibPicker(false); analyseFromLibrary(s.set_data) }}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px', cursor:'pointer', transition:'.15s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = C}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#1a1a2e'}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:'#e8e8f0', marginBottom:2 }}>{s.title}</div>
+                          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                            {[s.meta?.genre, s.meta?.crowd].filter(Boolean).map(tag => (
+                              <span key={String(tag)} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'1px 7px' }}>{String(tag)}</span>
+                            ))}
+                            {s.set_data?.tracks?.length && <span style={{ fontSize:10, color:'#4a4a66' }}>{s.set_data.tracks.length} tracks</span>}
+                          </div>
+                        </div>
+                        <div style={{ fontSize:12, color:C, flexShrink:0, marginLeft:12 }}>Analyse →</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -351,9 +430,14 @@ export default function AnalysePage() {
               <button onClick={() => { setReport(null); setTracks([]) }} className="btn-ghost" style={{ padding:'9px 18px', borderRadius:8, fontSize:13 }}>
                 ← Analyse another set
               </button>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={exportPDF} disabled={exporting} className="btn-ghost" style={{ padding:'9px 18px', borderRadius:8, fontSize:13 }}>
-                  {exporting ? 'Exporting…' : '↓ Export report'}
+              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                <button onClick={() => { setIncludeMixingNotes(true); setTimeout(exportPDF, 0) }} disabled={exporting}
+                  className="btn-ghost" style={{ padding:'9px 16px', borderRadius:8, fontSize:12 }}>
+                  {exporting && includeMixingNotes ? 'Exporting…' : '↓ Full report'}
+                </button>
+                <button onClick={() => { setIncludeMixingNotes(false); setTimeout(exportPDF, 0) }} disabled={exporting}
+                  className="btn-ghost" style={{ padding:'9px 16px', borderRadius:8, fontSize:12 }}>
+                  {exporting && !includeMixingNotes ? 'Exporting…' : '↓ Tracklist only'}
                 </button>
               </div>
             </div>

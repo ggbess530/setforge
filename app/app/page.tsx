@@ -1,3 +1,4 @@
+// ▸ Place at: app/app/page.tsx (full replacement)
 
 'use client'
 
@@ -74,23 +75,13 @@ export default function AppPage() {
   const [renameVal,   setRenameVal]   = useState('')
 
   // onboarding
-  const [showWizard,          setShowWizard]          = useState(false)
+  const [showWizard,          setShowWizard]          = useState(() => { try { return !localStorage.getItem('sf_onboarded') } catch { return false } })
   const [firstSetCelebration, setFirstSetCelebration] = useState(false)
-  const [upgrading,            setUpgrading]            = useState<'pro'|'team'|null>(null)
 
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadLibrary() }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
-  useEffect(() => {
-    try { if (!localStorage.getItem('sf_onboarded')) setShowWizard(true) } catch {}
-  }, [])
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('upgraded') === 'true') {
-      window.history.replaceState({}, '', '/app')
-    }
-  }, [])
 
   // ── Generate ──────────────────────────────────────────────
   async function generate(keepLocks = false) {
@@ -237,9 +228,13 @@ export default function AppPage() {
     const a=Object.assign(document.createElement('a'),{ href:URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/plain'})), download:`${set.title.replace(/\s+/g,'_')}.txt` }); a.click()
   }
 
-  function trackSearchUrl(t: Track, platform: 'beatport'|'spotify') {
-    const q=encodeURIComponent(`${t.artist} ${t.title}`)
-    return platform==='beatport' ? `https://www.beatport.com/search?q=${q}` : `https://open.spotify.com/search/${q}`
+  function trackSearchUrl(t: Track, platform: 'beatport'|'spotify'|'youtube'|'soundcloud') {
+    const q = encodeURIComponent(`${t.artist} ${t.title}`)
+    if (platform === 'beatport')   return `https://www.beatport.com/search?q=${q}`
+    if (platform === 'spotify')    return `https://open.spotify.com/search/${q}`
+    if (platform === 'youtube')    return `https://www.youtube.com/results?search_query=${q}`
+    if (platform === 'soundcloud') return `https://soundcloud.com/search?q=${q}`
+    return ''
   }
 
   // ── Wizard ────────────────────────────────────────────────
@@ -250,21 +245,6 @@ export default function AppPage() {
     setShowWizard(false); setFirstSetCelebration(true); setTimeout(()=>generate(false),80)
   }
   function handleWizardSkip() { try { localStorage.setItem('sf_onboarded','true') } catch {}; setShowWizard(false) }
-
-  async function handleUpgrade(tier: 'pro' | 'team') {
-    setUpgrading(tier)
-    try {
-      const res  = await fetch('/api/checkout', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier }),
-      })
-      const data = await res.json()
-      if (!res.ok || !data.url) { setError(data.error || 'Could not start checkout. Please try again.'); return }
-      window.location.href = data.url
-    } catch { setError('Network error. Please try again.') }
-    finally   { setUpgrading(null) }
-  }
 
   // ─────────────────────────────────────────────────────────
   // RENDER
@@ -323,18 +303,9 @@ export default function AppPage() {
           </div>
         </Link>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-            <Link href="/analyse" style={{ textDecoration:'none' }}>
-              <button className="sf-btn-ghost" style={{ padding:'6px 14px', borderRadius:8, fontSize:11 }}>🔍 ANALYSE</button>
-            </Link>
           {quota?.trial?.active && (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
-                {quota.trial.daysLeft}d trial left
-              </div>
-              <button onClick={()=>handleUpgrade('pro')} disabled={upgrading!==null}
-                style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer', border:'none', opacity:upgrading?.5:1 }}>
-                {upgrading?'…':'Upgrade'}
-              </button>
+            <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
+              {quota.trial.daysLeft}d left in trial
             </div>
           )}
           {quota?.isFree && !quota?.trial?.active && (
@@ -342,10 +313,9 @@ export default function AppPage() {
               <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color:'#9a9ab8' }}>
                 {quota.remaining===0 ? '0 sets left' : `${quota.remaining} free sets left`}
               </div>
-              <button onClick={()=>handleUpgrade('pro')} disabled={upgrading!==null}
-                style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer', border:'none', opacity:upgrading?.5:1 }}>
-                {upgrading?'…':'Upgrade'}
-              </button>
+              <a href="/#pricing" style={{ textDecoration:'none' }}>
+                <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer' }}>Upgrade</div>
+              </a>
             </div>
           )}
           <UserButton />
@@ -469,19 +439,10 @@ export default function AppPage() {
                 )}
 
                 {error && (
-                  <div style={{ padding:12, border:`1px solid ${M}`, borderRadius:10, fontSize:12, lineHeight:1.5, background:'#0a0408' }}>
-                    <div style={{ color:M, fontWeight:700, marginBottom: (error.includes('free sets')||error.includes('limit')||error.includes('trial')||error.includes('subscription'))?10:0 }}>{error}</div>
-                    {(error.includes('free sets')||error.includes('limit')||error.includes('trial')||error.includes('subscription')) && (
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                        <button onClick={()=>handleUpgrade('pro')} disabled={upgrading!==null}
-                          style={{ background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', border:'none', padding:'8px 14px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'JetBrains Mono',monospace", letterSpacing:1, opacity:upgrading?.6:1 }}>
-                          {upgrading==='pro'?'OPENING…':'⚡ UPGRADE TO PRO — $9/mo'}
-                        </button>
-                        <button onClick={()=>handleUpgrade('team')} disabled={upgrading!==null}
-                          style={{ background:'transparent', border:`1px solid ${C}`, color:C, padding:'8px 12px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'JetBrains Mono',monospace", opacity:upgrading?.6:1 }}>
-                          {upgrading==='team'?'OPENING…':'Team $19/mo'}
-                        </button>
-                      </div>
+                  <div style={{ padding:12, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:12, lineHeight:1.5 }}>
+                    {error}
+                    {(error.includes('free sets')||error.includes('trial')||error.includes('subscription')) && (
+                      <a href="/#pricing" style={{ display:'block', marginTop:8, color:C, textDecoration:'underline', fontSize:11 }}>View upgrade options →</a>
                     )}
                   </div>
                 )}
@@ -673,8 +634,10 @@ export default function AppPage() {
                       <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
                       <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
                         <span>{t.artist}</span>
-                        <a href={trackSearchUrl(t,'beatport')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
-                        <a href={trackSearchUrl(t,'spotify')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
+                        <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
+                        <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
+                        <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
+                        <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
                       </div>
                       <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>
                     </div>

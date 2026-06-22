@@ -1,5 +1,4 @@
 // ▸ Place at: app/api/analyse/export/route.ts
-// Exports the analysis report as a formatted text file
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
@@ -9,7 +8,7 @@ export async function POST(req: Request) {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { report, tracks } = await req.json()
+    const { report, tracks, includeMixingNotes = true } = await req.json()
     if (!report) return NextResponse.json({ error: 'No report.' }, { status: 400 })
 
     const lines: string[] = [
@@ -17,6 +16,7 @@ export async function POST(req: Request) {
       '═'.repeat(50),
       `Generated: ${new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}`,
       `Tracks analysed: ${tracks?.length || '?'}`,
+      `Mixing notes: ${includeMixingNotes ? 'included' : 'excluded'}`,
       '',
       `GRADE: ${report.grade} — ${report.gradeReason}`,
       '',
@@ -32,20 +32,29 @@ export async function POST(req: Request) {
         s => `${s.label}: ${s.score}/10\n  ${s.comment}`
       ),
       '',
-      '─'.repeat(50),
-      'PEAK MOMENT',
-      '─'.repeat(50),
-      `Track ${report.peakMoment.trackN}: ${report.peakMoment.artist} — ${report.peakMoment.title}`,
-      report.peakMoment.reason,
-      '',
-      '─'.repeat(50),
-      'HARDEST TRANSITION',
-      '─'.repeat(50),
-      `Track ${report.weakestTransition.fromN} → ${report.weakestTransition.toN}`,
-      `${report.weakestTransition.fromTitle} into ${report.weakestTransition.toTitle}`,
-      report.weakestTransition.reason,
-      `Fix: ${report.weakestTransition.fix}`,
-      '',
+    ]
+
+    // Mixing notes section — conditionally included
+    if (includeMixingNotes) {
+      lines.push(
+        '─'.repeat(50),
+        'PEAK MOMENT',
+        '─'.repeat(50),
+        `Track ${report.peakMoment.trackN}: ${report.peakMoment.artist} — ${report.peakMoment.title}`,
+        report.peakMoment.reason,
+        '',
+        '─'.repeat(50),
+        'HARDEST TRANSITION',
+        '─'.repeat(50),
+        `Track ${report.weakestTransition.fromN} → ${report.weakestTransition.toN}`,
+        `${report.weakestTransition.fromTitle} into ${report.weakestTransition.toTitle}`,
+        report.weakestTransition.reason,
+        `Fix: ${report.weakestTransition.fix}`,
+        '',
+      )
+    }
+
+    lines.push(
       '─'.repeat(50),
       'STRENGTHS',
       '─'.repeat(50),
@@ -56,14 +65,24 @@ export async function POST(req: Request) {
       '─'.repeat(50),
       ...report.improvements.map((imp: { title:string; detail:string }) => `↑ ${imp.title}\n  ${imp.detail}`),
       '',
-      '─'.repeat(50),
-      'TRACK NOTES',
-      '─'.repeat(50),
-      ...(report.trackNotes || []).map((tn: { n:number; note:string }) => {
-        const t = tracks?.find((tr: { n:number }) => tr.n === tn.n)
-        return `${String(tn.n).padStart(2,'0')}. ${t ? `${t.artist} — ${t.title}` : `Track ${tn.n}`}\n    ${tn.note}`
-      }),
-      '',
+    )
+
+    // Track notes — mixing notes conditionally included
+    if (report.trackNotes?.length) {
+      lines.push(
+        '─'.repeat(50),
+        includeMixingNotes ? 'TRACK-BY-TRACK NOTES' : 'TRACKLIST',
+        '─'.repeat(50),
+        ...(report.trackNotes || []).map((tn: { n:number; note:string }) => {
+          const t = tracks?.find((tr: { n:number }) => tr.n === tn.n)
+          const trackLine = `${String(tn.n).padStart(2,'0')}. ${t ? `${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}` : `Track ${tn.n}`}`
+          return includeMixingNotes ? `${trackLine}\n    ${tn.note}` : trackLine
+        }),
+        '',
+      )
+    }
+
+    lines.push(
       '─'.repeat(50),
       'VERDICT',
       '─'.repeat(50),
@@ -71,13 +90,16 @@ export async function POST(req: Request) {
       '',
       '═'.repeat(50),
       'Analysed with SetForge — setforge.online',
-    ]
+    )
 
-    const text = lines.join('\n')
-    return new NextResponse(text, {
+    const filename = includeMixingNotes
+      ? 'setforge-analysis-full.txt'
+      : 'setforge-analysis-tracklist.txt'
+
+    return new NextResponse(lines.join('\n'), {
       headers: {
         'Content-Type':        'text/plain',
-        'Content-Disposition': 'attachment; filename="setforge-analysis.txt"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
 
