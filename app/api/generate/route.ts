@@ -92,7 +92,9 @@ Respond ONLY with valid JSON, no markdown, no preamble:
 }
 
 Rules:
-- Pick REAL, WELL-KNOWN tracks that fit the genre and BPM range
+- Pick REAL tracks that DEFINITIVELY exist on Spotify and Beatport — commercial releases by established artists only
+- NEVER suggest: unreleased tracks, dubplates, SoundCloud-only tracks, bootlegs, unofficial edits, or tracks you are uncertain about
+- If you cannot fill the track count with verified streaming tracks, use fewer tracks rather than inventing or guessing
 - Match each track's energy to the per-position value above
 - ${keyMatch ? 'Adjacent keys must be harmonically compatible' : 'Key matching off — focus on BPM and energy'}
 - Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")

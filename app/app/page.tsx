@@ -81,6 +81,14 @@ export default function AppPage() {
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadLibrary() }, [])
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    if (tab === 'library') {
+      setView('library')
+      window.history.replaceState({}, '', '/app')
+    }
+  }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
 
   // ── Generate ──────────────────────────────────────────────

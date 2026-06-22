@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import Link         from 'next/link'
-import { UserButton } from '@clerk/nextjs'
+import { UserButton, useAuth } from '@clerk/nextjs'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
@@ -135,6 +135,7 @@ function EnergyCurveChart({ curve, tracks }: { curve: number[]; tracks: { n:numb
 
 // ── Main component ────────────────────────────────────────────
 export default function AnalysePage() {
+  const { isSignedIn } = useAuth()
   const [rawText,   setRawText]   = useState('')
   const [context,   setContext]   = useState('')
   const [loading,   setLoading]   = useState(false)
@@ -151,19 +152,7 @@ export default function AnalysePage() {
 
   async function analyse() {
     if (!rawText.trim()) return
-    setLoading(true); setError(null); setReport(null)
-    try {
-      const res  = await fetch('/api/analyse', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText, context }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Analysis failed.'); return }
-      setReport(data.report)
-      setTracks(data.tracks || [])
-    } catch { setError('Network error. Please try again.') }
-    finally   { setLoading(false) }
+    await runAnalysis(rawText, context)
   }
 
   async function loadHistory() {
@@ -185,31 +174,47 @@ export default function AnalysePage() {
     finally { setLoadingLib(false); setShowLibPicker(true) }
   }
 
-  async function analyseFromLibrary(setData: { title:string; tracks:{artist:string;title:string;bpm?:number;key?:string;n:number}[]; _meta?:Record<string,string> }) {
-    // Build a tracklist string from the saved set
-    const lines = setData.tracks.map(t =>
-      `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`
-    ).join('\n')
-    const ctx = [setData._meta?.genre, setData._meta?.crowd, setData._meta?.arc].filter(Boolean).join(' / ')
+  // Shared core analysis function — called by both the paste flow and library flow
+  async function runAnalysis(text: string, ctx: string) {
+    setReport(null)
+    setError(null)
+    setLoading(true)
+    try {
+      const res  = await fetch('/api/analyse', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: text, context: ctx }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Analysis failed. Please try again.'); return }
+      setTracks(data.tracks || [])
+      setReport(data.report)
+    } catch { setError('Network error. Please try again.') }
+    finally   { setLoading(false) }
+  }
+
+  // Called from library picker — takes full set object, no second fetch needed
+  function analyseFromLibrary(s: typeof libSets[0]) {
+    setShowLibPicker(false)
+    setShowHistory(false)
+
+    const tracks = s.set_data?.tracks || []
+    if (!tracks.length) { setError('This set has no tracks to analyse.'); return }
+
+    const lines = tracks
+      .map((t: {n:number;artist:string;title:string;bpm?:number;key?:string}) =>
+        `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`)
+      .join('\n')
+
+    const ctx = [
+      s.meta?.genre    || s.set_data?._meta?.genre,
+      s.meta?.crowd    || s.set_data?._meta?.crowd,
+      s.meta?.arc      || s.set_data?._meta?.arc,
+    ].filter(Boolean).join(' / ')
+
     setRawText(lines)
     setContext(ctx || '')
-    setReport(null)
-    // Small delay so state settles, then run analysis
-    setTimeout(async () => {
-      setLoading(true); setError(null)
-      try {
-        const res  = await fetch('/api/analyse', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rawText: lines, context: ctx }),
-        })
-        const data = await res.json()
-        if (!res.ok) { setError(data.error || 'Analysis failed.'); return }
-        setReport(data.report)
-        setTracks(data.tracks || [])
-      } catch { setError('Network error.') }
-      finally   { setLoading(false) }
-    }, 80)
+    runAnalysis(lines, ctx || '')
   }
 
   async function exportPDF() {
@@ -268,6 +273,11 @@ export default function AnalysePage() {
             <div style={{ fontSize:12, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ ANALYSER</div>
           </div>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+            {isSignedIn && (
+              <Link href="/app?tab=library" style={{ textDecoration:'none' }}>
+                <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>◈ My Library</button>
+              </Link>
+            )}
             <Link href="/app" style={{ textDecoration:'none' }}>
               <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>⚡ Forge a set</button>
             </Link>
@@ -373,7 +383,7 @@ export default function AnalysePage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:280, overflowY:'auto' }}>
                     {libSets.map(s => (
                       <div key={s.id}
-                        onClick={() => { setShowLibPicker(false); analyseFromLibrary(s.set_data) }}
+                        onClick={() => analyseFromLibrary(s)}
                         style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px', cursor:'pointer', transition:'.15s' }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = C}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#1a1a2e'}>
