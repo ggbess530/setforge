@@ -323,6 +323,9 @@ export default function AppPage() {
           </div>
         </Link>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <Link href="/analyse" style={{ textDecoration:'none' }}>
+              <button className="sf-btn-ghost" style={{ padding:'6px 14px', borderRadius:8, fontSize:11 }}>🔍 ANALYSE</button>
+            </Link>
           {quota?.trial?.active && (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
