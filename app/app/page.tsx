@@ -1,5 +1,3 @@
-// ▸ Place at: app/app/page.tsx (full replacement)
-
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -9,31 +7,38 @@ import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
 import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
-// ── Constants ─────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
-  'House':          ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
-  'Techno':         ['Techno','Melodic Techno','Peak Time Techno','Minimal / Deep Tech','Hard Techno','Industrial Techno','Dub Techno'],
-  'Bass & Breaks':  ['Drum & Bass','Dubstep','UK Garage / UKG','Breakbeat','Jungle','Bassline','Future Bass'],
-  'Trance':         ['Trance','Progressive Trance','Psytrance','Uplifting Trance','Hard Trance'],
-  'Urban / Hip Hop':['Hip Hop','Trap','R&B','Afrobeats','Amapiano','Reggaeton','Dancehall'],
+  'House':           ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
+  'Techno':          ['Techno','Melodic Techno','Peak Time Techno','Minimal / Deep Tech','Hard Techno','Industrial Techno','Dub Techno'],
+  'Bass & Breaks':   ['Drum & Bass','Dubstep','UK Garage / UKG','Breakbeat','Jungle','Bassline','Future Bass'],
+  'Trance':          ['Trance','Progressive Trance','Psytrance','Uplifting Trance','Hard Trance'],
+  'Urban / Hip Hop': ['Hip Hop','Trap','R&B','Afrobeats','Amapiano','Reggaeton','Dancehall'],
   'Classic / Groove':['Disco / Funk','Nu-Disco','Funky House','Acid House','Old School / 90s','Italo Disco'],
-  'Open Format':    ['Open Format / Multi-Genre','Top 40 / Pop','Latin','Reggae / Dub'],
+  'Open Format':     ['Open Format / Multi-Genre','Top 40 / Pop','Latin','Reggae / Dub'],
 }
-const CROWDS  = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
-const ARCS    = ['Slow Build','Peak Time Energy','Cool Down','Wave (up & down)']
+const CROWDS   = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
+const ARCS     = ['Slow Build','Peak Time Energy','Cool Down','Wave (up & down)']
 const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
-// ── Types ─────────────────────────────────────────────────────
 type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string }
 type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 
-// ── Main component ────────────────────────────────────────────
-export default function AppPage() {
+function camelotCompat(k1: string, k2: string): 'perfect' | 'good' | 'careful' {
+  const m1 = (k1||'').toUpperCase().match(/^(\d+)([AB])$/)
+  const m2 = (k2||'').toUpperCase().match(/^(\d+)([AB])$/)
+  if (!m1 || !m2) return 'careful'
+  const n1 = parseInt(m1[1]), t1 = m1[2], n2 = parseInt(m2[1]), t2 = m2[2]
+  if (n1 === n2) return 'perfect'
+  const diff = Math.abs(n1 - n2)
+  if (t1 === t2 && (diff === 1 || diff === 11)) return 'perfect'
+  if (diff === 2 || diff === 10) return 'good'
+  return 'careful'
+}
 
-  // form
+export default function AppPage() {
   const [genre,        setGenre]        = useState('Tech House')
   const [crowd,        setCrowd]        = useState('Club Peak Hour')
   const [arc,          setArc]          = useState('Slow Build')
@@ -50,49 +55,56 @@ export default function AppPage() {
   const [customGenre,  setCustomGenre]  = useState('')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
 
-  // generator
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState<string|null>(null)
-  const [set,      setSet]      = useState<SetData|null>(null)
+  const [loading,       setLoading]       = useState(false)
+  const [error,         setError]         = useState<string|null>(null)
+  const [set,           setSet]           = useState<SetData|null>(null)
   const [swapping,      setSwapping]      = useState<number|null>(null)
-  const [locked,       setLocked]       = useState<Set<number>>(new Set())
-  const [copied,       setCopied]       = useState(false)
-  const [dragIndex,    setDragIndex]    = useState<number|null>(null)
-  const [dragOverIndex,setDragOverIndex]= useState<number|null>(null)
-  const [quota,    setQuota]    = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
+  const [locked,        setLocked]        = useState<Set<number>>(new Set())
+  const [copied,        setCopied]        = useState(false)
+  const [dragIndex,     setDragIndex]     = useState<number|null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number|null>(null)
+  const [quota,         setQuota]         = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
 
-  // library
-  const [view,        setView]        = useState<'forge'|'library'|'import'>('forge')
-  const [library,     setLibrary]     = useState<LibItem[]>([])
-  const [libLoaded,   setLibLoaded]   = useState(false)
-  const [saving,      setSaving]      = useState(false)
-  const [savedFlash,  setSavedFlash]  = useState(false)
-  const [libLoading,  setLibLoading]  = useState(false)
+  const [view,          setView]          = useState<'forge'|'library'|'import'>('forge')
+  const [library,       setLibrary]       = useState<LibItem[]>([])
+  const [libLoaded,     setLibLoaded]     = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [savedFlash,    setSavedFlash]    = useState(false)
+  const [libLoading,    setLibLoading]    = useState(false)
   const [importLoading, setImportLoading] = useState(false)
-  const [deleteConf,  setDeleteConf]  = useState<string|null>(null)
-  const [sharingId,   setSharingId]   = useState<string|null>(null)
-  const [copiedId,    setCopiedId]    = useState<string|null>(null)
-  const [renamingId,  setRenamingId]  = useState<string|null>(null)
-  const [renameVal,   setRenameVal]   = useState('')
+  const [deleteConf,    setDeleteConf]    = useState<string|null>(null)
+  const [sharingId,     setSharingId]     = useState<string|null>(null)
+  const [copiedId,      setCopiedId]      = useState<string|null>(null)
+  const [renamingId,    setRenamingId]    = useState<string|null>(null)
+  const [renameVal,     setRenameVal]     = useState('')
 
-  // onboarding
   const [showWizard,          setShowWizard]          = useState(() => { try { return !localStorage.getItem('sf_onboarded') } catch { return false } })
   const [firstSetCelebration, setFirstSetCelebration] = useState(false)
+
+  // new
+  const [hoveredTrackIndex, setHoveredTrackIndex] = useState<number|null>(null)
+  const [performanceMode,   setPerformanceMode]   = useState(false)
+  const [perfTrackIndex,    setPerfTrackIndex]    = useState(0)
 
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadLibrary() }, [])
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const tab = params.get('tab')
-    if (tab === 'library') {
-      setView('library')
-      window.history.replaceState({}, '', '/app')
-    }
+    if (params.get('tab') === 'library') { setView('library'); window.history.replaceState({}, '', '/app') }
   }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
+  useEffect(() => {
+    if (!performanceMode || !set) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  setPerfTrackIndex(i => Math.min(i+1, set.tracks.length-1))
+      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    setPerfTrackIndex(i => Math.max(i-1, 0))
+      if (e.key === 'Escape') setPerformanceMode(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [performanceMode, set])
 
-  // ── Generate ──────────────────────────────────────────────
   async function generate(keepLocks = false) {
     setLoading(true); setError(null)
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
@@ -100,11 +112,10 @@ export default function AppPage() {
     setSet(null)
     try {
       const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-          genre: effectiveGenre, crowd, arc, vibe, refArtist,
-          mode, minutes, count, bpmLow, bpmHigh, keyMatch,
-          lockedTracks, energyPoints, includeMixingNotes,
-          recentTracks: [],
-        }) })
+        genre: effectiveGenre, crowd, arc, vibe, refArtist,
+        mode, minutes, count, bpmLow, bpmHigh, keyMatch,
+        lockedTracks, energyPoints, includeMixingNotes, recentTracks: [],
+      }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, arc, vibe, refArtist } })
@@ -126,7 +137,6 @@ export default function AppPage() {
     setTimeout(() => generate(false), 80)
   }
 
-  // ── Swap ──────────────────────────────────────────────────
   async function swapTrack(index: number) {
     if (!set) return
     setSwapping(index); setError(null)
@@ -140,7 +150,6 @@ export default function AppPage() {
     finally   { setSwapping(null) }
   }
 
-  // ── Save ──────────────────────────────────────────────────
   async function saveSet() {
     if (!set||saving) return; setSaving(true)
     try {
@@ -152,7 +161,6 @@ export default function AppPage() {
     finally   { setSaving(false) }
   }
 
-  // ── Library ───────────────────────────────────────────────
   async function loadLibrary() {
     try { const res=await fetch('/api/library'); const data=await res.json(); if (res.ok) setLibrary(data.sets||[]) } catch {}
     finally { setLibLoaded(true) }
@@ -194,7 +202,6 @@ export default function AppPage() {
     finally { setRenamingId(null); setRenameVal('') }
   }
 
-  // ── Import ────────────────────────────────────────────────
   async function handleImport(tracks: ImportedTrack[]) {
     setImportLoading(true); setError(null); setSet(null)
     try {
@@ -205,7 +212,6 @@ export default function AppPage() {
     finally   { setImportLoading(false) }
   }
 
-  // ── Utils ─────────────────────────────────────────────────
   function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) }
 
   function reorderTracks(from: number, to: number) {
@@ -220,10 +226,10 @@ export default function AppPage() {
     setLocked(prev => {
       const next = new Set<number>()
       prev.forEach(idx => {
-        if (idx === from)                              next.add(to)
-        else if (from < to && idx > from && idx <= to) next.add(idx - 1)
-        else if (from > to && idx < from && idx >= to) next.add(idx + 1)
-        else                                            next.add(idx)
+        if (idx === from)                               next.add(to)
+        else if (from < to && idx > from && idx <= to)  next.add(idx - 1)
+        else if (from > to && idx < from && idx >= to)  next.add(idx + 1)
+        else                                             next.add(idx)
       })
       return next
     })
@@ -251,7 +257,6 @@ export default function AppPage() {
     return ''
   }
 
-  // ── Wizard ────────────────────────────────────────────────
   function handleWizardComplete(result: WizardResult) {
     setGenre(result.genre); setCrowd(result.crowd); setArc(result.arc); setVibe(result.vibe); setRefArtist(result.refArtist); setMinutes(result.minutes); setMode('time')
     const presetName = Object.entries(ENERGY_PRESETS).find(([name]) => name.toLowerCase().includes(result.arc.toLowerCase().split(' ')[0]))
@@ -260,9 +265,6 @@ export default function AppPage() {
   }
   function handleWizardSkip() { try { localStorage.setItem('sf_onboarded','true') } catch {}; setShowWizard(false) }
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────
   return (
     <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#06060c', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", overflow:'hidden' }}>
       <style>{`
@@ -286,7 +288,7 @@ export default function AppPage() {
         .sf-tab { cursor:pointer; padding:10px 0; font-size:10px; letter-spacing:2px; border-bottom:2px solid transparent; transition:.2s; user-select:none; flex:1; text-align:center; }
         .sf-tab.on { border-color:${C}; color:${C}; }
         .sf-tab:hover:not(.on) { color:#9a9ab8; }
-        .sf-track:hover { border-color:#23233a!important; }
+        .sf-track { transition:background .15s, border-color .15s; }
         .sf-swap:hover:enabled { border-color:${C}!important; color:${C}!important; }
         .sf-del-btn { background:transparent; border:1px solid #23233a; color:#5a5a78; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:10px; padding:4px 8px; border-radius:5px; transition:.18s; }
         .sf-del-btn:hover { border-color:${M}; color:${M}; }
@@ -296,20 +298,34 @@ export default function AppPage() {
         .sf-slider { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:999px; background:linear-gradient(90deg,${M}33,${C}33); border:1px solid #23233a; outline:none; cursor:pointer; }
         .sf-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 10px ${C}66; cursor:grab; }
         .sf-slider::-webkit-slider-thumb:active { cursor:grabbing; }
-        @keyframes rise  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-        @keyframes spin  { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-        @keyframes flash { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px ${C}88} }
-        @keyframes scan  { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+        .sf-plat { display:inline-flex; align-items:center; gap:3px; padding:3px 8px; border-radius:5px; border:1px solid; font-size:10px; font-family:'JetBrains Mono',monospace; text-decoration:none; font-weight:600; transition:opacity .15s,transform .15s; opacity:.75; }
+        .sf-plat:hover { opacity:1!important; transform:translateY(-1px); }
+        @keyframes rise    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @keyframes spin    { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        @keyframes pulse   { 0%,100%{opacity:.4} 50%{opacity:1} }
+        @keyframes flash   { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px ${C}88} }
+        @keyframes scan    { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+        @keyframes shimmer { 0%{background-position:-400% 0} 100%{background-position:400% 0} }
+        @keyframes perf-in { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:none} }
         .sf-row { animation:rise .4s ease backwards; }
+        .sf-skel { background:linear-gradient(90deg,#0d0d1a 25%,#181830 50%,#0d0d1a 75%); background-size:400% 100%; animation:shimmer 1.6s ease-in-out infinite; border-radius:10px; }
         * { box-sizing:border-box; }
         ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#1f1f33; border-radius:2px; }
       `}</style>
 
-      {/* Wizard overlay */}
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
 
-      {/* ── NAV ── */}
+      {performanceMode && set && (
+        <PerformanceModeView
+          tracks={set.tracks}
+          currentIndex={perfTrackIndex}
+          onPrev={() => setPerfTrackIndex(i => Math.max(0, i-1))}
+          onNext={() => setPerfTrackIndex(i => Math.min(set.tracks.length-1, i+1))}
+          onExit={() => setPerformanceMode(false)}
+        />
+      )}
+
+      {/* NAV */}
       <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40 }}>
         <Link href="/" style={{ textDecoration:'none' }}>
           <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
@@ -318,36 +334,31 @@ export default function AppPage() {
         </Link>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
           {quota?.trial?.active && (
-            <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
+            <div style={{ fontSize:10, padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
               {quota.trial.daysLeft}d left in trial
             </div>
           )}
           {quota?.isFree && !quota?.trial?.active && (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color:'#9a9ab8' }}>
+              <div style={{ fontSize:10, padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color:'#9a9ab8' }}>
                 {quota.remaining===0 ? '0 sets left' : `${quota.remaining} free sets left`}
               </div>
               <a href="/#pricing" style={{ textDecoration:'none' }}>
-                <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer' }}>Upgrade</div>
+                <div style={{ fontSize:10, padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer' }}>Upgrade</div>
               </a>
             </div>
           )}
           <Link href="/analyse" style={{ textDecoration:'none' }}>
-            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>
-              🔍 ANALYSE
-            </button>
+            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1 }}>🔍 ANALYSE</button>
           </Link>
           <UserButton />
         </div>
       </nav>
 
-      {/* ── SPLIT LAYOUT ── */}
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
 
-        {/* ════ LEFT PANEL ════ */}
+        {/* LEFT PANEL */}
         <div style={{ width:370, flexShrink:0, borderRight:'1px solid #1a1a2e', display:'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
-
-          {/* Tab nav */}
           <div style={{ display:'flex', borderBottom:'1px solid #1a1a2e', flexShrink:0 }}>
             <div className={`sf-tab ${view==='forge'?'on':''}`} onClick={()=>setView('forge')}>⚡ FORGE</div>
             <div className={`sf-tab ${view==='library'?'on':''}`} onClick={()=>{ setView('library'); if(!libLoaded) loadLibrary() }}>
@@ -356,13 +367,10 @@ export default function AppPage() {
             <div className={`sf-tab ${view==='import'?'on':''}`} onClick={()=>setView('import')}>↑ IMPORT</div>
           </div>
 
-          {/* Scrollable panel content */}
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
 
-            {/* ══ FORGE FORM ══ */}
             {view==='forge' && (
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-
                 <SFLabel>GENRE</SFLabel>
                 <div>
                   <select className="sf-input sf-select" value={genre} onChange={e=>setGenre(e.target.value)} style={{ marginBottom: genre==='__custom__'?8:0 }}>
@@ -375,34 +383,14 @@ export default function AppPage() {
                 </div>
 
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  <div>
-                    <SFLabel>CROWD</SFLabel>
-                    <select className="sf-input sf-select" value={crowd} onChange={e=>setCrowd(e.target.value)}>
-                      {CROWDS.map(c=><option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <SFLabel>ARC</SFLabel>
-                    <select className="sf-input sf-select" value={arc} onChange={e=>setArc(e.target.value)}>
-                      {ARCS.map(a=><option key={a}>{a}</option>)}
-                    </select>
-                  </div>
+                  <div><SFLabel>CROWD</SFLabel><select className="sf-input sf-select" value={crowd} onChange={e=>setCrowd(e.target.value)}>{CROWDS.map(c=><option key={c}>{c}</option>)}</select></div>
+                  <div><SFLabel>ARC</SFLabel><select className="sf-input sf-select" value={arc} onChange={e=>setArc(e.target.value)}>{ARCS.map(a=><option key={a}>{a}</option>)}</select></div>
                 </div>
 
-                <div>
-                  <SFLabel>VIBE <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>
-                  <input className="sf-input" value={vibe} onChange={e=>setVibe(e.target.value)} placeholder="dark & hypnotic, summery rooftop…" />
-                </div>
+                <div><SFLabel>VIBE <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel><input className="sf-input" value={vibe} onChange={e=>setVibe(e.target.value)} placeholder="dark & hypnotic, summery rooftop…" /></div>
+                <div><SFLabel>REFERENCE ARTISTS <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel><input className="sf-input" value={refArtist} onChange={e=>setRefArtist(e.target.value)} placeholder="Boris Brejcha, Tale Of Us…" /></div>
 
-                <div>
-                  <SFLabel>REFERENCE ARTISTS <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>
-                  <input className="sf-input" value={refArtist} onChange={e=>setRefArtist(e.target.value)} placeholder="Boris Brejcha, Tale Of Us…" />
-                </div>
-
-                <div>
-                  <SFLabel>ENERGY CURVE</SFLabel>
-                  <EnergyEditor points={energyPoints} onChange={setEnergyPoints} />
-                </div>
+                <div><SFLabel>ENERGY CURVE</SFLabel><EnergyEditor points={energyPoints} onChange={setEnergyPoints} /></div>
 
                 <div>
                   <SFLabel>SET LENGTH</SFLabel>
@@ -429,14 +417,8 @@ export default function AppPage() {
                 </div>
 
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  <div>
-                    <SFLabel>BPM LOW</SFLabel>
-                    <input className="sf-input" type="number" value={bpmLow} onChange={e=>setBpmLow(+e.target.value)} />
-                  </div>
-                  <div>
-                    <SFLabel>BPM HIGH</SFLabel>
-                    <input className="sf-input" type="number" value={bpmHigh} onChange={e=>setBpmHigh(+e.target.value)} />
-                  </div>
+                  <div><SFLabel>BPM LOW</SFLabel><input className="sf-input" type="number" value={bpmLow} onChange={e=>setBpmLow(+e.target.value)} /></div>
+                  <div><SFLabel>BPM HIGH</SFLabel><input className="sf-input" type="number" value={bpmHigh} onChange={e=>setBpmHigh(+e.target.value)} /></div>
                 </div>
 
                 <div className={`sf-chip ${keyMatch?'on':''}`} onClick={()=>setKeyMatch(!keyMatch)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
@@ -444,23 +426,19 @@ export default function AppPage() {
                 </div>
                 <div className={`sf-chip ${includeMixingNotes?'on':''}`} onClick={()=>setIncludeMixingNotes(!includeMixingNotes)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }} title="Off = faster, tracklist only">
                   ↳ Mix notes {includeMixingNotes?'ON':'OFF'}
-                  ♪ Harmonic mixing {keyMatch?'ON':'OFF'}
                 </div>
 
                 <button className="sf-btn-primary" onClick={()=>generate(false)} disabled={loading||(genre==='__custom__'&&!customGenre.trim())} style={{ padding:'13px 0', borderRadius:10, fontSize:14, letterSpacing:2, width:'100%', marginTop:4 }}>
                   {loading?'FORGING…':'⚡ FORGE SET'}
                 </button>
-
                 <button onClick={tryExample} disabled={loading} className="sf-btn-ghost" style={{ padding:'9px 0', borderRadius:8, fontSize:11, letterSpacing:1, width:'100%' }}>
                   ✦ TRY AN EXAMPLE SET
                 </button>
-
                 {locked.size>0 && (
                   <button onClick={()=>generate(true)} disabled={loading} className="sf-btn-ghost" style={{ padding:'9px 0', borderRadius:8, fontSize:11, color:'#f59e0b', borderColor:'#f59e0b44', width:'100%' }}>
                     ↻ REFORGE ({locked.size} locked)
                   </button>
                 )}
-
                 {error && (
                   <div style={{ padding:12, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:12, lineHeight:1.5 }}>
                     {error}
@@ -469,11 +447,9 @@ export default function AppPage() {
                     )}
                   </div>
                 )}
-
               </div>
             )}
 
-            {/* ══ LIBRARY ══ */}
             {view==='library' && (
               <div>
                 {!libLoaded ? (
@@ -528,7 +504,6 @@ export default function AppPage() {
               </div>
             )}
 
-            {/* ══ IMPORT ══ */}
             {view==='import' && (
               <div>
                 <div style={{ marginBottom:14 }}>
@@ -540,21 +515,38 @@ export default function AppPage() {
                 {error && <div style={{ marginTop:10, padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
               </div>
             )}
-
           </div>
         </div>
 
-        {/* ════ RIGHT PANEL ════ */}
+        {/* RIGHT PANEL */}
         <div style={{ flex:1, overflowY:'auto', background:'#07070e', position:'relative' }}>
 
-          {/* ── Loading beam ── */}
+          {/* Loading beam */}
           {(loading||importLoading) && (
             <div style={{ position:'sticky', top:0, zIndex:10, height:3, background:'#0d0d1a', overflow:'hidden' }}>
               <div style={{ position:'absolute', top:0, left:0, height:'100%', width:'30%', background:`linear-gradient(90deg,transparent,${C},${M},transparent)`, animation:'scan 1.4s linear infinite' }} />
             </div>
           )}
 
-          {/* ── Empty state ── */}
+          {/* Loading skeleton */}
+          {(loading||importLoading) && (
+            <div style={{ padding:24, pointerEvents:'none' }}>
+              <div className="sf-skel" style={{ height:36, width:'52%', marginBottom:10 }} />
+              <div className="sf-skel" style={{ height:13, width:'75%', marginBottom:20 }} />
+              <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+                {[88,108,96,78,120].map((w,i)=><div key={i} className="sf-skel" style={{ height:40, width:w, borderRadius:8 }} />)}
+              </div>
+              <div className="sf-skel" style={{ height:130, marginBottom:18, borderRadius:12 }} />
+              {Array.from({length:5}).map((_,i)=>(
+                <div key={i} style={{ marginBottom:6 }}>
+                  <div className="sf-skel" style={{ height:70, animationDelay:`${i*0.08}s` }} />
+                  {i < 4 && <div style={{ height:24 }} />}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
           {!set && !loading && !importLoading && (
             <div style={{ height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
               <div style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${C}04 1px,transparent 1px),linear-gradient(90deg,${C}04 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 50%,black,transparent 70%)', pointerEvents:'none' }} />
@@ -563,9 +555,7 @@ export default function AppPage() {
               <div style={{ position:'relative' }}>
                 <div style={{ fontSize:32, marginBottom:14 }}>🎧</div>
                 <div style={{ fontSize:16, fontWeight:600, color:'#4a4a66', marginBottom:8 }}>Your set will appear here</div>
-                <div style={{ fontSize:13, color:'#3a3a58', lineHeight:1.6, maxWidth:320 }}>
-                  Use the controls on the left to configure your set, then hit Forge.
-                </div>
+                <div style={{ fontSize:13, color:'#3a3a58', lineHeight:1.6, maxWidth:320 }}>Use the controls on the left to configure your set, then hit Forge.</div>
                 <button onClick={tryExample} disabled={loading} style={{ marginTop:24, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', border:'none', padding:'11px 28px', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', letterSpacing:1 }}>
                   ✦ TRY AN EXAMPLE SET
                 </button>
@@ -573,11 +563,10 @@ export default function AppPage() {
             </div>
           )}
 
-          {/* ── Set results ── */}
-          {set && (
+          {/* Set results */}
+          {set && !loading && !importLoading && (
             <div style={{ padding:24 }}>
 
-              {/* First set celebration */}
               {firstSetCelebration && (
                 <div style={{ background:`linear-gradient(135deg,${M}14,${C}14)`, border:`1px solid ${C}44`, borderRadius:12, padding:'16px 20px', marginBottom:20, display:'flex', gap:14, alignItems:'flex-start' }}>
                   <div style={{ fontSize:28, flexShrink:0 }}>🎉</div>
@@ -590,7 +579,7 @@ export default function AppPage() {
               )}
 
               {/* Header */}
-              <div style={{ marginBottom:18 }}>
+              <div style={{ marginBottom:16 }}>
                 <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:36, margin:'0 0 4px', letterSpacing:1, color:C }} className="sf-glow-c">{set.title}</h2>
                 <div style={{ fontSize:13, color:'#9a9ab8', lineHeight:1.5, marginBottom:10 }}>{set.summary}</div>
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
@@ -598,7 +587,6 @@ export default function AppPage() {
                     <span key={tag} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'2px 8px' }}>{tag}</span>
                   ))}
                 </div>
-                {/* Action buttons */}
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                   <button onClick={saveSet} disabled={saving} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11, animation:savedFlash?'flash .6s ease':'none', color:savedFlash?C:undefined, borderColor:savedFlash?C:undefined }}>
                     {saving?'SAVING…':savedFlash?'✓ SAVED':'◈ SAVE'}
@@ -607,24 +595,41 @@ export default function AppPage() {
                     {copied?'✓ COPIED':'⧉ COPY LIST'}
                   </button>
                   <button onClick={exportText} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11 }}>↓ EXPORT</button>
+                  <button
+                    onClick={() => { setPerfTrackIndex(0); setPerformanceMode(true) }}
+                    style={{ padding:'8px 14px', borderRadius:8, fontSize:11, background:`${C}15`, border:`1px solid ${C}55`, color:C, cursor:'pointer', fontFamily:"'JetBrains Mono',monospace", fontWeight:700, letterSpacing:.5, transition:'.18s' }}
+                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=`${C}28`}
+                    onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=`${C}15`}
+                  >▶ DJ VIEW</button>
                 </div>
               </div>
 
-              {/* Energy bar */}
-              <EnergyBar tracks={set.tracks} />
+              {/* Stats strip */}
+              <SetStatsStrip tracks={set.tracks} />
+
+              {/* Journey chart */}
+              <SetJourneyChart
+                tracks={set.tracks}
+                highlightIndex={hoveredTrackIndex}
+                onHover={setHoveredTrackIndex}
+              />
 
               {/* Camelot + key sequence */}
-              <div style={{ marginTop:16, display:'grid', gridTemplateColumns:'auto 1fr', gap:16, alignItems:'start' }}>
+              <div style={{ marginTop:18, display:'grid', gridTemplateColumns:'auto 1fr', gap:16, alignItems:'start' }}>
                 <CamelotWheel tracks={set.tracks} />
-                <div style={{ display:'flex', flexDirection:'column', gap:5, paddingTop:26 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:4, paddingTop:26 }}>
                   <div style={{ fontSize:9, letterSpacing:2, color:'#6a6a8a', marginBottom:4 }}>KEY SEQUENCE</div>
                   {set.tracks.map((t,i)=>{
                     const m=(t.key||'').toUpperCase().match(/^(\d+)([AB])$/); const hue=m?CAM_HUES[parseInt(m[1])-1]:null
+                    const isHov = hoveredTrackIndex===i
                     return (
-                      <div key={i} style={{ display:'flex', alignItems:'center', gap:7, fontSize:10 }}>
+                      <div key={i}
+                        onMouseEnter={()=>setHoveredTrackIndex(i)}
+                        onMouseLeave={()=>setHoveredTrackIndex(null)}
+                        style={{ display:'flex', alignItems:'center', gap:7, fontSize:10, cursor:'pointer', borderRadius:5, padding:'2px 4px', background:isHov?`${C}0e`:'transparent', transition:'.12s' }}>
                         <span style={{ color:M, fontFamily:"'Bebas Neue',sans-serif", fontSize:12, minWidth:20 }}>{String(t.n).padStart(2,'0')}</span>
                         {hue!==null && <span style={{ width:7, height:7, borderRadius:'50%', background:`hsl(${hue},85%,58%)`, flexShrink:0, boxShadow:`0 0 5px hsl(${hue},85%,58%)` }} />}
-                        <span style={{ color:'#e8e8f0', fontWeight:700, minWidth:28 }}>{t.key}</span>
+                        <span style={{ color:isHov?C:'#e8e8f0', fontWeight:700, minWidth:28, transition:'.12s' }}>{t.key}</span>
                         <span style={{ color:'#6a6a8a', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{t.artist} — {t.title}</span>
                       </div>
                     )
@@ -633,75 +638,297 @@ export default function AppPage() {
               </div>
 
               {/* Track list */}
-              <div style={{ marginTop:18, display:'flex', flexDirection:'column', gap:7 }}>
+              <div style={{ marginTop:18 }}>
                 {set.tracks.map((t,i)=>(
-                  <div
-                    key={`${t.n}-${t.title}`}
-                    className="sf-row sf-track"
-                    onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
-                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
-                    onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
-                    style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
-                      border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
-                      borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
-                    {/* drag handle */}
+                  <div key={`${t.n}-${t.title}`}>
                     <div
-                      draggable
-                      onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
-                      onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
-                      title="Drag to reorder"
-                      style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px' }}
-                    >⠿</div>
-                    <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
-                      <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
-                        <span>{t.artist}</span>
-                        <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
-                        <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
-                        <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
-                        <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
+                      className="sf-row sf-track"
+                      onMouseEnter={() => setHoveredTrackIndex(i)}
+                      onMouseLeave={() => setHoveredTrackIndex(null)}
+                      onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
+                      onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
+                      style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center',
+                        background: hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
+                        border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                        borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
+                      <div draggable onDragStart={e=>{e.stopPropagation();setDragIndex(i)}} onDragEnd={()=>{setDragIndex(null);setDragOverIndex(null)}}
+                        title="Drag to reorder" style={{ cursor:'grab', color:dragIndex===i?C:'#2a2a48', fontSize:14, textAlign:'center', userSelect:'none' }}>⠿</div>
+                      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{t.title}</div>
+                        <div style={{ fontSize:11, color:'#8a8aa8', marginBottom:6 }}>{t.artist}</div>
+                        <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                          <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" className="sf-plat" style={{ color:'#01FF95', borderColor:'#01FF9540' }}>● Beatport</a>
+                          <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" className="sf-plat" style={{ color:'#1DB954', borderColor:'#1DB95440' }}>● Spotify</a>
+                          <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" className="sf-plat" style={{ color:'#FF4444', borderColor:'#FF444440' }}>▶ YouTube</a>
+                          <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" className="sf-plat" style={{ color:'#FF5500', borderColor:'#FF550040' }}>◉ SoundCloud</a>
+                        </div>
+                        {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:6 }}>↳ {t.transition}</div>}
                       </div>
-                      {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
+                      <div style={{ textAlign:'right', fontSize:11, lineHeight:1.8 }}>
+                        <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
+                        <div>{t.key}</div>
+                        <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
+                      </div>
+                      <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
+                        {locked.has(i)?'🔒':'🔓'}
+                      </button>
+                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                        <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
+                      </button>
                     </div>
-                    <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
-                      <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
-                      <div>{t.key}</div>
-                      <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
-                    </div>
-                    <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
-                      {locked.has(i)?'🔒':'🔓'}
-                    </button>
-                    <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
-                      <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
-                    </button>
+                    {i < set.tracks.length - 1 && <TransitionBridge from={t} to={set.tracks[i+1]} />}
                   </div>
                 ))}
               </div>
 
-              <div style={{ marginTop:14, fontSize:10, color:'#3a3a58', textAlign:'center' }}>
+              <div style={{ marginTop:16, fontSize:10, color:'#3a3a58', textAlign:'center' }}>
                 AI-curated blueprints — verify BPM & key in your library before performing.
               </div>
             </div>
           )}
         </div>
-
       </div>
     </div>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────
+
 function SFLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize:9, letterSpacing:2, color:'#6a6a8a', marginBottom:6 }}>{children}</div>
 }
 
-function EnergyBar({ tracks }: { tracks: Track[] }) {
+function SetStatsStrip({ tracks }: { tracks: Track[] }) {
+  const bpms    = tracks.map(t=>t.bpm).filter(Boolean)
+  const minBpm  = bpms.length ? Math.min(...bpms) : 0
+  const maxBpm  = bpms.length ? Math.max(...bpms) : 0
+  const keys    = new Set(tracks.map(t=>(t.key||'').toUpperCase().trim()).filter(Boolean))
+  let compat = 0
+  for (let i = 0; i < tracks.length-1; i++) {
+    const c = camelotCompat(tracks[i].key, tracks[i+1].key)
+    if (c === 'perfect' || c === 'good') compat++
+  }
+  const harmPct = tracks.length > 1 ? Math.round((compat / (tracks.length-1)) * 100) : 100
+  const estMin  = Math.round(tracks.length * 4.5)
+
+  const stats = [
+    `~${estMin} min`,
+    `${tracks.length} tracks`,
+    minBpm===maxBpm ? `${minBpm} BPM` : `${minBpm}–${maxBpm} BPM`,
+    `${keys.size} keys`,
+    `${harmPct}% harmonic`,
+  ]
   return (
-    <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:44, background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:'5px 10px' }}>
-      {tracks.map((t,i)=>(
-        <div key={i} title={`${t.artist} — ${t.title} · E${t.energy}`} style={{ flex:1, height:`${(t.energy/10)*100}%`, minHeight:2, background:`linear-gradient(180deg,${M},${C})`, borderRadius:2, opacity:.85 }} />
+    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
+      {stats.map((s,i) => (
+        <div key={i} style={{ background:'#0a0a14', border:'1px solid #16162a', borderRadius:8, padding:'5px 12px', fontSize:11, color: i===4 ? (harmPct>=80?'#4ade80':harmPct>=60?'#f59e0b':M) : '#c8c8e0', fontWeight:600, fontFamily:"'JetBrains Mono',monospace" }}>
+          {s}
+        </div>
       ))}
+    </div>
+  )
+}
+
+function SetJourneyChart({ tracks, highlightIndex, onHover }: { tracks: Track[]; highlightIndex: number|null; onHover: (i: number|null) => void }) {
+  if (!tracks.length) return null
+  const W=800, H=150, PX=24, PY=18, uw=W-PX*2, uh=H-PY*2
+
+  const energyPts = tracks.map((t,i) => ({
+    x: PX + (i / Math.max(tracks.length-1, 1)) * uw,
+    y: PY + (1 - (t.energy-1)/9) * uh,
+    t, i,
+  }))
+
+  const bpms   = tracks.map(t=>t.bpm).filter(Boolean)
+  const bMin   = Math.min(...bpms), bMax = Math.max(...bpms), bRange = bMax-bMin||1
+  const bpmPts = tracks.map((t,i) => ({
+    x: PX + (i / Math.max(tracks.length-1, 1)) * uw,
+    y: PY + (1 - (t.bpm-bMin)/bRange) * uh,
+  }))
+
+  function curve(pts: {x:number;y:number}[], close=false) {
+    if (pts.length < 2) return `M${pts[0].x} ${pts[0].y}`
+    let d = `M ${pts[0].x} ${pts[0].y}`
+    for (let i = 0; i < pts.length-1; i++) {
+      const p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(pts.length-1,i+2)]
+      const cp1x=p1.x+(p2.x-p0.x)/6, cp1y=p1.y+(p2.y-p0.y)/6
+      const cp2x=p2.x-(p3.x-p1.x)/6, cp2y=p2.y-(p3.y-p1.y)/6
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+    if (close) d += ` L ${pts[pts.length-1].x} ${PY+uh} L ${pts[0].x} ${PY+uh} Z`
+    return d
+  }
+
+  return (
+    <div style={{ background:'#0a0a14', border:'1px solid #16162a', borderRadius:12, padding:'12px 10px 6px', marginBottom:16 }}>
+      <div style={{ fontSize:9, letterSpacing:2, color:'#6a6a8a', marginBottom:8, display:'flex', justifyContent:'space-between', padding:'0 4px' }}>
+        <span>SET JOURNEY</span>
+        <span style={{ display:'flex', gap:12 }}>
+          <span style={{ color:M }}>— Energy</span>
+          <span style={{ color:`${C}aa` }}>- - BPM</span>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', display:'block', overflow:'visible' }}>
+        <defs>
+          <linearGradient id="sj-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={M} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={M} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[2,5,8].map(e => {
+          const y = PY + (1-(e-1)/9)*uh
+          return <g key={e}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#16162a" strokeWidth={1} /><text x={PX-6} y={y} textAnchor="end" dominantBaseline="middle" fontSize={8} fill="#2a2a48" fontFamily="monospace">{e}</text></g>
+        })}
+        <path d={curve(energyPts, true)} fill="url(#sj-fill)" />
+        <path d={curve(energyPts)} fill="none" stroke={M} strokeWidth={2} strokeLinecap="round" />
+        <path d={curve(bpmPts)} fill="none" stroke={`${C}70`} strokeWidth={1.5} strokeDasharray="6 4" strokeLinecap="round" />
+        {energyPts.map(p => {
+          const isHov = highlightIndex===p.i
+          const tipX  = Math.max(PX+4, Math.min(p.x, W-PX-160))
+          return (
+            <g key={p.i} onMouseEnter={()=>onHover(p.i)} onMouseLeave={()=>onHover(null)} style={{ cursor:'pointer' }}>
+              {isHov && <line x1={p.x} y1={PY} x2={p.x} y2={PY+uh} stroke={M} strokeWidth={1} strokeDasharray="3 3" opacity={0.35} />}
+              <circle cx={p.x} cy={p.y} r={isHov?7:3.5} fill={isHov?M:'#0a0a14'} stroke={M} strokeWidth={isHov?2:1.5} style={{ transition:'r .12s' }} />
+              {isHov && (
+                <g>
+                  <rect x={tipX} y={p.y-58} width={156} height={50} rx={6} fill="#0c0c1c" stroke={M} strokeWidth={1} />
+                  <text x={tipX+8} y={p.y-44} fontSize={9} fill={C} fontFamily="monospace">{p.t.artist}</text>
+                  <text x={tipX+8} y={p.y-32} fontSize={9} fill="#e8e8f0" fontFamily="monospace">{p.t.title.slice(0,22)}{p.t.title.length>22?'…':''}</text>
+                  <text x={tipX+8} y={p.y-19} fontSize={8} fill="#6a6a8a" fontFamily="monospace">{p.t.bpm} BPM · {p.t.key} · E{p.t.energy}</text>
+                </g>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+      <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#2a2a48', padding:'0 8px' }}>
+        <span>OPENING</span><span>CLOSE</span>
+      </div>
+    </div>
+  )
+}
+
+function TransitionBridge({ from, to }: { from: Track; to: Track }) {
+  const compat      = camelotCompat(from.key, to.key)
+  const bpmDelta    = to.bpm - from.bpm
+  const energyDelta = to.energy - from.energy
+  const compatColor = compat==='perfect' ? '#4ade80' : compat==='good' ? '#f59e0b' : M
+  const compatLabel = compat==='perfect' ? '✓ harmonic' : compat==='good' ? '~ near-key' : '✕ key clash'
+  const bpmColor    = Math.abs(bpmDelta)<=2 ? '#4ade80' : Math.abs(bpmDelta)<=5 ? '#f59e0b' : M
+  const bpmLabel    = bpmDelta===0 ? '= BPM' : (bpmDelta>0?`+${bpmDelta}`:`${bpmDelta}`) + ' BPM'
+  const eLabel      = energyDelta===0 ? '= E' : (energyDelta>0?`+${energyDelta}`:`${energyDelta}`) + ' E'
+
+  return (
+    <div style={{ display:'flex', alignItems:'center', padding:'2px 14px 2px 66px', height:26 }}>
+      <div style={{ width:1, height:'100%', background:'#1a1a2e', marginRight:10, flexShrink:0 }} />
+      <span style={{ fontSize:9, color:compatColor, border:`1px solid ${compatColor}44`, borderRadius:4, padding:'1px 7px', fontFamily:'monospace', marginRight:6, flexShrink:0 }}>{compatLabel}</span>
+      <span style={{ fontSize:9, color:bpmColor, fontFamily:'monospace', marginRight:8 }}>{bpmLabel}</span>
+      <span style={{ fontSize:9, color:'#3a3a58', fontFamily:'monospace' }}>{eLabel}</span>
+    </div>
+  )
+}
+
+function PerformanceModeView({ tracks, currentIndex, onPrev, onNext, onExit }: {
+  tracks: Track[]; currentIndex: number; onPrev: ()=>void; onNext: ()=>void; onExit: ()=>void
+}) {
+  const current = tracks[currentIndex]
+  const next    = tracks[currentIndex+1] ?? null
+  const prev    = tracks[currentIndex-1] ?? null
+  if (!current) return null
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:100, background:'#03030a', display:'flex', flexDirection:'column', fontFamily:"'JetBrains Mono',monospace", animation:'perf-in .22s ease' }}>
+      {/* Top bar */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 24px', borderBottom:'1px solid #1a1a2e', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, letterSpacing:2 }}>
+            <span style={{ color:C }}>DJ</span><span style={{ color:M }}>VIEW</span>
+          </div>
+          <div style={{ fontSize:10, color:'#3a3a58' }}>← → arrows to navigate · Esc to exit</div>
+        </div>
+        <button onClick={onExit} style={{ background:'transparent', border:'1px solid #23233a', color:'#6a6a8a', cursor:'pointer', fontFamily:'inherit', fontSize:11, padding:'6px 14px', borderRadius:8, transition:'.15s' }}
+          onMouseEnter={e=>(e.currentTarget as HTMLElement).style.color=M}
+          onMouseLeave={e=>(e.currentTarget as HTMLElement).style.color='#6a6a8a'}>
+          ✕ EXIT
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height:2, background:'#0d0d1a', flexShrink:0 }}>
+        <div style={{ height:'100%', width:`${((currentIndex+1)/tracks.length)*100}%`, background:`linear-gradient(90deg,${M},${C})`, transition:'width .3s ease' }} />
+      </div>
+
+      {/* Content */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 48px', textAlign:'center', position:'relative', overflow:'hidden' }}>
+
+        {/* Background glow */}
+        <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 60%,${M}08,transparent 65%)`, pointerEvents:'none' }} />
+
+        {/* Track counter */}
+        <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:13, letterSpacing:4, color:'#3a3a58', marginBottom:24 }}>
+          {String(currentIndex+1).padStart(2,'0')} / {String(tracks.length).padStart(2,'0')}
+        </div>
+
+        {/* Current track */}
+        <div style={{ position:'relative', marginBottom:28 }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'clamp(32px,5.5vw,68px)', lineHeight:1.05, color:C, letterSpacing:2, marginBottom:6 }} className="sf-glow-c">
+            {current.title}
+          </div>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'clamp(18px,3vw,32px)', color:'#e8e8f0', letterSpacing:1, marginBottom:20 }}>
+            {current.artist}
+          </div>
+          <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+            <div style={{ background:`${C}18`, border:`1px solid ${C}44`, borderRadius:999, padding:'7px 20px', fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:C, letterSpacing:1 }}>{current.bpm} BPM</div>
+            <div style={{ background:'#0d0d1a', border:'1px solid #23233a', borderRadius:999, padding:'7px 20px', fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:'#e8e8f0', letterSpacing:1 }}>{current.key}</div>
+            <div style={{ background:`${M}14`, border:`1px solid ${M}44`, borderRadius:999, padding:'7px 20px', fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M, letterSpacing:1 }}>E{current.energy}</div>
+          </div>
+        </div>
+
+        {/* Transition note */}
+        {next && current.transition && (
+          <div style={{ maxWidth:580, background:'#08080f', border:`1px solid ${C}28`, borderRadius:14, padding:'14px 22px', marginBottom:20 }}>
+            <div style={{ fontSize:9, letterSpacing:2, color:C, marginBottom:6 }}>TRANSITION → NEXT TRACK</div>
+            <div style={{ fontSize:14, color:'#c8c8e0', lineHeight:1.75 }}>{current.transition}</div>
+          </div>
+        )}
+
+        {/* Next track */}
+        {next && (
+          <div style={{ background:'#07070e', border:'1px solid #1a1a2e', borderRadius:10, padding:'10px 22px', display:'inline-flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:9, letterSpacing:2, color:'#3a3a58', flexShrink:0 }}>NEXT →</div>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#6a6a8a' }}>{next.title}</div>
+              <div style={{ fontSize:10, color:'#3a3a58' }}>{next.artist} · {next.bpm} BPM · {next.key}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Prev ghost */}
+        {prev && (
+          <div style={{ position:'absolute', top:16, left:24, fontSize:10, color:'#1f1f38', textAlign:'left', maxWidth:200 }}>
+            <div style={{ fontSize:8, letterSpacing:1, marginBottom:2 }}>← PREV</div>
+            <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{prev.artist} — {prev.title}</div>
+          </div>
+        )}
+
+        {!next && (
+          <div style={{ marginTop:16, fontSize:12, color:'#4a4a66' }}>End of set 🎧</div>
+        )}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{ display:'flex', gap:12, justifyContent:'center', padding:'18px 24px', borderTop:'1px solid #1a1a2e', flexShrink:0 }}>
+        <button onClick={onPrev} disabled={currentIndex===0}
+          style={{ padding:'12px 36px', borderRadius:10, fontSize:13, background:'transparent', border:'1px solid #23233a', color:currentIndex===0?'#2a2a48':'#e8e8f0', cursor:currentIndex===0?'default':'pointer', fontFamily:'inherit', letterSpacing:1, transition:'.15s' }}>
+          ← PREV
+        </button>
+        <button onClick={onNext} disabled={currentIndex===tracks.length-1}
+          style={{ padding:'12px 48px', borderRadius:10, fontSize:13, background:currentIndex===tracks.length-1?'transparent':`linear-gradient(100deg,${M},${C})`, border:currentIndex===tracks.length-1?'1px solid #23233a':'none', color:currentIndex===tracks.length-1?'#2a2a48':'#06060c', cursor:currentIndex===tracks.length-1?'default':'pointer', fontFamily:'inherit', fontWeight:700, letterSpacing:1, transition:'.15s' }}>
+          NEXT →
+        </button>
+      </div>
     </div>
   )
 }
