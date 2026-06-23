@@ -155,6 +155,13 @@ export default function AppPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [performanceMode, set])
 
+  useEffect(() => {
+    if (editingTrack === null) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEditingTrack(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editingTrack])
+
   async function generate(keepLocks = false) {
     setLoading(true); setError(null)
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
@@ -440,7 +447,8 @@ export default function AppPage() {
         @keyframes flash   { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px ${C}88} }
         @keyframes scan    { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
         @keyframes shimmer { 0%{background-position:-400% 0} 100%{background-position:400% 0} }
-        @keyframes perf-in { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:none} }
+        @keyframes perf-in  { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:none} }
+        @keyframes modal-in  { from{opacity:0;transform:scale(.96) translateY(8px)} to{opacity:1;transform:none} }
         .sf-row { animation:rise .4s ease backwards; }
         .sf-skel { background:linear-gradient(90deg,#0d0d1a 25%,#181830 50%,#0d0d1a 75%); background-size:400% 100%; animation:shimmer 1.6s ease-in-out infinite; border-radius:10px; }
         * { box-sizing:border-box; }
@@ -448,6 +456,35 @@ export default function AppPage() {
       `}</style>
 
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
+
+      {/* Track Edit Modal */}
+      {editingTrack !== null && set?.tracks[editingTrack] && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setEditingTrack(null) }}
+          style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(3,3,10,.82)', backdropFilter:'blur(18px)', WebkitBackdropFilter:'blur(18px)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ background:'#0e0e1c', border:`1px solid ${C}55`, borderRadius:18, padding:'26px 28px', width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto', boxShadow:`0 0 80px ${C}18, 0 28px 80px rgba(0,0,0,.7)`, animation:'modal-in .2s ease' }}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:22 }}>
+              <div>
+                <div style={{ fontSize:9, letterSpacing:2, color:M, marginBottom:7 }}>EDITING TRACK {String(editingTrack+1).padStart(2,'0')}</div>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:C, lineHeight:1, marginBottom:3 }} className="sf-glow-c">{set.tracks[editingTrack].title}</div>
+                <div style={{ fontSize:12, color:'#8a8aa8' }}>{set.tracks[editingTrack].artist}</div>
+              </div>
+              <button onClick={() => setEditingTrack(null)}
+                style={{ background:'transparent', border:'1px solid #23233a', color:'#6a6a8a', width:34, height:34, borderRadius:9, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'.15s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = M}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#23233a'}>
+                ✕
+              </button>
+            </div>
+            <TrackEditPanel
+              track={set.tracks[editingTrack]}
+              onUpdate={updates => updateTrack(editingTrack, updates)}
+              onClose={() => setEditingTrack(null)}
+            />
+          </div>
+        </div>
+      )}
 
       {performanceMode && set && (
         <PerformanceModeView
@@ -928,7 +965,7 @@ export default function AppPage() {
                         background: libDropIndex===i && libDropMode==='replace' ? `${M}0e` : selectMode && selectedTracks.has(i) ? `${C}0e` : hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
                         border: libDropIndex===i && libDropMode==='replace' ? `2px dashed ${M}` : selectMode && selectedTracks.has(i) ? `1px solid ${C}55` : dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         cursor: selectMode ? 'pointer' : undefined,
-                        borderRadius: editingTrack===i ? '10px 10px 0 0' : 10,
+                        borderRadius: 10,
                         padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
 
                       {/* REPLACE chip */}
@@ -975,15 +1012,6 @@ export default function AppPage() {
                         ✏
                       </button>
                     </div>
-
-                    {/* Inline track editor */}
-                    {editingTrack === i && (
-                      <TrackEditPanel
-                        track={t}
-                        onUpdate={updates => updateTrack(i, updates)}
-                        onClose={() => setEditingTrack(null)}
-                      />
-                    )}
 
                     {/* Between-track zone: drop zone when library dragging, otherwise transition bridge */}
                     {i < set.tracks.length - 1 && (
@@ -1197,7 +1225,7 @@ function TrackEditPanel({ track, onUpdate, onClose }: { track: Track; onUpdate: 
   const inp = { background:'#0a0a14', border:'1px solid #1f1f33', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", fontSize:11, padding:'6px 8px', borderRadius:6, outline:'none', width:'100%', boxSizing:'border-box' as const, transition:'border-color .15s' }
 
   return (
-    <div style={{ background:'#0d0d1a', border:`1px solid ${C}44`, borderTop:'none', borderRadius:'0 0 10px 10px', padding:'14px 14px 12px' }}>
+    <div>
       <style>{`.te-inp:focus{border-color:${C}!important}`}</style>
 
       {/* Artist + Title */}
