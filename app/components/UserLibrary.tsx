@@ -215,14 +215,19 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
       if (tag==='otrk') {
         const t: Partial<LibTrack>&{path?:string}={};let inner=pos
         while(inner+8<=pos+len){const it=readTag(bytes,inner),il=readU32(view,inner+4);inner+=8
-          if(it==='ptrk') t.path=readUTF16(bytes,inner,il)
+          if(it==='pfil') t.path=readUTF16(bytes,inner,il)   // database V2 uses pfil, not ptrk
+          if(it==='ptrk') t.path=t.path||readUTF16(bytes,inner,il) // older format fallback
           if(it==='tsng') t.title=readUTF16(bytes,inner,il)
           if(it==='tart') t.artist=readUTF16(bytes,inner,il)
           if(it==='tgen') t.genre=readUTF16(bytes,inner,il)
           if(it==='tkey') t.key=readUTF16(bytes,inner,il)||undefined
           if(it==='tbpm'){const s=readUTF16(bytes,inner,il),b=parseFloat(s);if(!isNaN(b)&&b>0) t.bpm=Math.round(b)}
           inner+=il}
-        if(t.path){const n=normPath(t.path);dbMeta[n]={...t,id:n}}
+        if(t.path){
+          // Some Serato versions store "Artist - Title" combined in tsng with no tart tag
+          if(!t.artist&&t.title){const sep=t.title.indexOf(' - ');if(sep>0){t.artist=t.title.slice(0,sep).trim();t.title=t.title.slice(sep+3).trim()}}
+          const n=normPath(t.path);dbMeta[n]={...t,id:n}
+        }
       }
       pos+=len
     }
