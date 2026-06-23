@@ -117,16 +117,59 @@ Analyse this set across these dimensions and return ONLY valid JSON:
   ],
   "energyCurve": [1,2,3,4,5,6,7,8,9,8,7],
   "verdict": "One punchy closing sentence — the thing this DJ should work on most"
-}`
+}
+
+IMPORTANT: Keep ALL text fields SHORT (1-2 sentences max). For trackNotes, only include notes for the most notable tracks — maximum 8 entries, skip unremarkable tracks entirely. energyCurve must have exactly one number per track.`
 
     const msg = await anthropic.messages.create({
       model:      CLAUDE_MODEL,
-      max_tokens: 2000,
+      max_tokens: 4000,
       messages:   [{ role: 'user', content: prompt }],
     })
 
-    const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-    const report = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    const raw = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
+
+    // Robust JSON extraction — handles truncation and markdown fences
+    let report: Record<string, unknown>
+    try {
+      const cleaned = raw.replace(/```json|```/g, '').trim()
+      report = JSON.parse(cleaned)
+    } catch {
+      // Try to extract JSON object even if response was truncated
+      const start = raw.indexOf('{')
+      let candidate = start >= 0 ? raw.slice(start) : raw
+
+      // If truncated mid-JSON, try to close it
+      if (candidate.lastIndexOf('}') < candidate.length - 20) {
+        // Response likely cut off — try adding closing braces
+        const opens  = (candidate.match(/\{/g) || []).length
+        const closes = (candidate.match(/\}/g) || []).length
+        const missing = opens - closes
+        if (missing > 0 && missing < 5) {
+          candidate = candidate.trimEnd().replace(/,\s*$/, '') + '}'.repeat(missing)
+        }
+      }
+
+      try {
+        report = JSON.parse(candidate)
+      } catch {
+        console.error('[analyse] Raw response that failed to parse:', raw.slice(0, 500))
+        throw new SyntaxError('AI response could not be parsed')
+      }
+    }
+
+    // Ensure required fields exist with safe defaults
+    if (!report.grade)              report.grade              = 'B'
+    if (!report.gradeReason)        report.gradeReason        = 'Analysis completed'
+    if (!report.overview)           report.overview           = 'Set analysed successfully.'
+    if (!report.scores)             report.scores             = {}
+    if (!report.strengths)          report.strengths          = []
+    if (!report.improvements)       report.improvements       = []
+    if (!report.trackNotes)         report.trackNotes         = []
+    if (!report.energyCurve)        report.energyCurve        = []
+    if (!report.verdict)            report.verdict            = 'Keep practising!'
+    if (!report.peakMoment)         report.peakMoment         = { trackN:1, artist:'', title:'', reason:'' }
+    if (!report.weakestTransition)  report.weakestTransition  = { fromN:1, toN:2, fromTitle:'', toTitle:'', reason:'', fix:'' }
 
     // Save to track_history so it ties into the history feature
     if (tracks.length > 0) {

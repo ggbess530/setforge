@@ -1,6 +1,9 @@
 // ▸ Replace: app/api/generate/route.ts
 
 import { auth }         from '@clerk/nextjs/server'
+
+// Extend Vercel timeout to 120s for large chunked sets
+export const maxDuration = 120
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
@@ -42,17 +45,19 @@ async function generateChunk(params: {
   energyStart:  number
   energyEnd:    number
   energyCurve:  number[]  // full energy values per track position
-  position:     'full' | 'opening' | 'closing'
+  position:          'full' | 'opening' | 'closing'
+  includeMixingNotes?: boolean
   lockedTracks?: { n:number; artist:string; title:string; bpm:number; key:string; energy:number }[]
   prevTracks?:  { artist:string; title:string; bpm:number; key:string }[]
   setTitle?:    string
+  recentTracks?: string[]
 }): Promise<{ title: string; summary: string; tracks: unknown[] }> {
 
   const {
     genre, crowd, vibe, refArtist,
     bpmLow, bpmHigh, keyMatch,
     targetCount, energyStart, energyEnd, energyCurve,
-    position, lockedTracks, prevTracks, setTitle,
+    position, includeMixingNotes = true, lockedTracks, prevTracks, setTitle, recentTracks = [],
   } = params
 
   const vibeLine    = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}`              : ''
@@ -60,6 +65,13 @@ async function generateChunk(params: {
   const lockedBlock = buildLockedSection(lockedTracks || [])
 
   const curveStr = energyCurve.map((e, i) => `Track ${i + 1}: energy ${e}/10`).join(', ')
+
+  // FIX 1+2: Build avoid list from recent tracks + locked to prevent duplicates
+  const allLockedTitles = (lockedTracks || []).map(t => `"${t.artist} — ${t.title}"`)
+  const avoidList = [...new Set([...recentTracks, ...allLockedTitles])]
+  const avoidBlock = avoidList.length
+    ? `\n\nDO NOT USE any of these tracks (already used in this or recent sets):\n${avoidList.slice(0, 40).join('\n')}`
+    : ''
 
   const contextBlock = prevTracks?.length
     ? `\nThis chunk continues from: ${prevTracks.map(t => `"${t.artist} — ${t.title}" [${t.bpm} BPM, ${t.key}]`).join(' → ')}. First track MUST flow naturally from these.\n`
@@ -136,6 +148,8 @@ export async function POST(req: Request) {
       keyMatch = true,
       lockedTracks = [],
       energyPoints,
+      includeMixingNotes = true,
+      recentTracks = [],
     } = body
 
     if (!genre || !crowd) {
@@ -178,6 +192,8 @@ export async function POST(req: Request) {
         energyCurve,
         position:     'full',
         lockedTracks,
+        includeMixingNotes,
+        recentTracks,
       })
 
     } else {
@@ -203,10 +219,15 @@ export async function POST(req: Request) {
         energyCurve:  energy1,
         position:     'opening',
         lockedTracks: locked1,
+        includeMixingNotes,
+        recentTracks,
       })
 
       // Chunk 2: closing, seeded from chunk 1's last 2 tracks
       const prevTracks = ((chunk1.tracks || []) as { artist:string; title:string; bpm:number; key:string }[]).slice(-2)
+      // Pass chunk 1 tracks as recent so chunk 2 never repeats them
+      const chunk1Used = ((chunk1.tracks || []) as {artist:string;title:string}[])
+        .map(t => `"${t.artist} — ${t.title}"`)
       const chunk2 = await generateChunk({
         ...baseParams,
         targetCount:  chunk2Size,
@@ -217,6 +238,8 @@ export async function POST(req: Request) {
         lockedTracks: locked2,
         prevTracks,
         setTitle:     chunk1.title,
+        includeMixingNotes,
+        recentTracks: [...recentTracks, ...chunk1Used],
       })
 
       // Renumber chunk 2 tracks

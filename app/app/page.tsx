@@ -44,7 +44,8 @@ export default function AppPage() {
   const [count,        setCount]        = useState(12)
   const [bpmLow,       setBpmLow]       = useState(120)
   const [bpmHigh,      setBpmHigh]      = useState(128)
-  const [keyMatch,     setKeyMatch]     = useState(true)
+  const [keyMatch,           setKeyMatch]           = useState(true)
+  const [includeMixingNotes, setIncludeMixingNotes] = useState(true)
   const [energyPoints, setEnergyPoints] = useState<number[]>([3,5,6,8,9])
   const [customGenre,  setCustomGenre]  = useState('')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
@@ -98,7 +99,15 @@ export default function AppPage() {
     if (!keepLocks) setLocked(new Set())
     setSet(null)
     try {
-      const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ genre:effectiveGenre, crowd, arc, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, lockedTracks, energyPoints }) })
+      const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+          genre: effectiveGenre, crowd, arc, vibe, refArtist,
+          mode, minutes, count, bpmLow, bpmHigh, keyMatch,
+          lockedTracks, energyPoints, includeMixingNotes,
+          recentTracks: [...trackHistory].slice(0, 60).map(k => {
+            const [artist, title] = k.split('::')
+            return `"${artist} — ${title}"`
+          }),
+        }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, arc, vibe, refArtist } })
@@ -436,6 +445,10 @@ export default function AppPage() {
                 <div className={`sf-chip ${keyMatch?'on':''}`} onClick={()=>setKeyMatch(!keyMatch)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
                   ♪ Harmonic mixing {keyMatch?'ON':'OFF'}
                 </div>
+                <div className={`sf-chip ${includeMixingNotes?'on':''}`} onClick={()=>setIncludeMixingNotes(!includeMixingNotes)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }} title="Off = faster, tracklist only">
+                  ↳ Mix notes {includeMixingNotes?'ON':'OFF'}
+                  ♪ Harmonic mixing {keyMatch?'ON':'OFF'}
+                </div>
 
                 <button className="sf-btn-primary" onClick={()=>generate(false)} disabled={loading||(genre==='__custom__'&&!customGenre.trim())} style={{ padding:'13px 0', borderRadius:10, fontSize:14, letterSpacing:2, width:'100%', marginTop:4 }}>
                   {loading?'FORGING…':'⚡ FORGE SET'}
@@ -652,7 +665,7 @@ export default function AppPage() {
                         <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
                         <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
                       </div>
-                      <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>
+                      {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
                     </div>
                     <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
                       <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
