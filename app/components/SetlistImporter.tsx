@@ -15,8 +15,11 @@ export type ImportedTrack = {
 }
 
 interface Props {
-  onImport: (tracks: ImportedTrack[]) => void
-  loading:  boolean
+  onImport:              (tracks: ImportedTrack[]) => void
+  loading:               boolean
+  setExists?:            boolean
+  onLibraryDragStart?:   (track: ImportedTrack) => void
+  onLibraryDragEnd?:     () => void
 }
 
 // ── Parsers ──────────────────────────────────────────────────
@@ -107,7 +110,7 @@ function parseFile(filename: string, content: string): ImportedTrack[] {
 }
 
 // ── Component ─────────────────────────────────────────────────
-export default function SetlistImporter({ onImport, loading }: Props) {
+export default function SetlistImporter({ onImport, loading, setExists, onLibraryDragStart, onLibraryDragEnd }: Props) {
   const [tracks,   setTracks]   = useState<ImportedTrack[]>([])
   const [fileName, setFileName] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -202,14 +205,14 @@ export default function SetlistImporter({ onImport, loading }: Props) {
       {tracks.length > 0 && (
         <div>
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#e8e8f0' }}>
                 {tracks.length} tracks found
                 {fileName && <span style={{ fontSize: 12, color: '#4a4a66', marginLeft: 8 }}>from {fileName}</span>}
               </div>
               <div style={{ fontSize: 12, color: '#6a6a8a', marginTop: 2 }}>
-                Remove any tracks you don't want in the set, then build.
+                Remove any tracks you don't want, then build — or drag into your set.
               </div>
             </div>
             <button onClick={() => { setTracks([]); setFileName(''); setError(null) }}
@@ -218,10 +221,32 @@ export default function SetlistImporter({ onImport, loading }: Props) {
             </button>
           </div>
 
+          {/* Drag hint */}
+          {setExists && onLibraryDragStart && (
+            <div style={{ background: `${C}0c`, border: `1px solid ${C}33`, borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontSize: 11, color: C, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 14 }}>⠿</span>
+              Drag any track directly into your set on the right →
+            </div>
+          )}
+
           {/* Track list */}
-          <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
+          <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
             {tracks.map((t, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#0a0a14', border: '1px solid #16162a', borderRadius: 8, padding: '8px 12px' }}>
+              <div key={i}
+                draggable={!!onLibraryDragStart}
+                onDragStart={e => {
+                  if (!onLibraryDragStart) return
+                  e.dataTransfer.effectAllowed = 'copy'
+                  onLibraryDragStart(t)
+                }}
+                onDragEnd={() => onLibraryDragEnd?.()}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#0a0a14', border: '1px solid #16162a', borderRadius: 8, padding: '8px 12px', cursor: onLibraryDragStart ? 'grab' : 'default', transition: '.12s' }}
+                onMouseEnter={e => { if (onLibraryDragStart) (e.currentTarget as HTMLElement).style.borderColor = `${C}55` }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#16162a' }}
+              >
+                {onLibraryDragStart && (
+                  <div style={{ fontSize: 13, color: '#3a3a58', flexShrink: 0, cursor: 'grab', padding: '0 2px' }}>⠿</div>
+                )}
                 <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, color: M, minWidth: 28, flexShrink: 0 }}>{String(i+1).padStart(2,'0')}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#e8e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>

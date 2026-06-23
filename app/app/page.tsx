@@ -85,6 +85,9 @@ export default function AppPage() {
   const [hoveredTrackIndex, setHoveredTrackIndex] = useState<number|null>(null)
   const [performanceMode,   setPerformanceMode]   = useState(false)
   const [perfTrackIndex,    setPerfTrackIndex]    = useState(0)
+  const [libDragTrack,      setLibDragTrack]      = useState<ImportedTrack|null>(null)
+  const [libDropIndex,      setLibDropIndex]      = useState<number|null>(null)
+  const [libDropMode,       setLibDropMode]       = useState<'insert'|'replace'>('insert')
 
   const renameRef = useRef<HTMLInputElement>(null)
 
@@ -255,6 +258,27 @@ export default function AppPage() {
     if (platform === 'youtube')    return `https://www.youtube.com/results?search_query=${q}`
     if (platform === 'soundcloud') return `https://soundcloud.com/search?q=${q}`
     return ''
+  }
+
+  function insertLibraryTrack(position: number, lt: ImportedTrack) {
+    if (!set) return
+    const tracks = [...set.tracks]
+    const prev   = position > 0 ? tracks[position - 1] : null
+    const next   = position < tracks.length ? tracks[position] : null
+    const energy = prev && next ? Math.round((prev.energy + next.energy) / 2)
+                 : prev ? prev.energy : next ? next.energy : 5
+    tracks.splice(position, 0, { n: 0, artist: lt.artist, title: lt.title, bpm: lt.bpm || 0, key: lt.key || '', energy, transition: '' })
+    setSet(s => s ? { ...s, tracks: tracks.map((t, i) => ({ ...t, n: i + 1 })) } : s)
+    setLibDragTrack(null); setLibDropIndex(null)
+  }
+
+  function replaceWithLibraryTrack(index: number, lt: ImportedTrack) {
+    if (!set) return
+    const tracks = [...set.tracks]
+    const old    = tracks[index]
+    tracks[index] = { n: old.n, artist: lt.artist, title: lt.title, bpm: lt.bpm || old.bpm, key: lt.key || old.key, energy: old.energy, transition: old.transition }
+    setSet(s => s ? { ...s, tracks } : s)
+    setLibDragTrack(null); setLibDropIndex(null)
   }
 
   function handleWizardComplete(result: WizardResult) {
@@ -511,7 +535,13 @@ export default function AppPage() {
                   <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', marginBottom:4 }}>Import from Rekordbox or Serato</div>
                   <div style={{ fontSize:11, color:'#6a6a8a', lineHeight:1.6 }}>Upload a playlist and AI builds the optimal set ordering.</div>
                 </div>
-                <SetlistImporter onImport={handleImport} loading={importLoading} />
+                <SetlistImporter
+                  onImport={handleImport}
+                  loading={importLoading}
+                  setExists={!!set}
+                  onLibraryDragStart={track => setLibDragTrack(track)}
+                  onLibraryDragEnd={() => { setLibDragTrack(null); setLibDropIndex(null) }}
+                />
                 {error && <div style={{ marginTop:10, padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
               </div>
             )}
@@ -637,21 +667,68 @@ export default function AppPage() {
                 </div>
               </div>
 
+              {/* Drag-from-library banner */}
+              {libDragTrack && (
+                <div style={{ background:`${C}0e`, border:`1px dashed ${C}55`, borderRadius:10, padding:'10px 16px', marginTop:14, marginBottom:4, display:'flex', alignItems:'center', gap:10, fontSize:11, color:C }}>
+                  <span style={{ fontSize:16 }}>⠿</span>
+                  <div>
+                    <div style={{ fontWeight:700, marginBottom:1 }}>{libDragTrack.title}</div>
+                    <div style={{ fontSize:10, color:`${C}99` }}>{libDragTrack.artist}{libDragTrack.bpm ? ` · ${libDragTrack.bpm} BPM` : ''}{libDragTrack.key ? ` · ${libDragTrack.key}` : ''} — drop to insert or drag over a track to replace</div>
+                  </div>
+                </div>
+              )}
+
               {/* Track list */}
-              <div style={{ marginTop:18 }}>
+              <div style={{ marginTop: libDragTrack ? 4 : 18 }}
+                onDragEnd={() => { setLibDragTrack(null); setLibDropIndex(null) }}>
+
+                {/* Insert zone — before first track */}
+                <InsertDropZone
+                  visible={!!libDragTrack}
+                  active={libDropIndex === 0 && libDropMode === 'insert'}
+                  label="ADD AT START"
+                  onDragOver={() => { setLibDropIndex(0); setLibDropMode('insert') }}
+                  onDragLeave={() => setLibDropIndex(null)}
+                  onDrop={() => libDragTrack && insertLibraryTrack(0, libDragTrack)}
+                />
+
                 {set.tracks.map((t,i)=>(
                   <div key={`${t.n}-${t.title}`}>
                     <div
                       className="sf-row sf-track"
-                      onMouseEnter={() => setHoveredTrackIndex(i)}
+                      onMouseEnter={() => !libDragTrack && setHoveredTrackIndex(i)}
                       onMouseLeave={() => setHoveredTrackIndex(null)}
-                      onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
-                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
-                      onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
-                      style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center',
-                        background: hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
-                        border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                      onDragOver={e => {
+                        e.preventDefault()
+                        if (libDragTrack) { setLibDropIndex(i); setLibDropMode('replace') }
+                        else setDragOverIndex(i)
+                      }}
+                      onDragLeave={e => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                          if (libDragTrack) setLibDropIndex(null)
+                          else setDragOverIndex(null)
+                        }
+                      }}
+                      onDrop={() => {
+                        if (libDragTrack) {
+                          replaceWithLibraryTrack(i, libDragTrack)
+                        } else {
+                          if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i)
+                          setDragIndex(null); setDragOverIndex(null)
+                        }
+                      }}
+                      style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center', position:'relative',
+                        background: libDropIndex===i && libDropMode==='replace' ? `${M}0e` : hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
+                        border: libDropIndex===i && libDropMode==='replace' ? `2px dashed ${M}` : dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
+
+                      {/* REPLACE chip */}
+                      {libDropIndex===i && libDropMode==='replace' && (
+                        <div style={{ position:'absolute', top:6, right:80, background:M, color:'#06060c', fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:4, letterSpacing:1, zIndex:5, pointerEvents:'none' }}>
+                          REPLACE
+                        </div>
+                      )}
+
                       <div draggable onDragStart={e=>{e.stopPropagation();setDragIndex(i)}} onDragEnd={()=>{setDragIndex(null);setDragOverIndex(null)}}
                         title="Drag to reorder" style={{ cursor:'grab', color:dragIndex===i?C:'#2a2a48', fontSize:14, textAlign:'center', userSelect:'none' }}>⠿</div>
                       <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
@@ -667,20 +744,44 @@ export default function AppPage() {
                         {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:6 }}>↳ {t.transition}</div>}
                       </div>
                       <div style={{ textAlign:'right', fontSize:11, lineHeight:1.8 }}>
-                        <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
-                        <div>{t.key}</div>
+                        <div style={{ color:C }}>{t.bpm || '?'}<span style={{ color:'#4a4a66' }}> BPM</span></div>
+                        <div>{t.key || '—'}</div>
                         <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
                       </div>
                       <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
                         {locked.has(i)?'🔒':'🔓'}
                       </button>
-                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null||!!libDragTrack} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null||libDragTrack?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                         <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
                       </button>
                     </div>
-                    {i < set.tracks.length - 1 && <TransitionBridge from={t} to={set.tracks[i+1]} />}
+
+                    {/* Between-track zone: drop zone when library dragging, otherwise transition bridge */}
+                    {i < set.tracks.length - 1 && (
+                      libDragTrack ? (
+                        <InsertDropZone
+                          visible
+                          active={libDropIndex === i+1 && libDropMode === 'insert'}
+                          onDragOver={() => { setLibDropIndex(i+1); setLibDropMode('insert') }}
+                          onDragLeave={() => setLibDropIndex(null)}
+                          onDrop={() => libDragTrack && insertLibraryTrack(i+1, libDragTrack)}
+                        />
+                      ) : (
+                        <TransitionBridge from={t} to={set.tracks[i+1]} />
+                      )
+                    )}
                   </div>
                 ))}
+
+                {/* Insert zone — after last track */}
+                <InsertDropZone
+                  visible={!!libDragTrack}
+                  active={libDropIndex === set.tracks.length && libDropMode === 'insert'}
+                  label="ADD AT END"
+                  onDragOver={() => { setLibDropIndex(set.tracks.length); setLibDropMode('insert') }}
+                  onDragLeave={() => setLibDropIndex(null)}
+                  onDrop={() => libDragTrack && insertLibraryTrack(set.tracks.length, libDragTrack)}
+                />
               </div>
 
               <div style={{ marginTop:16, fontSize:10, color:'#3a3a58', textAlign:'center' }}>
@@ -806,6 +907,44 @@ function SetJourneyChart({ tracks, highlightIndex, onHover }: { tracks: Track[];
       <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#2a2a48', padding:'0 8px' }}>
         <span>OPENING</span><span>CLOSE</span>
       </div>
+    </div>
+  )
+}
+
+function InsertDropZone({ visible, active, label, onDragOver, onDragLeave, onDrop }: {
+  visible:    boolean
+  active:     boolean
+  label?:     string
+  onDragOver: () => void
+  onDragLeave: () => void
+  onDrop:     () => void
+}) {
+  if (!visible) return null
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); onDragOver() }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onDragLeave() }}
+      onDrop={e => { e.preventDefault(); onDrop() }}
+      style={{
+        height:     active ? 48 : 22,
+        display:    'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin:     '3px 0',
+        border:     `2px dashed ${active ? C : C+'28'}`,
+        borderRadius: 8,
+        background: active ? `${C}12` : 'transparent',
+        transition: 'all .15s ease',
+        cursor:     'copy',
+        overflow:   'hidden',
+      }}
+    >
+      {active && (
+        <div style={{ fontSize:10, color:C, fontFamily:"'JetBrains Mono',monospace", letterSpacing:1, display:'flex', alignItems:'center', gap:6 }}>
+          <span style={{ fontSize:16, fontWeight:700 }}>+</span>
+          {label || 'INSERT HERE'}
+        </div>
+      )}
     </div>
   )
 }
