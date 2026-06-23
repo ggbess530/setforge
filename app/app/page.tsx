@@ -8,6 +8,7 @@ import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 import UserLibrary from '../components/UserLibrary'
 import type { LibTrack } from '../components/UserLibrary'
+import LibraryPanel from '../components/LibraryPanel'
 
 const GENRE_GROUPS: Record<string, string[]> = {
   'House':           ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
@@ -92,6 +93,7 @@ export default function AppPage() {
   const [libDropMode,       setLibDropMode]       = useState<'insert'|'replace'>('insert')
   const [leftWidth,         setLeftWidth]         = useState(370)
   const [resizing,          setResizing]          = useState(false)
+  const [showLibSidebar,    setShowLibSidebar]    = useState(false)
   // track select (save to library)
   const [selectMode,        setSelectMode]        = useState(false)
   const [selectedTracks,    setSelectedTracks]    = useState<Set<number>>(new Set())
@@ -708,8 +710,21 @@ export default function AppPage() {
           <div style={{ width:2, height:40, borderRadius:999, background: resizing ? C : '#2a2a42', transition:'background .15s, box-shadow .15s', boxShadow: resizing ? `0 0 8px ${C}` : 'none' }} />
         </div>
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT PANEL — set view + optional library sidebar */}
+        <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
         <div style={{ flex:1, overflowY:'auto', background:'#07070e', position:'relative' }}>
+
+          {/* Library panel toggle — sticky top bar */}
+          <div style={{ position:'sticky', top:0, zIndex:11, display:'flex', justifyContent:'flex-end', padding:'6px 10px', background:'#07070ecc', backdropFilter:'blur(8px)', borderBottom:'1px solid #1a1a2e11' }}>
+            <button
+              onClick={() => setShowLibSidebar(v => !v)}
+              style={{ padding:'4px 12px', borderRadius:7, fontSize:10, fontFamily:"'JetBrains Mono',monospace", fontWeight:700, letterSpacing:.5, cursor:'pointer', transition:'.15s',
+                background: showLibSidebar ? `${C}20` : 'transparent',
+                border: `1px solid ${showLibSidebar ? C : '#2a2a42'}`,
+                color: showLibSidebar ? C : '#6a6a8a' }}>
+              📚 {showLibSidebar ? 'CLOSE LIBRARY' : 'OPEN LIBRARY'}
+            </button>
+          </div>
 
           {/* Loading beam */}
           {(loading||importLoading) && (
@@ -975,7 +990,20 @@ export default function AppPage() {
               </div>
             </div>
           )}
-        </div>
+        </div>{/* end set scroll area */}
+
+        {/* Library sidebar */}
+        {showLibSidebar && (
+          <div style={{ width:280, flexShrink:0, borderLeft:'1px solid #1a1a2e', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+            <LibraryPanel
+              onDragStart={track => setLibDragTrack(track)}
+              onDragEnd={() => { setLibDragTrack(null); setLibDropIndex(null) }}
+              onClose={() => setShowLibSidebar(false)}
+            />
+          </div>
+        )}
+
+        </div>{/* end right panel flex row */}
       </div>
     </div>
   )
