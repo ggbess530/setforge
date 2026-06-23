@@ -22,10 +22,11 @@ const GENRE_GROUPS: Record<string, string[]> = {
 const CROWDS   = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
 const ARCS     = ['Slow Build','Peak Time Energy','Cool Down','Wave (up & down)']
 const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
+const CAM_KEYS = ['1A','2A','3A','4A','5A','6A','7A','8A','9A','10A','11A','12A','1B','2B','3B','4B','5B','6B','7B','8B','9B','10B','11B','12B']
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
-type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string }
+type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; genre?:string; rating?:number; tags?:string[] }
 type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 
@@ -94,6 +95,8 @@ export default function AppPage() {
   const [leftWidth,         setLeftWidth]         = useState(370)
   const [resizing,          setResizing]          = useState(false)
   const [libShowUpload,     setLibShowUpload]     = useState(false)
+  // track editing
+  const [editingTrack,      setEditingTrack]      = useState<number|null>(null)
   // track select (save to library)
   const [selectMode,        setSelectMode]        = useState(false)
   const [selectedTracks,    setSelectedTracks]    = useState<Set<number>>(new Set())
@@ -267,6 +270,15 @@ export default function AppPage() {
   }
 
   function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) }
+
+  function updateTrack(index: number, updates: Partial<Track>) {
+    setSet(s => {
+      if (!s) return s
+      const tracks = [...s.tracks]
+      tracks[index] = { ...tracks[index], ...updates }
+      return { ...s, tracks }
+    })
+  }
 
   function reorderTracks(from: number, to: number) {
     if (!set || from === to) return
@@ -912,11 +924,12 @@ export default function AppPage() {
                           setDragIndex(null); setDragOverIndex(null)
                         }
                       }}
-                      style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center', position:'relative',
+                      style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto', gap:10, alignItems:'center', position:'relative',
                         background: libDropIndex===i && libDropMode==='replace' ? `${M}0e` : selectMode && selectedTracks.has(i) ? `${C}0e` : hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
                         border: libDropIndex===i && libDropMode==='replace' ? `2px dashed ${M}` : selectMode && selectedTracks.has(i) ? `1px solid ${C}55` : dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         cursor: selectMode ? 'pointer' : undefined,
-                        borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
+                        borderRadius: editingTrack===i ? '10px 10px 0 0' : 10,
+                        padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
 
                       {/* REPLACE chip */}
                       {libDropIndex===i && libDropMode==='replace' && (
@@ -957,7 +970,20 @@ export default function AppPage() {
                       <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null||!!libDragTrack} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null||libDragTrack?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                         <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
                       </button>
+                      <button onClick={()=>setEditingTrack(editingTrack===i?null:i)} title="Edit track"
+                        style={{ background:editingTrack===i?`${C}18`:'transparent', border:`1px solid ${editingTrack===i?C:'#23233a'}`, color:editingTrack===i?C:'#6a6a8a', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                        ✏
+                      </button>
                     </div>
+
+                    {/* Inline track editor */}
+                    {editingTrack === i && (
+                      <TrackEditPanel
+                        track={t}
+                        onUpdate={updates => updateTrack(i, updates)}
+                        onClose={() => setEditingTrack(null)}
+                      />
+                    )}
 
                     {/* Between-track zone: drop zone when library dragging, otherwise transition bridge */}
                     {i < set.tracks.length - 1 && (
@@ -1109,6 +1135,142 @@ function SetJourneyChart({ tracks, highlightIndex, onHover }: { tracks: Track[];
       </svg>
       <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#2a2a48', padding:'0 8px' }}>
         <span>OPENING</span><span>CLOSE</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Track edit panel ─────────────────────────────────────────
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0)
+  return (
+    <div style={{ display:'flex', gap:3 }}>
+      {[1,2,3,4,5].map(n => (
+        <span key={n}
+          onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}
+          onClick={()=>onChange(value===n?0:n)}
+          style={{ cursor:'pointer', fontSize:16, color: n<=(hover||value)?'#f59e0b':'#2a2a48', transition:'color .1s', lineHeight:1 }}>★</span>
+      ))}
+    </div>
+  )
+}
+
+function TagsInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  const [input, setInput] = useState('')
+  function add() { const t=input.trim(); if(t&&!tags.includes(t)){ onChange([...tags,t]); setInput('') } }
+  return (
+    <div>
+      {tags.length > 0 && (
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6 }}>
+          {tags.map((tag,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:4, fontSize:9, padding:'2px 8px', borderRadius:999, background:`${C}14`, border:`1px solid ${C}33`, color:C }}>
+              {tag}
+              <button onClick={()=>onChange(tags.filter((_,j)=>j!==i))}
+                style={{ background:'none', border:'none', color:`${C}88`, cursor:'pointer', fontSize:10, padding:'0 1px', lineHeight:1 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input value={input} onChange={e=>setInput(e.target.value)}
+        onKeyDown={e=>{ if(e.key==='Enter'||e.key===','){e.preventDefault();add()} }}
+        placeholder="Add tag — press Enter"
+        style={{ width:'100%', background:'#0d0d18', border:'1px solid #1f1f33', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", fontSize:10, padding:'5px 8px', borderRadius:6, outline:'none', boxSizing:'border-box', transition:'border-color .15s' }}
+        onFocus={e=>{e.target.style.borderColor=C}} onBlur={e=>{e.target.style.borderColor='#1f1f33';add()}} />
+    </div>
+  )
+}
+
+function TrackEditPanel({ track, onUpdate, onClose }: { track: Track; onUpdate: (u: Partial<Track>) => void; onClose: () => void }) {
+  const [artist,  setArtist]  = useState(track.artist)
+  const [title,   setTitle]   = useState(track.title)
+  const [bpm,     setBpm]     = useState(track.bpm)
+  const [key,     setKey]     = useState(track.key)
+  const [energy,  setEnergy]  = useState(track.energy)
+  const [genre,   setGenre]   = useState(track.genre  || '')
+  const [rating,  setRating]  = useState(track.rating || 0)
+  const [tags,    setTags]    = useState(track.tags   || [])
+  const [customKey, setCustomKey] = useState(!CAM_KEYS.includes(track.key))
+
+  function apply(field: Partial<Track>) { onUpdate(field) }
+
+  const lbl = { fontSize:9, letterSpacing:1.5, color:'#6a6a8a', marginBottom:4, display:'block' as const }
+  const inp = { background:'#0a0a14', border:'1px solid #1f1f33', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", fontSize:11, padding:'6px 8px', borderRadius:6, outline:'none', width:'100%', boxSizing:'border-box' as const, transition:'border-color .15s' }
+
+  return (
+    <div style={{ background:'#0d0d1a', border:`1px solid ${C}44`, borderTop:'none', borderRadius:'0 0 10px 10px', padding:'14px 14px 12px' }}>
+      <style>{`.te-inp:focus{border-color:${C}!important}`}</style>
+
+      {/* Artist + Title */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+        <div>
+          <label style={lbl}>ARTIST</label>
+          <input className="te-inp" value={artist} onChange={e=>setArtist(e.target.value)} onBlur={()=>apply({artist})} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>TITLE</label>
+          <input className="te-inp" value={title} onChange={e=>setTitle(e.target.value)} onBlur={()=>apply({title})} style={inp} />
+        </div>
+      </div>
+
+      {/* BPM / Key / Energy */}
+      <div style={{ display:'grid', gridTemplateColumns:'80px 1fr 1fr', gap:8, marginBottom:10 }}>
+        <div>
+          <label style={lbl}>BPM</label>
+          <input className="te-inp" type="number" value={bpm||''} min={60} max={200}
+            onChange={e=>setBpm(+e.target.value)}
+            onBlur={()=>apply({bpm})}
+            style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>KEY</label>
+          {customKey ? (
+            <div style={{ display:'flex', gap:4 }}>
+              <input className="te-inp" value={key} onChange={e=>setKey(e.target.value)} onBlur={()=>apply({key})} style={{...inp, flex:1}} placeholder="e.g. 8A" />
+              <button onClick={()=>setCustomKey(false)} style={{ fontSize:9, padding:'0 6px', borderRadius:5, border:'1px solid #23233a', background:'transparent', color:'#6a6a8a', cursor:'pointer', flexShrink:0 }}>⊞</button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', gap:4 }}>
+              <select className="te-inp" value={CAM_KEYS.includes(key)?key:''} onChange={e=>{setKey(e.target.value);apply({key:e.target.value})}}
+                style={{...inp, cursor:'pointer', appearance:'none' as const, backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3l3 3 3-3' stroke='%2300f0ff' stroke-width='1.5' fill='none'/%3E%3C/svg%3E\")", backgroundRepeat:'no-repeat', backgroundPosition:'right 6px center', paddingRight:20}}>
+                <option value="">—</option>
+                {CAM_KEYS.map(k=><option key={k} value={k}>{k}</option>)}
+              </select>
+              <button onClick={()=>setCustomKey(true)} title="Type custom key" style={{ fontSize:9, padding:'0 6px', borderRadius:5, border:'1px solid #23233a', background:'transparent', color:'#6a6a8a', cursor:'pointer', flexShrink:0 }}>✎</button>
+            </div>
+          )}
+        </div>
+        <div>
+          <label style={lbl}>ENERGY — <span style={{ color:C }}>{energy}/10</span></label>
+          <input type="range" min={1} max={10} value={energy}
+            onChange={e=>{ setEnergy(+e.target.value); apply({energy:+e.target.value}) }}
+            style={{ width:'100%', accentColor:C, marginTop:6 }} />
+        </div>
+      </div>
+
+      {/* Genre + Rating */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:12, marginBottom:10, alignItems:'end' }}>
+        <div>
+          <label style={lbl}>GENRE</label>
+          <input className="te-inp" value={genre} onChange={e=>setGenre(e.target.value)} onBlur={()=>apply({genre:genre||undefined})} style={inp} placeholder="Tech House, Drum & Bass…" />
+        </div>
+        <div>
+          <label style={lbl}>RATING</label>
+          <StarRating value={rating} onChange={v=>{ setRating(v); apply({rating:v||undefined}) }} />
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div style={{ marginBottom:12 }}>
+        <label style={lbl}>TAGS</label>
+        <TagsInput tags={tags} onChange={t=>{ setTags(t); apply({tags:t.length?t:undefined}) }} />
+      </div>
+
+      {/* Done */}
+      <div style={{ display:'flex', justifyContent:'flex-end' }}>
+        <button onClick={()=>{ apply({artist,title,bpm,key,energy,genre:genre||undefined,rating:rating||undefined,tags:tags.length?tags:undefined}); onClose() }}
+          style={{ padding:'6px 18px', borderRadius:7, fontSize:11, fontWeight:700, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', border:'none', cursor:'pointer', fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5 }}>
+          DONE
+        </button>
       </div>
     </div>
   )
