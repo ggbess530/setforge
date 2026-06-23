@@ -281,6 +281,23 @@ export default function AppPage() {
     window.addEventListener('mouseup', onUp)
   }
 
+  async function enrichTrack(artist: string, title: string) {
+    try {
+      const res = await fetch('/api/track-info', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({artist,title}) })
+      const data = await res.json()
+      if (!data.bpm && !data.key) return
+      setSet(s => {
+        if (!s) return s
+        const tracks = s.tracks.map(t =>
+          t.artist.toLowerCase()===artist.toLowerCase() && t.title.toLowerCase()===title.toLowerCase()
+            ? { ...t, bpm: data.bpm||t.bpm, key: data.key||t.key }
+            : t
+        )
+        return { ...s, tracks }
+      })
+    } catch {}
+  }
+
   function insertLibraryTrack(position: number, lt: ImportedTrack) {
     if (!set) return
     const tracks = [...set.tracks]
@@ -291,6 +308,7 @@ export default function AppPage() {
     tracks.splice(position, 0, { n: 0, artist: lt.artist, title: lt.title, bpm: lt.bpm || 0, key: lt.key || '', energy, transition: '' })
     setSet(s => s ? { ...s, tracks: tracks.map((t, i) => ({ ...t, n: i + 1 })) } : s)
     setLibDragTrack(null); setLibDropIndex(null)
+    if (!lt.bpm || !lt.key) enrichTrack(lt.artist, lt.title)
   }
 
   function replaceWithLibraryTrack(index: number, lt: ImportedTrack) {
@@ -300,6 +318,7 @@ export default function AppPage() {
     tracks[index] = { n: old.n, artist: lt.artist, title: lt.title, bpm: lt.bpm || old.bpm, key: lt.key || old.key, energy: old.energy, transition: old.transition }
     setSet(s => s ? { ...s, tracks } : s)
     setLibDragTrack(null); setLibDropIndex(null)
+    if (!lt.bpm || !lt.key) enrichTrack(lt.artist, lt.title)
   }
 
   function handleWizardComplete(result: WizardResult) {
