@@ -116,7 +116,13 @@ Rules:
 - NEVER suggest: unreleased tracks, dubplates, SoundCloud-only tracks, bootlegs, unofficial edits, or tracks you are uncertain about
 - If you cannot fill the track count with verified streaming tracks, use fewer tracks rather than inventing or guessing
 - Match each track's energy to the per-position value above
-- ${keyMatch ? 'Adjacent keys must be harmonically compatible' : 'Key matching off — focus on BPM and energy'}
+- ${keyMatch ? `Harmonic key mixing REQUIRED. Camelot wheel rules (strict):
+  · Each position nA (minor) pairs with nB (major): same number is always compatible (8A↔8B)
+  · Adjacent on same ring: (n-1)X↔nX↔(n+1)X where 12 wraps to 1 (12A↔1A, 12B↔1B)
+  · Compatible moves FROM 8A: → 8B (relative), → 7A (down), → 9A (up). Nothing else.
+  · Compatible moves FROM 8B: → 8A (relative), → 7B (down), → 9B (up). Nothing else.
+  · DO NOT skip positions — 8A→10A or 8A→3B are key clashes, not harmonic
+  · BPM difference between adjacent tracks must be ≤ 6 BPM for smooth mixing` : 'Key matching off — focus on BPM and energy flow'}
 - Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
 

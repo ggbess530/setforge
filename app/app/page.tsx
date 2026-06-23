@@ -30,16 +30,35 @@ type Track   = { n:number; artist:string; title:string; bpm:number; key:string; 
 type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 
-function camelotCompat(k1: string, k2: string): 'perfect' | 'good' | 'careful' {
-  const m1 = (k1||'').toUpperCase().match(/^(\d+)([AB])$/)
-  const m2 = (k2||'').toUpperCase().match(/^(\d+)([AB])$/)
-  if (!m1 || !m2) return 'careful'
+// Camelot wheel compatibility
+// 'harmonic' — safe mix:  same position (nA↔nA, nA↔nB) or ±1 same ring (8A→7A/9A)
+// 'shift'    — technique: ±1 cross-ring (energy boost) or ±2 same ring (noticeable)
+// 'clash'    — avoid:     anything 3+ positions apart
+function camelotCompat(k1: string, k2: string): 'harmonic' | 'shift' | 'clash' {
+  const m1 = (k1||'').toUpperCase().trim().match(/^(\d+)([AB])$/)
+  const m2 = (k2||'').toUpperCase().trim().match(/^(\d+)([AB])$/)
+  if (!m1 || !m2) return 'clash'
   const n1 = parseInt(m1[1]), t1 = m1[2], n2 = parseInt(m2[1]), t2 = m2[2]
-  if (n1 === n2) return 'perfect'
-  const diff = Math.abs(n1 - n2)
-  if (t1 === t2 && (diff === 1 || diff === 11)) return 'perfect'
-  if (diff === 2 || diff === 10) return 'good'
-  return 'careful'
+  if (n1 === n2) return 'harmonic'                        // identity or relative (nA↔nB)
+  const circ = Math.min(Math.abs(n1 - n2), 12 - Math.abs(n1 - n2))  // circular distance
+  if (circ === 1 && t1 === t2) return 'harmonic'         // adjacent same ring (±1)
+  if (circ === 1 && t1 !== t2) return 'shift'            // energy-boost cross (diagonal ±1)
+  if (circ === 2 && t1 === t2) return 'shift'            // two-step same ring
+  return 'clash'
+}
+
+// BPM compatibility
+// 'smooth' — ≤2 BPM difference (tempo sync trivial)
+// 'pitch'  — 3-7 BPM difference, or double/half time ratio (requires pitch adjustment)
+// 'jump'   — >7 BPM (hard cut or tempo break needed)
+function bpmCompat(b1: number, b2: number): 'smooth' | 'pitch' | 'jump' {
+  if (!b1 || !b2) return 'jump'
+  const diff  = Math.abs(b1 - b2)
+  const ratio = Math.max(b1, b2) / Math.min(b1, b2)
+  if (Math.abs(ratio - 2) < 0.08 || Math.abs(ratio - 1.5) < 0.06) return 'pitch'  // double/half time
+  if (diff <= 2) return 'smooth'
+  if (diff <= 7) return 'pitch'
+  return 'jump'
 }
 
 export default function AppPage() {
@@ -503,7 +522,7 @@ export default function AppPage() {
                 const origBpm = set.tracks[swapTargetIndex].bpm
                 const bpmDelta = s.bpm - origBpm
                 const compat = camelotCompat(set.tracks[swapTargetIndex].key, s.key)
-                const compatColor = compat==='perfect'?'#4ade80':compat==='good'?'#f59e0b':M
+                const compatColor = compat==='harmonic'?'#4ade80':compat==='shift'?'#f59e0b':M
                 return (
                   <div key={i} onClick={()=>applySwap(s)}
                     style={{ cursor:'pointer', background:'#0a0a14', border:`1px solid ${isWild?M+'44':'#1a1a2e'}`, borderRadius:12, padding:'12px 14px', transition:'.15s' }}
@@ -1136,12 +1155,14 @@ function SetStatsStrip({ tracks }: { tracks: Track[] }) {
   const minBpm  = bpms.length ? Math.min(...bpms) : 0
   const maxBpm  = bpms.length ? Math.max(...bpms) : 0
   const keys    = new Set(tracks.map(t=>(t.key||'').toUpperCase().trim()).filter(Boolean))
-  let compat = 0
+  let harmCount = 0, shiftCount = 0
   for (let i = 0; i < tracks.length-1; i++) {
     const c = camelotCompat(tracks[i].key, tracks[i+1].key)
-    if (c === 'perfect' || c === 'good') compat++
+    if (c === 'harmonic') harmCount++
+    else if (c === 'shift') shiftCount++
   }
-  const harmPct = tracks.length > 1 ? Math.round((compat / (tracks.length-1)) * 100) : 100
+  const total   = Math.max(tracks.length - 1, 1)
+  const harmPct = Math.round((harmCount / total) * 100)
   const estMin  = Math.round(tracks.length * 4.5)
 
   const stats = [
@@ -1416,19 +1437,28 @@ function InsertDropZone({ visible, active, label, onDragOver, onDragLeave, onDro
 }
 
 function TransitionBridge({ from, to }: { from: Track; to: Track }) {
-  const compat      = camelotCompat(from.key, to.key)
+  const keyC        = camelotCompat(from.key, to.key)
+  const bpmC        = bpmCompat(from.bpm, to.bpm)
   const bpmDelta    = to.bpm - from.bpm
   const energyDelta = to.energy - from.energy
-  const compatColor = compat==='perfect' ? '#4ade80' : compat==='good' ? '#f59e0b' : M
-  const compatLabel = compat==='perfect' ? '✓ harmonic' : compat==='good' ? '~ near-key' : '✕ key clash'
-  const bpmColor    = Math.abs(bpmDelta)<=2 ? '#4ade80' : Math.abs(bpmDelta)<=5 ? '#f59e0b' : M
-  const bpmLabel    = bpmDelta===0 ? '= BPM' : (bpmDelta>0?`+${bpmDelta}`:`${bpmDelta}`) + ' BPM'
-  const eLabel      = energyDelta===0 ? '= E' : (energyDelta>0?`+${energyDelta}`:`${energyDelta}`) + ' E'
+
+  const keyColor = keyC==='harmonic' ? '#4ade80' : keyC==='shift' ? '#f59e0b' : M
+  const keyLabel = keyC==='harmonic' ? '✓ harmonic' : keyC==='shift' ? '~ key shift' : '✕ clash'
+
+  const bpmColor = bpmC==='smooth' ? '#4ade80' : bpmC==='pitch' ? '#f59e0b' : M
+  // Detect double / half time (2:1 ratio) and 3:2 ratio for the label
+  const ratio      = from.bpm && to.bpm ? Math.max(from.bpm,to.bpm) / Math.min(from.bpm,to.bpm) : 0
+  const isDouble   = Math.abs(ratio - 2) < 0.08
+  const isOneHalf  = Math.abs(ratio - 1.5) < 0.06
+  const bpmLabel   = isDouble ? '×2 tempo' : isOneHalf ? '×1.5 tempo'
+                   : bpmDelta===0 ? '= BPM' : (bpmDelta>0?`+${bpmDelta}`:`${bpmDelta}`) + ' BPM'
+
+  const eLabel = energyDelta===0 ? '= E' : (energyDelta>0?`+${energyDelta}`:`${energyDelta}`) + ' E'
 
   return (
     <div style={{ display:'flex', alignItems:'center', padding:'2px 14px 2px 66px', height:26 }}>
       <div style={{ width:1, height:'100%', background:'#1a1a2e', marginRight:10, flexShrink:0 }} />
-      <span style={{ fontSize:9, color:compatColor, border:`1px solid ${compatColor}44`, borderRadius:4, padding:'1px 7px', fontFamily:'monospace', marginRight:6, flexShrink:0 }}>{compatLabel}</span>
+      <span style={{ fontSize:9, color:keyColor, border:`1px solid ${keyColor}44`, borderRadius:4, padding:'1px 7px', fontFamily:'monospace', marginRight:6, flexShrink:0 }}>{keyLabel}</span>
       <span style={{ fontSize:9, color:bpmColor, fontFamily:'monospace', marginRight:8 }}>{bpmLabel}</span>
       <span style={{ fontSize:9, color:'#3a3a58', fontFamily:'monospace' }}>{eLabel}</span>
     </div>

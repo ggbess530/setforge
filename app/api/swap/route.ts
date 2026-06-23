@@ -53,7 +53,8 @@ Respond ONLY with valid JSON, no markdown:
 Rules:
 - All tracks MUST be real, commercially released tracks on Beatport or Spotify — no bootlegs, no guesses
 - BPM values must be integers within ${bpmLow}–${bpmHigh}
-- All 4 suggestions must be different tracks from each other and from the original`
+- All 4 suggestions must be different tracks from each other and from the original
+${keyMatch ? `- Strict Camelot key rules: compatible keys for ${target.key} are same number (${target.key.replace(/[AB]/,'A')} and ${target.key.replace(/[AB]/,'B')}), and ±1 same letter with 12↔1 wrap. No other keys are harmonic.` : ''}`
 
     const message = await anthropic.messages.create({
       model:      CLAUDE_MODEL,
