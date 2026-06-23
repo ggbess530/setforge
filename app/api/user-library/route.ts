@@ -34,7 +34,20 @@ export async function GET(req: Request) {
 
     // If crateId specified, return tracks for that crate only
     if (crateId) {
-      // Get all crate IDs in this subtree (crate + all descendants)
+      // '__all__' → return every track the user owns, regardless of crate membership.
+      // Tracks saved from sets (source='setforge') have no crate assignments, so
+      // going through user_crate_tracks would miss them entirely.
+      if (crateId === '__all__') {
+        const { data: allTracks, error: allErr } = await client
+          .from('user_tracks')
+          .select('*')
+          .eq('user_id', userId)
+          .order('artist')
+        if (allErr) throw allErr
+        return NextResponse.json({ tracks: allTracks || [] })
+      }
+
+      // Specific crate → walk subtree then look up via membership table
       const allCrates = crates || []
       function getSubtreeIds(id: string): string[] {
         const ids = [id]
@@ -43,9 +56,7 @@ export async function GET(req: Request) {
           .forEach(child => ids.push(...getSubtreeIds(child.crate_id)))
         return ids
       }
-      const subtreeIds = crateId === '__all__'
-        ? allCrates.map(c => c.crate_id)
-        : getSubtreeIds(crateId)
+      const subtreeIds = getSubtreeIds(crateId)
 
       const { data: memberships } = await client
         .from('user_crate_tracks')
@@ -54,7 +65,6 @@ export async function GET(req: Request) {
         .in('crate_id', subtreeIds)
 
       const trackIds = [...new Set((memberships || []).map(m => m.track_id))]
-
       if (trackIds.length === 0) return NextResponse.json({ tracks: [] })
 
       const { data: tracks, error: trackErr } = await client
