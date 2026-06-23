@@ -6,6 +6,8 @@ import Link from 'next/link'
 import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
 import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
+import UserLibrary from '../components/UserLibrary'
+import type { LibTrack } from '../components/UserLibrary'
 
 const GENRE_GROUPS: Record<string, string[]> = {
   'House':           ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
@@ -65,7 +67,7 @@ export default function AppPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number|null>(null)
   const [quota,         setQuota]         = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
 
-  const [view,          setView]          = useState<'forge'|'library'|'import'>('forge')
+  const [view,          setView]          = useState<'forge'|'sets'|'library'|'import'>('forge')
   const [library,       setLibrary]       = useState<LibItem[]>([])
   const [libLoaded,     setLibLoaded]     = useState(false)
   const [saving,        setSaving]        = useState(false)
@@ -81,7 +83,7 @@ export default function AppPage() {
   const [showWizard,          setShowWizard]          = useState(() => { try { return !localStorage.getItem('sf_onboarded') } catch { return false } })
   const [firstSetCelebration, setFirstSetCelebration] = useState(false)
 
-  // new
+  // ui / interaction
   const [hoveredTrackIndex, setHoveredTrackIndex] = useState<number|null>(null)
   const [performanceMode,   setPerformanceMode]   = useState(false)
   const [perfTrackIndex,    setPerfTrackIndex]    = useState(0)
@@ -90,6 +92,17 @@ export default function AppPage() {
   const [libDropMode,       setLibDropMode]       = useState<'insert'|'replace'>('insert')
   const [leftWidth,         setLeftWidth]         = useState(370)
   const [resizing,          setResizing]          = useState(false)
+  // track select (save to library)
+  const [selectMode,        setSelectMode]        = useState(false)
+  const [selectedTracks,    setSelectedTracks]    = useState<Set<number>>(new Set())
+  const [savingToLib,       setSavingToLib]       = useState(false)
+  const [savedToLibFlash,   setSavedToLibFlash]   = useState(false)
+  // forge with library
+  const [useLibrary,        setUseLibrary]        = useState(false)
+  const [libraryCrateId,    setLibraryCrateId]    = useState('__all__')
+  const [libraryCrateList,  setLibraryCrateList]  = useState<{id:string;name:string;count:number}[]>([])
+  const [libraryForgeTracks,setLibraryForgeTracks]= useState<{artist:string;title:string;bpm?:number;key?:string}[]>([])
+  const [libraryForgeCount, setLibraryForgeCount] = useState(0)
 
   const renameRef = useRef<HTMLInputElement>(null)
 
@@ -107,6 +120,25 @@ export default function AppPage() {
     if (params.get('tab') === 'library') { setView('library'); window.history.replaceState({}, '', '/app') }
   }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
+  // Load library crates when forge-with-library is toggled on
+  useEffect(() => {
+    if (!useLibrary) return
+    fetch('/api/user-library').then(r=>r.json()).then(d=>{
+      const flat = (d.crates||[]).filter((c:{is_folder?:boolean})=>!c.is_folder)
+        .map((c:{crate_id?:string;id?:string;name:string;trackCount?:number})=>({ id:c.crate_id||c.id||'', name:c.name, count:c.trackCount||0 }))
+      setLibraryCrateList(flat)
+    }).catch(()=>{})
+  }, [useLibrary])
+
+  // Reload library tracks when crate selection changes
+  useEffect(() => {
+    if (!useLibrary) { setLibraryForgeTracks([]); setLibraryForgeCount(0); return }
+    fetch(`/api/user-library?crateId=${libraryCrateId}`).then(r=>r.json()).then(d=>{
+      const tracks = (d.tracks||[]).map((t:{artist:string;title:string;bpm?:number;key?:string})=>({artist:t.artist,title:t.title,bpm:t.bpm,key:t.key}))
+      setLibraryForgeTracks(tracks); setLibraryForgeCount(tracks.length)
+    }).catch(()=>{})
+  }, [useLibrary, libraryCrateId])
+
   useEffect(() => {
     if (!performanceMode || !set) return
     const onKey = (e: KeyboardEvent) => {
@@ -128,6 +160,7 @@ export default function AppPage() {
         genre: effectiveGenre, crowd, arc, vibe, refArtist,
         mode, minutes, count, bpmLow, bpmHigh, keyMatch,
         lockedTracks, energyPoints, includeMixingNotes, recentTracks: [],
+        libraryTracks: useLibrary ? libraryForgeTracks : [],
       }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
@@ -215,6 +248,12 @@ export default function AppPage() {
     finally { setRenamingId(null); setRenameVal('') }
   }
 
+  async function handleLibraryBuildSet(libTracks: LibTrack[]) {
+    const tracks: ImportedTrack[] = libTracks.map(t => ({ artist: t.artist, title: t.title, bpm: t.bpm, key: t.key }))
+    await handleImport(tracks)
+    setView('forge')
+  }
+
   async function handleImport(tracks: ImportedTrack[]) {
     setImportLoading(true); setError(null); setSet(null)
     try {
@@ -268,6 +307,23 @@ export default function AppPage() {
     if (platform === 'youtube')    return `https://www.youtube.com/results?search_query=${q}`
     if (platform === 'soundcloud') return `https://soundcloud.com/search?q=${q}`
     return ''
+  }
+
+  async function saveTracksToLibrary() {
+    if (!set || !selectedTracks.size || savingToLib) return
+    setSavingToLib(true)
+    const toSave = [...selectedTracks].map(i => set.tracks[i]).filter(Boolean)
+    const libTracks = toSave.map(t => ({
+      id: `sf-${(t.artist + t.title).toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,80)}`,
+      title: t.title, artist: t.artist,
+      bpm: t.bpm || undefined, key: t.key || undefined,
+    }))
+    try {
+      await fetch('/api/user-library', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ source:'setforge', tracks:libTracks, crates:[], crateTracks:{} }) })
+      setSavedToLibFlash(true); setTimeout(()=>setSavedToLibFlash(false), 2000)
+    } catch {}
+    finally { setSavingToLib(false); setSelectMode(false); setSelectedTracks(new Set()) }
   }
 
   function startResize(e: React.MouseEvent) {
@@ -437,11 +493,12 @@ export default function AppPage() {
         {/* LEFT PANEL */}
         <div style={{ width:leftWidth, flexShrink:0, display:'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
           <div style={{ display:'flex', borderBottom:'1px solid #1a1a2e', flexShrink:0 }}>
-            <div className={`sf-tab ${view==='forge'?'on':''}`} onClick={()=>setView('forge')}>⚡ FORGE</div>
-            <div className={`sf-tab ${view==='library'?'on':''}`} onClick={()=>{ setView('library'); if(!libLoaded) loadLibrary() }}>
-              ◈ LIBRARY{library.length>0&&<span style={{ marginLeft:5, background:M, color:'#06060c', borderRadius:999, fontSize:8, padding:'1px 5px', fontWeight:700 }}>{library.length}</span>}
+            <div className={`sf-tab ${view==='forge'?'on':''}`} onClick={()=>setView('forge')} style={{ fontSize:9 }}>⚡ FORGE</div>
+            <div className={`sf-tab ${view==='sets'?'on':''}`} onClick={()=>{ setView('sets'); if(!libLoaded) loadLibrary() }} style={{ fontSize:9 }}>
+              🎵 SETS{library.length>0&&<span style={{ marginLeft:4, background:M, color:'#06060c', borderRadius:999, fontSize:7, padding:'1px 4px', fontWeight:700 }}>{library.length}</span>}
             </div>
-            <div className={`sf-tab ${view==='import'?'on':''}`} onClick={()=>setView('import')}>↑ IMPORT</div>
+            <div className={`sf-tab ${view==='library'?'on':''}`} onClick={()=>setView('library')} style={{ fontSize:9 }}>📚 LIBRARY</div>
+            <div className={`sf-tab ${view==='import'?'on':''}`} onClick={()=>setView('import')} style={{ fontSize:9 }}>↑ IMPORT</div>
           </div>
 
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
@@ -505,6 +562,37 @@ export default function AppPage() {
                   ↳ Mix notes {includeMixingNotes?'ON':'OFF'}
                 </div>
 
+                {/* Library forge toggle */}
+                <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: useLibrary ? 8 : 0 }}>
+                    <div>
+                      <div style={{ fontSize:10, color:'#e8e8f0', fontWeight:700 }}>📚 USE MY LIBRARY</div>
+                      <div style={{ fontSize:9, color:'#4a4a66', marginTop:1 }}>
+                        {useLibrary && libraryForgeCount > 0 ? `${libraryForgeCount} tracks loaded` : 'AI prefers tracks you own'}
+                      </div>
+                    </div>
+                    <div
+                      onClick={()=>setUseLibrary(v=>!v)}
+                      style={{ width:40, height:22, borderRadius:999, background: useLibrary?C:'#1a1a2e', cursor:'pointer', position:'relative', flexShrink:0, transition:'background .2s', border:`1px solid ${useLibrary?C:'#2a2a42'}` }}>
+                      <div style={{ position:'absolute', top:2, left: useLibrary?18:2, width:16, height:16, borderRadius:'50%', background: useLibrary?'#06060c':'#4a4a66', transition:'left .2s' }} />
+                    </div>
+                  </div>
+                  {useLibrary && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      <select value={libraryCrateId} onChange={e=>setLibraryCrateId(e.target.value)}
+                        className="sf-input sf-select" style={{ fontSize:11 }}>
+                        <option value="__all__">All library tracks{libraryForgeCount>0?` (${libraryForgeCount})`:''}</option>
+                        {libraryCrateList.map(c=><option key={c.id} value={c.id}>{c.name}{c.count>0?` (${c.count})`:''}</option>)}
+                      </select>
+                      {libraryForgeCount === 0 && (
+                        <div style={{ fontSize:9, color:'#5a5a78', textAlign:'center' }}>
+                          No library yet — go to 📚 LIBRARY to import your collection
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <button className="sf-btn-primary" onClick={()=>generate(false)} disabled={loading||(genre==='__custom__'&&!customGenre.trim())} style={{ padding:'13px 0', borderRadius:10, fontSize:14, letterSpacing:2, width:'100%', marginTop:4 }}>
                   {loading?'FORGING…':'⚡ FORGE SET'}
                 </button>
@@ -527,7 +615,7 @@ export default function AppPage() {
               </div>
             )}
 
-            {view==='library' && (
+            {view==='sets' && (
               <div>
                 {!libLoaded ? (
                   <div style={{ textAlign:'center', padding:40, color:'#6a6a8a', fontSize:11, animation:'pulse 1.2s infinite' }}>LOADING LIBRARY…</div>
@@ -579,6 +667,14 @@ export default function AppPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ══ LIBRARY (persistent DJ library) ══ */}
+            {view==='library' && (
+              <UserLibrary
+                onBuildSet={handleLibraryBuildSet}
+                loading={importLoading}
+              />
             )}
 
             {view==='import' && (
@@ -695,7 +791,24 @@ export default function AppPage() {
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=`${C}28`}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=`${C}15`}
                   >▶ DJ VIEW</button>
+                  {!selectMode && (
+                    <button onClick={()=>{ setSelectMode(true); setSelectedTracks(new Set()) }} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11 }}>
+                      + LIBRARY
+                    </button>
+                  )}
                 </div>
+                {selectMode && (
+                  <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:8, flexWrap:'wrap' }}>
+                    <div style={{ fontSize:11, color:'#9a9ab8' }}>
+                      <span style={{ color:selectedTracks.size>0?C:'#4a4a66', fontWeight:700 }}>{selectedTracks.size}</span> selected
+                    </div>
+                    <button onClick={saveTracksToLibrary} disabled={savingToLib||selectedTracks.size===0}
+                      style={{ padding:'7px 14px', borderRadius:8, fontSize:11, background:selectedTracks.size>0?`${C}18`:'transparent', border:`1px solid ${selectedTracks.size>0?C:'#23233a'}`, color:selectedTracks.size>0?C:'#4a4a66', cursor:selectedTracks.size>0?'pointer':'default', fontFamily:"'JetBrains Mono',monospace", fontWeight:700, transition:'.15s' }}>
+                      {savingToLib?'SAVING…':savedToLibFlash?'✓ SAVED':'📚 SAVE TO LIBRARY'}
+                    </button>
+                    <button onClick={()=>{ setSelectMode(false); setSelectedTracks(new Set()) }} className="sf-btn-ghost" style={{ padding:'7px 12px', borderRadius:8, fontSize:11 }}>Cancel</button>
+                  </div>
+                )}
               </div>
 
               {/* Stats strip */}
@@ -760,8 +873,9 @@ export default function AppPage() {
                   <div key={`${t.n}-${t.title}`}>
                     <div
                       className="sf-row sf-track"
-                      onMouseEnter={() => !libDragTrack && setHoveredTrackIndex(i)}
+                      onMouseEnter={() => !libDragTrack && !selectMode && setHoveredTrackIndex(i)}
                       onMouseLeave={() => setHoveredTrackIndex(null)}
+                      onClick={() => { if (selectMode) { setSelectedTracks(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) } }}
                       onDragOver={e => {
                         e.preventDefault()
                         if (libDragTrack) { setLibDropIndex(i); setLibDropMode('replace') }
@@ -782,8 +896,9 @@ export default function AppPage() {
                         }
                       }}
                       style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center', position:'relative',
-                        background: libDropIndex===i && libDropMode==='replace' ? `${M}0e` : hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
-                        border: libDropIndex===i && libDropMode==='replace' ? `2px dashed ${M}` : dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                        background: libDropIndex===i && libDropMode==='replace' ? `${M}0e` : selectMode && selectedTracks.has(i) ? `${C}0e` : hoveredTrackIndex===i ? '#0d0d1c' : '#0a0a14',
+                        border: libDropIndex===i && libDropMode==='replace' ? `2px dashed ${M}` : selectMode && selectedTracks.has(i) ? `1px solid ${C}55` : dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                        cursor: selectMode ? 'pointer' : undefined,
                         borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1 }}>
 
                       {/* REPLACE chip */}
@@ -793,8 +908,15 @@ export default function AppPage() {
                         </div>
                       )}
 
-                      <div draggable onDragStart={e=>{e.stopPropagation();setDragIndex(i)}} onDragEnd={()=>{setDragIndex(null);setDragOverIndex(null)}}
-                        title="Drag to reorder" style={{ cursor:'grab', color:dragIndex===i?C:'#2a2a48', fontSize:14, textAlign:'center', userSelect:'none' }}>⠿</div>
+                      {selectMode ? (
+                        <div onClick={()=>{ setSelectedTracks(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) }}
+                          style={{ width:16, height:16, borderRadius:'50%', border:`2px solid ${selectedTracks.has(i)?C:'#3a3a58'}`, background:selectedTracks.has(i)?C:'transparent', cursor:'pointer', flexShrink:0, transition:'.15s', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          {selectedTracks.has(i) && <div style={{ width:6, height:6, borderRadius:'50%', background:'#06060c' }} />}
+                        </div>
+                      ) : (
+                        <div draggable onDragStart={e=>{e.stopPropagation();setDragIndex(i)}} onDragEnd={()=>{setDragIndex(null);setDragOverIndex(null)}}
+                          title="Drag to reorder" style={{ cursor:'grab', color:dragIndex===i?C:'#2a2a48', fontSize:14, textAlign:'center', userSelect:'none' }}>⠿</div>
+                      )}
                       <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                       <div>
                         <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{t.title}</div>

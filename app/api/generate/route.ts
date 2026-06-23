@@ -44,13 +44,14 @@ async function generateChunk(params: {
   targetCount:  number
   energyStart:  number
   energyEnd:    number
-  energyCurve:  number[]  // full energy values per track position
+  energyCurve:  number[]
   position:          'full' | 'opening' | 'closing'
   includeMixingNotes?: boolean
   lockedTracks?: { n:number; artist:string; title:string; bpm:number; key:string; energy:number }[]
   prevTracks?:  { artist:string; title:string; bpm:number; key:string }[]
   setTitle?:    string
   recentTracks?: string[]
+  libraryTracks?: { artist:string; title:string; bpm?:number; key?:string }[]
 }): Promise<{ title: string; summary: string; tracks: unknown[] }> {
 
   const {
@@ -58,6 +59,7 @@ async function generateChunk(params: {
     bpmLow, bpmHigh, keyMatch,
     targetCount, energyStart, energyEnd, energyCurve,
     position, includeMixingNotes = true, lockedTracks, prevTracks, setTitle, recentTracks = [],
+    libraryTracks = [],
   } = params
 
   const vibeLine    = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}`              : ''
@@ -83,6 +85,12 @@ async function generateChunk(params: {
     closing: '\nThis is the CLOSING section — follow the energy curve to the end.',
   }[position]
 
+  const libraryBlock = libraryTracks.length
+    ? `\n\nPREFERRED TRACKS from this DJ's personal library — prioritize these where they fit the BPM range, energy, key, and genre requirements:\n${
+        libraryTracks.slice(0, 50).map(t => `- "${t.artist} — ${t.title}"${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`).join('\n')
+      }\nUse library tracks over equivalent alternatives when they fit. Supplement with other real tracks when the library lacks a suitable option for a slot.`
+    : ''
+
   const prompt = `You are a world-class DJ set curator. Build a ${position === 'full' ? 'complete' : position} DJ set section.
 
 Parameters:
@@ -92,7 +100,7 @@ Parameters:
 - Harmonic key matching: ${keyMatch ? 'YES — adjacent Camelot keys must be compatible (same number, ±1, or A↔B)' : 'not required'}
 - Track count: ${targetCount} tracks
 - Energy: start ${energyStart}/10 → end ${energyEnd}/10
-- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}
+- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
@@ -150,6 +158,7 @@ export async function POST(req: Request) {
       energyPoints,
       includeMixingNotes = true,
       recentTracks = [],
+      libraryTracks = [],
     } = body
 
     if (!genre || !crowd) {
@@ -194,6 +203,7 @@ export async function POST(req: Request) {
         lockedTracks,
         includeMixingNotes,
         recentTracks,
+        libraryTracks,
       })
 
     } else {
@@ -221,6 +231,7 @@ export async function POST(req: Request) {
         lockedTracks: locked1,
         includeMixingNotes,
         recentTracks,
+        libraryTracks,
       })
 
       // Chunk 2: closing, seeded from chunk 1's last 2 tracks
@@ -240,6 +251,7 @@ export async function POST(req: Request) {
         setTitle:     chunk1.title,
         includeMixingNotes,
         recentTracks: [...recentTracks, ...chunk1Used],
+        libraryTracks,
       })
 
       // Renumber chunk 2 tracks
