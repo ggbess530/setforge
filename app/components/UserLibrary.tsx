@@ -117,12 +117,43 @@ function parseTraktor(xml: string) {
   return { tracks, flatCrates }
 }
 
+// Derive a stable crate key from webkitRelativePath, normalising both
+// old-style (%% in filename) and new-style (actual subdirectories) to
+// the same Folder%%Subfolder%%Crate format.
+function crateKeyFromFile(file: File): string {
+  const rp = ((file as File & { webkitRelativePath?: string }).webkitRelativePath || '').replace(/\\/g, '/')
+  if (rp) {
+    const parts = rp.split('/')
+    const subIdx = parts.findIndex(p => p.toLowerCase() === 'subcrates')
+    if (subIdx >= 0) {
+      const rel = parts.slice(subIdx + 1) // everything inside Subcrates/
+      return rel.map((p, i) => i === rel.length - 1 ? p.replace(/\.crate$/i, '') : p).join('%%')
+    }
+  }
+  return file.name.replace(/\.crate$/i, '')
+}
+
 async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTrack>; flatCrates: {id:string;name:string;fullPath:string;parentId?:string;isFolder:boolean;trackIds:string[]}[] }> {
   const tracks: Record<string,LibTrack> = {}
   const crateTrackPaths: Record<string,string[]> = {}
   const crateNames: string[] = []
-  const crateFiles = files.filter(f=>f.name.endsWith('.crate'))
-  const dbFile     = files.find(f=>f.name==='database V2')
+
+  // Only process crate files from the Subcrates directory — skip SmartCrates,
+  // History, BeatGrid, Loops, Waveforms which use different formats.
+  const SKIP_DIRS = ['smartcrates', 'history', 'beatgrid', 'loops', 'waveforms', 'recording']
+  const crateFiles = files.filter(f => {
+    if (!f.name.endsWith('.crate')) return false
+    const rp = ((f as File & { webkitRelativePath?: string }).webkitRelativePath || '').replace(/\\/g, '/').toLowerCase()
+    return !rp || !SKIP_DIRS.some(d => rp.includes(`/${d}/`))
+  })
+
+  // Use the database V2 closest to the root (fewest path segments).
+  const dbCandidates = files.filter(f => f.name === 'database V2')
+  const dbFile = dbCandidates.sort((a, b) => {
+    const ra = ((a as any).webkitRelativePath || '').split('/').length
+    const rb = ((b as any).webkitRelativePath || '').split('/').length
+    return ra - rb
+  })[0]
   const dbMeta: Record<string,Partial<LibTrack>> = {}
 
   if (dbFile) {
@@ -147,7 +178,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
   }
 
   await Promise.all(crateFiles.map(async file => {
-    const key=file.name.replace(/\.crate$/,''); crateNames.push(key)
+    const key = crateKeyFromFile(file); crateNames.push(key)
     const buf=await new Promise<ArrayBuffer>((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target?.result as ArrayBuffer);r.onerror=rej;r.readAsArrayBuffer(file)})
     const bytes=new Uint8Array(buf),view=new DataView(buf); const paths: string[]=[]; let pos=0
     while(pos+8<=bytes.length){const tag=readTag(bytes,pos),len=readU32(view,pos+4);pos+=8;if(pos+len>bytes.length)break
@@ -304,8 +335,15 @@ export default function UserLibrary({ onBuildSet, loading }: Props) {
         const parsed = parseTraktor(await readText(f))
         tracks = parsed.tracks; flatCrates = parsed.flatCrates
       } else {
-        const relevant = arr.filter(f=>f.name.endsWith('.crate')||f.name==='database V2')
-        if (!relevant.length) throw new Error('No Serato crate files found. Upload your _Serato_ folder.')
+        // Accept the full _Serato_ folder, the Subcrates subfolder, or individual files.
+        const SKIP = ['smartcrates', 'history', 'beatgrid', 'loops', 'waveforms', 'recording']
+        const relevant = arr.filter(f => {
+          if (f.name === 'database V2') return true
+          if (!f.name.endsWith('.crate')) return false
+          const rp = ((f as File & { webkitRelativePath?: string }).webkitRelativePath || '').replace(/\\/g, '/').toLowerCase()
+          return !rp || !SKIP.some(d => rp.includes(`/${d}/`))
+        })
+        if (!relevant.length) throw new Error('No Serato files found. Upload your _Serato_ folder.')
         const parsed = await parseSerato(relevant)
         tracks = parsed.tracks; flatCrates = parsed.flatCrates
       }
@@ -376,7 +414,7 @@ export default function UserLibrary({ onBuildSet, loading }: Props) {
   const INST = {
     rekordbox: { steps:['Open Rekordbox','File → Export Collection in xml format','Upload the XML file'], accept:'.xml' },
     traktor:   { steps:['Open Traktor Pro','File → Export Collection','Upload the .nml file'], accept:'.nml' },
-    serato:    { steps:['Close Serato first','Find ~/Music/_Serato_ (Mac) or C:/Users/you/Music/_Serato_ (Windows)','Upload that folder or its Subcrates subfolder'], accept:'' },
+    serato:    { steps:['Close Serato DJ first','Find your _Serato_ folder — ~/Music/_Serato_ on Mac, or Music/_Serato_ on Windows','Upload the entire _Serato_ folder (crates and track data are found automatically)'], accept:'' },
   }
 
   if (showUpload) return (
@@ -404,7 +442,9 @@ export default function UserLibrary({ onBuildSet, loading }: Props) {
         onClick={()=>uploadTab==='serato'?folderRef.current?.click():fileRef.current?.click()}
         style={{ border:`2px dashed ${dragOver?C:'#2a2a42'}`, borderRadius:10, padding:'24px 14px', textAlign:'center', cursor:'pointer', transition:'.2s', background:dragOver?`${C}06`:'transparent' }}>
         <div style={{ fontSize:28, marginBottom:6 }}>{uploadTab==='serato'?'📂':uploadTab==='rekordbox'?'🎚️':'🎛️'}</div>
-        <div style={{ fontSize:12, color:'#e8e8f0', fontWeight:600, marginBottom:4 }}>Drop {INST[uploadTab].accept||'folder'} here</div>
+        <div style={{ fontSize:12, color:'#e8e8f0', fontWeight:600, marginBottom:4 }}>
+          Drop your {uploadTab === 'serato' ? '_Serato_ folder' : INST[uploadTab].accept || 'file'} here
+        </div>
         <div style={{ fontSize:10, color:'#6a6a8a' }}>or click to browse</div>
       </div>
 
