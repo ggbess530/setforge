@@ -26,7 +26,7 @@ const CAM_KEYS = ['1A','2A','3A','4A','5A','6A','7A','8A','9A','10A','11A','12A'
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
-type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; genre?:string; rating?:number; tags?:string[] }
+type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; genre?:string; rating?:number; tags?:string[]; label?:string }
 type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 
@@ -62,7 +62,9 @@ export default function AppPage() {
   const [loading,       setLoading]       = useState(false)
   const [error,         setError]         = useState<string|null>(null)
   const [set,           setSet]           = useState<SetData|null>(null)
-  const [swapping,      setSwapping]      = useState<number|null>(null)
+  const [swapping,         setSwapping]         = useState<number|null>(null)
+  const [swapSuggestions,  setSwapSuggestions]  = useState<Track[]|null>(null)
+  const [swapTargetIndex,  setSwapTargetIndex]  = useState<number|null>(null)
   const [locked,        setLocked]        = useState<Set<number>>(new Set())
   const [copied,        setCopied]        = useState(false)
   const [dragIndex,     setDragIndex]     = useState<number|null>(null)
@@ -162,6 +164,13 @@ export default function AppPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [editingTrack])
 
+  useEffect(() => {
+    if (!swapSuggestions) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSwapSuggestions(null); setSwapTargetIndex(null) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [swapSuggestions])
+
   async function generate(keepLocks = false) {
     setLoading(true); setError(null)
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
@@ -197,15 +206,23 @@ export default function AppPage() {
 
   async function swapTrack(index: number) {
     if (!set) return
-    setSwapping(index); setError(null)
+    setSwapping(index); setError(null); setSwapSuggestions(null)
     const target = set.tracks[index]
     try {
       const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Swap failed.'); return }
-      setSet(s => { if (!s) return s; const tracks=[...s.tracks]; tracks[index]={...data.track,n:target.n}; return {...s,tracks} })
+      setSwapSuggestions(data.suggestions || [])
+      setSwapTargetIndex(index)
     } catch { setError('Network error.') }
     finally   { setSwapping(null) }
+  }
+
+  function applySwap(suggestion: Track) {
+    if (swapTargetIndex === null || !set) return
+    const target = set.tracks[swapTargetIndex]
+    setSet(s => { if (!s) return s; const tracks=[...s.tracks]; tracks[swapTargetIndex]={...suggestion,n:target.n}; return {...s,tracks} })
+    setSwapSuggestions(null); setSwapTargetIndex(null)
   }
 
   async function saveSet() {
@@ -456,6 +473,62 @@ export default function AppPage() {
       `}</style>
 
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
+
+      {/* Swap Picker Modal */}
+      {swapSuggestions && swapTargetIndex !== null && set && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) { setSwapSuggestions(null); setSwapTargetIndex(null) } }}
+          style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(3,3,10,.82)', backdropFilter:'blur(18px)', WebkitBackdropFilter:'blur(18px)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ background:'#0e0e1c', border:`1px solid ${M}55`, borderRadius:18, padding:'24px 26px', width:'100%', maxWidth:480, boxShadow:`0 0 80px ${M}18, 0 28px 80px rgba(0,0,0,.7)`, animation:'modal-in .2s ease' }}>
+
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:20 }}>
+              <div>
+                <div style={{ fontSize:9, letterSpacing:2, color:C, marginBottom:7 }}>SWAP TRACK {String(swapTargetIndex+1).padStart(2,'0')}</div>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', lineHeight:1, marginBottom:3 }}>
+                  {set.tracks[swapTargetIndex].title}
+                </div>
+                <div style={{ fontSize:11, color:'#6a6a8a' }}>{set.tracks[swapTargetIndex].artist} · {set.tracks[swapTargetIndex].bpm} BPM · {set.tracks[swapTargetIndex].key} · E{set.tracks[swapTargetIndex].energy}</div>
+              </div>
+              <button onClick={()=>{setSwapSuggestions(null);setSwapTargetIndex(null)}}
+                style={{ background:'transparent', border:'1px solid #23233a', color:'#6a6a8a', width:34, height:34, borderRadius:9, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'.15s' }}
+                onMouseEnter={e=>(e.currentTarget as HTMLElement).style.borderColor=M}
+                onMouseLeave={e=>(e.currentTarget as HTMLElement).style.borderColor='#23233a'}>✕</button>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {swapSuggestions.map((s, i) => {
+                const isWild = s.label === 'Wildcard'
+                const accent = isWild ? M : C
+                const origBpm = set.tracks[swapTargetIndex].bpm
+                const bpmDelta = s.bpm - origBpm
+                const compat = camelotCompat(set.tracks[swapTargetIndex].key, s.key)
+                const compatColor = compat==='perfect'?'#4ade80':compat==='good'?'#f59e0b':M
+                return (
+                  <div key={i} onClick={()=>applySwap(s)}
+                    style={{ cursor:'pointer', background:'#0a0a14', border:`1px solid ${isWild?M+'44':'#1a1a2e'}`, borderRadius:12, padding:'12px 14px', transition:'.15s' }}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor=accent;(e.currentTarget as HTMLElement).style.background=`${accent}0a`}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor=isWild?M+'44':'#1a1a2e';(e.currentTarget as HTMLElement).style.background='#0a0a14'}}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                      <div style={{ fontSize:9, color:accent, letterSpacing:1, fontWeight:700, background:`${accent}18`, border:`1px solid ${accent}33`, borderRadius:4, padding:'2px 8px' }}>
+                        {isWild ? '🎲 ' : ''}{s.label?.toUpperCase()}
+                      </div>
+                      <div style={{ display:'flex', gap:8, alignItems:'center', fontFamily:"'JetBrains Mono',monospace", fontSize:10 }}>
+                        <span style={{ color:C }}>{s.bpm} BPM{bpmDelta!==0&&<span style={{ color:Math.abs(bpmDelta)<=3?'#4ade80':Math.abs(bpmDelta)<=6?'#f59e0b':M, fontSize:9 }}> ({bpmDelta>0?'+':''}{bpmDelta})</span>}</span>
+                        <span style={{ color:compatColor }}>{s.key}</span>
+                        <span style={{ color:'#6a6a8a' }}>E{s.energy}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#e8e8f0', marginBottom:2 }}>{s.title}</div>
+                    <div style={{ fontSize:11, color:'#8a8aa8', marginBottom: s.transition?5:0 }}>{s.artist}</div>
+                    {s.transition && <div style={{ fontSize:10, color:'#5a5a78' }}>↳ {s.transition}</div>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Track Edit Modal */}
       {editingTrack !== null && set?.tracks[editingTrack] && (
