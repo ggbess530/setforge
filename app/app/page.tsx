@@ -88,10 +88,20 @@ export default function AppPage() {
   const [libDragTrack,      setLibDragTrack]      = useState<ImportedTrack|null>(null)
   const [libDropIndex,      setLibDropIndex]      = useState<number|null>(null)
   const [libDropMode,       setLibDropMode]       = useState<'insert'|'replace'>('insert')
+  const [leftWidth,         setLeftWidth]         = useState(370)
+  const [resizing,          setResizing]          = useState(false)
 
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadLibrary() }, [])
+  useEffect(() => {
+    fetch('/api/quota').then(r => r.json()).then(d => { if (d.tier) setQuota(d) }).catch(() => {})
+  }, [])
+  useEffect(() => {
+    document.body.style.cursor    = resizing ? 'col-resize' : ''
+    document.body.style.userSelect = resizing ? 'none' : ''
+    return () => { document.body.style.cursor = ''; document.body.style.userSelect = '' }
+  }, [resizing])
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('tab') === 'library') { setView('library'); window.history.replaceState({}, '', '/app') }
@@ -260,6 +270,17 @@ export default function AppPage() {
     return ''
   }
 
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = leftWidth
+    setResizing(true)
+    function onMove(mv: MouseEvent) { setLeftWidth(Math.max(260, Math.min(620, startW + mv.clientX - startX))) }
+    function onUp() { setResizing(false); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   function insertLibraryTrack(position: number, lt: ImportedTrack) {
     if (!set) return
     const tracks = [...set.tracks]
@@ -351,11 +372,24 @@ export default function AppPage() {
 
       {/* NAV */}
       <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40 }}>
-        <Link href="/" style={{ textDecoration:'none' }}>
-          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
-            <span style={{ color:C }} className="sf-glow-c">SET</span><span style={{ color:M }} className="sf-glow-m">FORGE</span>
-          </div>
-        </Link>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <Link href="/" style={{ textDecoration:'none' }}>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
+              <span style={{ color:C }} className="sf-glow-c">SET</span><span style={{ color:M }} className="sf-glow-m">FORGE</span>
+            </div>
+          </Link>
+          {quota?.tier && (
+            <div style={{
+              fontSize:9, fontFamily:"'JetBrains Mono',monospace", fontWeight:700, letterSpacing:1.5,
+              padding:'2px 8px', borderRadius:4,
+              color:  quota.tier==='pro' ? M : quota.tier==='team' ? C : '#5a5a78',
+              border: `1px solid ${quota.tier==='pro' ? M+'55' : quota.tier==='team' ? C+'55' : '#2a2a42'}`,
+              background: quota.tier==='pro' ? `${M}10` : quota.tier==='team' ? `${C}10` : 'transparent',
+            }}>
+              {quota.tier.toUpperCase()}
+            </div>
+          )}
+        </div>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
           {quota?.trial?.active && (
             <div style={{ fontSize:10, padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
@@ -382,7 +416,7 @@ export default function AppPage() {
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
 
         {/* LEFT PANEL */}
-        <div style={{ width:370, flexShrink:0, borderRight:'1px solid #1a1a2e', display:'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
+        <div style={{ width:leftWidth, flexShrink:0, display:'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
           <div style={{ display:'flex', borderBottom:'1px solid #1a1a2e', flexShrink:0 }}>
             <div className={`sf-tab ${view==='forge'?'on':''}`} onClick={()=>setView('forge')}>⚡ FORGE</div>
             <div className={`sf-tab ${view==='library'?'on':''}`} onClick={()=>{ setView('library'); if(!libLoaded) loadLibrary() }}>
@@ -546,6 +580,17 @@ export default function AppPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* RESIZE DIVIDER */}
+        <div
+          onMouseDown={startResize}
+          title="Drag to resize"
+          style={{ width:6, flexShrink:0, cursor:'col-resize', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', position:'relative', zIndex:20 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).querySelector('div')!.style.background = C }}
+          onMouseLeave={e => { if (!resizing) (e.currentTarget as HTMLElement).querySelector('div')!.style.background = '#2a2a42' }}
+        >
+          <div style={{ width:2, height:40, borderRadius:999, background: resizing ? C : '#2a2a42', transition:'background .15s, box-shadow .15s', boxShadow: resizing ? `0 0 8px ${C}` : 'none' }} />
         </div>
 
         {/* RIGHT PANEL */}
