@@ -117,6 +117,56 @@ function parseTraktor(xml: string) {
   return { tracks, flatCrates }
 }
 
+// ── Folder drag-and-drop via FileSystem API ───────────────────
+// e.dataTransfer.files returns nothing for dropped folders.
+// We must walk the directory tree using webkitGetAsEntry instead.
+async function getFilesFromDrop(dt: DataTransfer): Promise<File[]> {
+  const files: File[] = []
+
+  async function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+    const all: FileSystemEntry[] = []
+    // readEntries yields at most 100 results at a time — loop until empty
+    while (true) {
+      const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
+      if (!batch.length) break
+      all.push(...batch)
+    }
+    return all
+  }
+
+  async function traverse(entry: FileSystemEntry, parentPath: string): Promise<void> {
+    const entryPath = parentPath ? `${parentPath}/${entry.name}` : entry.name
+    if (entry.isFile) {
+      const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej))
+      // Attach relative path so downstream filters (e.g. skip SmartCrates) work correctly
+      try { Object.defineProperty(file, 'webkitRelativePath', { value: entryPath }) } catch {}
+      files.push(file)
+    } else if (entry.isDirectory) {
+      const entries = await readAllEntries((entry as FileSystemDirectoryEntry).createReader())
+      await Promise.all(entries.map(e => traverse(e, entryPath)))
+    }
+  }
+
+  if (dt.items?.length) {
+    await Promise.all(Array.from(dt.items).map(item => {
+      const entry = item.webkitGetAsEntry?.()
+      if (entry) return traverse(entry, '')
+      const f = item.getAsFile(); if (f) files.push(f)
+      return Promise.resolve()
+    }))
+  } else {
+    Array.from(dt.files).forEach(f => files.push(f))
+  }
+  return files
+}
+
+// ── Path normalisation for track lookup ───────────────────────
+// database V2 can URL-encode paths; crate ptrk tags usually don't.
+function normPath(p: string): string {
+  try { p = decodeURIComponent(p) } catch {}
+  return p.replace(/\\/g, '/').toLowerCase().trim()
+}
+
 // Derive a stable crate key from webkitRelativePath, normalising both
 // old-style (%% in filename) and new-style (actual subdirectories) to
 // the same Folder%%Subfolder%%Crate format.
@@ -169,9 +219,10 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
           if(it==='tsng') t.title=readUTF16(bytes,inner,il)
           if(it==='tart') t.artist=readUTF16(bytes,inner,il)
           if(it==='tgen') t.genre=readUTF16(bytes,inner,il)
+          if(it==='tkey') t.key=readUTF16(bytes,inner,il)||undefined
           if(it==='tbpm'){const s=readUTF16(bytes,inner,il),b=parseFloat(s);if(!isNaN(b)&&b>0) t.bpm=Math.round(b)}
           inner+=il}
-        if(t.path){const n=t.path.replace(/\\/g,'/');dbMeta[n]={...t,id:n}}
+        if(t.path){const n=normPath(t.path);dbMeta[n]={...t,id:n}}
       }
       pos+=len
     }
@@ -187,11 +238,12 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
         inner+=il}}pos+=len}
     crateTrackPaths[key]=paths
     paths.forEach(raw=>{
-      const np=raw.replace(/\\/g,'/'),m=dbMeta[np],id=np
+      const np=normPath(raw), id=np
+      const m=dbMeta[np]
       if(!tracks[id]){
-        const fn=np.split('/').pop()||np,nm=fn.replace(/\.[^.]+$/,'').trim(),di=nm.indexOf(' - ')
-        const artist=di>0?nm.slice(0,di).trim():'Unknown',title=di>0?nm.slice(di+3).trim():nm
-        tracks[id]={id,title:m?.title||title,artist:m?.artist||artist,bpm:m?.bpm,genre:m?.genre,path:np}
+        const fn=np.split('/').pop()||np, nm=fn.replace(/\.[^.]+$/,'').trim(), di=nm.indexOf(' - ')
+        const artist=di>0?nm.slice(0,di).trim():'Unknown', title=di>0?nm.slice(di+3).trim():nm
+        tracks[id]={id,title:m?.title||title,artist:m?.artist||artist,bpm:m?.bpm,key:m?.key,genre:m?.genre,path:raw}
       }
     })
   }))
@@ -200,7 +252,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
   interface FlatCrate{id:string;name:string;fullPath:string;parentId?:string;isFolder:boolean;trackIds:string[]}
   const flatCrates: FlatCrate[] = []
   const pathToId: Record<string,string>={}
-  Object.values(tracks).forEach(t=>{if(t.path)pathToId[t.path.replace(/\\/g,'/').toLowerCase()]=t.id})
+  Object.values(tracks).forEach(t=>{if(t.path)pathToId[normPath(t.path)]=t.id})
   const crateMap: Record<string,FlatCrate>={}
   crateNames.sort().forEach(key=>{
     const parts=key.split('%%')
@@ -211,7 +263,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
       const fullPath=parts.slice(0,i+1).join(' / '), id=`serato-${segKey}`
       const isFolder=crateNames.some(k=>k!==segKey&&k.startsWith(segKey+'%%'))
       const rawPaths=i===parts.length-1?(crateTrackPaths[key]||[]):[]
-      const trackIds=rawPaths.map(p=>pathToId[p.replace(/\\/g,'/').toLowerCase()]||p).filter(id=>tracks[id])
+      const trackIds=rawPaths.map(p=>pathToId[normPath(p)]||p).filter(id=>tracks[id])
       const fc: FlatCrate={id,name,fullPath,parentId:parentKey?`serato-${parentKey}`:undefined,isFolder,trackIds}
       crateMap[segKey]=fc; flatCrates.push(fc)
     })
@@ -438,7 +490,7 @@ export default function UserLibrary({ onBuildSet, loading }: Props) {
 
       {/* Drop zone */}
       <div onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
-        onDrop={e=>{e.preventDefault();setDragOver(false);handleFiles(e.dataTransfer.files)}}
+        onDrop={async e=>{e.preventDefault();setDragOver(false);handleFiles(await getFilesFromDrop(e.dataTransfer))}}
         onClick={()=>uploadTab==='serato'?folderRef.current?.click():fileRef.current?.click()}
         style={{ border:`2px dashed ${dragOver?C:'#2a2a42'}`, borderRadius:10, padding:'24px 14px', textAlign:'center', cursor:'pointer', transition:'.2s', background:dragOver?`${C}06`:'transparent' }}>
         <div style={{ fontSize:28, marginBottom:6 }}>{uploadTab==='serato'?'📂':uploadTab==='rekordbox'?'🎚️':'🎛️'}</div>
