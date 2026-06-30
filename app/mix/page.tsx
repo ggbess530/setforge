@@ -81,14 +81,41 @@ function TrackInput({ label, value, onChange }: {
 const EMPTY: TrackMeta & { energy: number } = { artist:'', title:'', bpm:0, key:'', energy:5 }
 
 export default function MixPage() {
+  const [mode,    setMode]    = useState<'mix'|'mashup'>('mix')
   const [track1, setTrack1] = useState<TrackMeta & { energy: number }>({ ...EMPTY })
   const [track2, setTrack2] = useState<TrackMeta & { energy: number }>({ ...EMPTY })
-  const [loading, setLoading]   = useState(false)
+  const [loading,    setLoading]   = useState(false)
+  // Mashup finder state
+  const [mArtist,    setMArtist]   = useState('')
+  const [mTitle,     setMTitle]    = useState('')
+  const [mBpm,       setMBpm]      = useState<number|undefined>()
+  const [mKey,       setMKey]      = useState('')
+  const [mResults,   setMResults]  = useState<{
+    sourceKey?:string; sourceBpm?:number;
+    candidates:{artist:string;title:string;bpm:number;key:string;genre:string;bpmDelta:number;keyRelationship:string;whyItWorks:string;technique:string}[]
+  }|null>(null)
+  const [mLoading,   setMLoading]  = useState(false)
+  const [mError,     setMError]    = useState<string|null>(null)
   const [aiTips, setAiTips]     = useState<{ technique:string; eqTips:string; timing:string; warning?:string } | null>(null)
   const [error, setError]       = useState<string|null>(null)
 
   const canSimulate = track1.bpm > 0 && track2.bpm > 0 && track1.key && track2.key
   const bridge = canSimulate ? calcBridge(track1, track2, track1.energy, track2.energy) : null
+
+  async function findMashups() {
+    if (!mArtist && !mTitle) return
+    setMLoading(true); setMError(null); setMResults(null)
+    try {
+      const res  = await fetch('/api/mashup', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ artist:mArtist, title:mTitle, bpm:mBpm, key:mKey }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setMError(data.error || 'Failed.'); return }
+      setMResults(data)
+    } catch { setMError('Network error.') }
+    finally   { setMLoading(false) }
+  }
 
   async function getAIAdvice() {
     if (!canSimulate) return
@@ -149,17 +176,35 @@ export default function MixPage() {
       <div style={{ position:'relative', zIndex:1, maxWidth:900, margin:'0 auto', padding:'48px 24px 80px' }}>
 
         {/* Header */}
-        <div style={{ textAlign:'center', marginBottom:48 }}>
-          <div style={{ fontSize:11, color:M, fontFamily:'JetBrains Mono,monospace', letterSpacing:3, marginBottom:12 }}>MIX SIMULATOR</div>
-          <h1 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'clamp(42px,7vw,80px)', margin:'0 0 16px', letterSpacing:2, lineHeight:1 }}>
-            <span style={{ color:C }}>WILL THESE</span><br />
-            <span style={{ color:'#e8e8f0' }}>TWO TRACKS MIX?</span>
+        <div style={{ textAlign:'center', marginBottom:36 }}>
+          <div style={{ fontSize:11, color:M, fontFamily:'JetBrains Mono,monospace', letterSpacing:3, marginBottom:12 }}>MIX LAB</div>
+          <h1 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'clamp(42px,7vw,80px)', margin:'0 0 24px', letterSpacing:2, lineHeight:1 }}>
+            <span style={{ color:C }}>MIX</span> <span style={{ color:'#e8e8f0' }}>&</span> <span style={{ color:M }}>MASHUP</span>
           </h1>
-          <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:520, margin:'0 auto', lineHeight:1.7 }}>
-            Enter BPM and Camelot key for any two tracks — get an instant compatibility score, key relationship analysis, and specific mixing techniques.
+
+          {/* Mode tabs */}
+          <div style={{ display:'inline-flex', border:'1px solid #1f1f33', borderRadius:12, overflow:'hidden', marginBottom:16 }}>
+            {([['mix','🎛️ Mix Simulator'],['mashup','⚡ Mashup Finder']] as const).map(([m,label]) => (
+              <button key={m} onClick={() => setMode(m)}
+                style={{ padding:'10px 28px', border:'none', cursor:'pointer', fontSize:14, fontWeight:600,
+                  fontFamily:'Inter,sans-serif', transition:'.2s',
+                  background: mode===m ? `linear-gradient(110deg,${M}33,${C}33)` : '#0a0a14',
+                  color: mode===m ? '#e8e8f0' : '#6a6a8a',
+                  borderBottom: `2px solid ${mode===m ? C : 'transparent'}` }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p style={{ fontSize:15, color:'#6a6a8a', maxWidth:520, margin:'0 auto', lineHeight:1.7 }}>
+            {mode === 'mix'
+              ? 'Enter BPM and key for two tracks — get instant compatibility score and mixing techniques.'
+              : 'Enter any track — discover cross-genre mashup candidates with compatible keys and BPMs.'}
           </p>
         </div>
 
+        {/* ── MIX SIMULATOR ── */}
+        {mode === 'mix' && (<>
         {/* Track inputs */}
         <div style={{ display:'flex', gap:16, marginBottom:24, flexWrap:'wrap' }}>
           <TrackInput label="TRACK 1 — OUTGOING" value={track1} onChange={v => setTrack1(prev => ({ ...prev, ...v }))} />
@@ -278,6 +323,148 @@ export default function MixPage() {
                 <div style={{ fontSize:13, color:'#6a6a8a', lineHeight:1.6 }}>{tip.text}</div>
               </div>
             ))}
+          </div>
+        )}
+        </>)}
+
+        {/* ── MASHUP FINDER ── */}
+        {mode === 'mashup' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+            {/* Source track input */}
+            <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:24 }}>
+              <div style={{ fontSize:10, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:16 }}>SOURCE TRACK</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+                <div>
+                  <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>ARTIST</div>
+                  <input value={mArtist} onChange={e=>setMArtist(e.target.value)} placeholder="e.g. Fisher"
+                    className="sf-input" onKeyDown={e=>e.key==='Enter'&&findMashups()} />
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>TRACK TITLE</div>
+                  <input value={mTitle} onChange={e=>setMTitle(e.target.value)} placeholder="e.g. Losing It"
+                    className="sf-input" onKeyDown={e=>e.key==='Enter'&&findMashups()} />
+                </div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:16 }}>
+                <div>
+                  <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>BPM <span style={{ color:'#3a3a58' }}>optional</span></div>
+                  <input value={mBpm||''} onChange={e=>setMBpm(parseFloat(e.target.value)||undefined)}
+                    placeholder="125" type="number" className="sf-input" />
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>CAMELOT KEY <span style={{ color:'#3a3a58' }}>optional</span></div>
+                  <input value={mKey} onChange={e=>setMKey(e.target.value.toUpperCase())}
+                    placeholder="8A" className="sf-input" style={{ fontFamily:'JetBrains Mono,monospace' }} />
+                </div>
+                <div style={{ display:'flex', alignItems:'flex-end' }}>
+                  <button onClick={findMashups} disabled={mLoading||(!mArtist&&!mTitle)}
+                    className="btn-cta" style={{ width:'100%', padding:'10px 0', borderRadius:8, fontSize:13,
+                      opacity:mLoading||(!mArtist&&!mTitle)?.6:1 }}>
+                    {mLoading ? 'Finding…' : '⚡ Find Mashups'}
+                  </button>
+                </div>
+              </div>
+              {mLoading && (
+                <div style={{ fontSize:11, color:C, fontFamily:'JetBrains Mono,monospace', animation:'pulse 1.2s infinite' }}>
+                  Searching across genres for compatible tracks…
+                </div>
+              )}
+            </div>
+
+            {mError && (
+              <div style={{ padding:12, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:13 }}>{mError}</div>
+            )}
+
+            {/* Results */}
+            {mResults && (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {mResults.sourceKey && (
+                  <div style={{ fontSize:12, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace' }}>
+                    Source: <span style={{ color:C }}>{mResults.sourceBpm} BPM</span> · <span style={{ color:'#9a9ab8' }}>{mResults.sourceKey}</span> · {mResults.candidates.length} mashup candidates found
+                  </div>
+                )}
+                {mResults.candidates.map((c, i) => {
+                  const relColor = c.keyRelationship === 'perfect' ? '#4ade80'
+                    : c.keyRelationship === 'adjacent' ? C
+                    : c.keyRelationship === 'relative' ? '#a78bfa'
+                    : c.keyRelationship === 'doubletime' || c.keyRelationship === 'halftime' ? '#f59e0b'
+                    : '#f59e0b'
+                  return (
+                    <div key={i} style={{ background:'#0a0a14', border:`1px solid ${relColor}33`, borderRadius:14, padding:20 }}>
+                      <div style={{ display:'flex', gap:14, alignItems:'flex-start', flexWrap:'wrap' }}>
+                        {/* Score circle */}
+                        <div style={{ width:52, height:52, borderRadius:'50%', background:`${relColor}18`,
+                          border:`2px solid ${relColor}55`, display:'flex', alignItems:'center',
+                          justifyContent:'center', flexShrink:0, flexDirection:'column' }}>
+                          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:relColor, lineHeight:1 }}>
+                            {c.key}
+                          </div>
+                          <div style={{ fontSize:8, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>
+                            {c.bpm}
+                          </div>
+                        </div>
+                        {/* Track info */}
+                        <div style={{ flex:1, minWidth:200 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
+                            <div style={{ fontSize:15, fontWeight:700, color:'#e8e8f0' }}>{c.title}</div>
+                            <span style={{ fontSize:10, color:relColor, border:`1px solid ${relColor}44`,
+                              borderRadius:999, padding:'2px 8px', fontFamily:'JetBrains Mono,monospace' }}>
+                              {c.keyRelationship.toUpperCase()}
+                            </span>
+                            <span style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33',
+                              borderRadius:999, padding:'2px 8px' }}>{c.genre}</span>
+                          </div>
+                          <div style={{ fontSize:13, color:'#8a8aa8', marginBottom:8 }}>
+                            {c.artist} · {c.bpmDelta > 0 ? '+' : ''}{c.bpmDelta} BPM
+                          </div>
+                          <div style={{ fontSize:13, color:'#c8c8e0', lineHeight:1.6, marginBottom:8 }}>
+                            {c.whyItWorks}
+                          </div>
+                          <div style={{ background:`${relColor}0a`, border:`1px solid ${relColor}22`,
+                            borderRadius:8, padding:'8px 12px', fontSize:12, color:'#9a9ab8', lineHeight:1.6 }}>
+                            <span style={{ color:relColor, fontWeight:600 }}>Technique: </span>{c.technique}
+                          </div>
+                        </div>
+                        {/* Links */}
+                        <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+                          {[
+                            ['BP','https://www.beatport.com/search?q=','#01FF95'],
+                            ['SP',`https://open.spotify.com/search/`,'#1DB954'],
+                            ['YT','https://www.youtube.com/results?search_query=','#FF0000'],
+                          ].map(([label, base, color]) => (
+                            <a key={label}
+                              href={`${base}${encodeURIComponent(`${c.artist} ${c.title}`)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize:9, color, textDecoration:'none', border:`1px solid ${color}33`,
+                                borderRadius:4, padding:'3px 7px', fontFamily:'JetBrains Mono,monospace',
+                                textAlign:'center' }}>
+                              {label}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Education when empty */}
+            {!mResults && !mLoading && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
+                {[
+                  { label:'What makes a good mashup?', text:'Compatible Camelot keys + close BPM. The best mashups contrast genres while sharing harmonic DNA — Tech House vocals over a Hip Hop instrumental, for example.' },
+                  { label:'Half-time & double-time', text:'A 125 BPM track can work over a 62.5 BPM (halftime) or 250 BPM (doubletime) track. Changes the energy completely while keeping groove.' },
+                  { label:'Key relationship types', text:'Perfect = same key. Adjacent = ±1 on the Camelot wheel. Relative = same number, A↔B switch. All work well for layering.' },
+                ].map(tip => (
+                  <div key={tip.label} style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:12, padding:18 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:M, marginBottom:6 }}>{tip.label}</div>
+                    <div style={{ fontSize:13, color:'#6a6a8a', lineHeight:1.6 }}>{tip.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
