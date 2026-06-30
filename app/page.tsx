@@ -250,6 +250,9 @@ export default function LandingPage() {
             <Link href="/analyse" style={{ textDecoration:'none' }}>
               <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:14 }}>🔍 Analyser</button>
             </Link>
+                <Link href="/planner">
+                  <button>🌙 Night Planner</button>
+                </Link>
             {isSignedIn ? (
               <>
                 <Link href="/app"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Open App →</button></Link>

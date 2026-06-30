@@ -338,6 +338,9 @@ export default function AppPage() {
               🔍 ANALYSE
             </button>
           </Link>
+          <Link href="/planner">
+            <button>🌙 Night Planner</button>
+          </Link>
           <UserButton />
         </div>
       </nav>
