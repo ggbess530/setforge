@@ -6,6 +6,8 @@ import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
+import TagScanner from '../components/TagScanner'
+import { toRekordboxXML, toSeratoM3U, toTraktorNML, downloadFile } from '@/lib/export-utils'
 import MixSimulator from '../components/MixSimulator'
 import SetlistImporter, { ImportedTrack } from '../components/SetlistImporter'
 import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
@@ -69,7 +71,8 @@ export default function AppPage() {
   const [saving,      setSaving]      = useState(false)
   const [savedFlash,  setSavedFlash]  = useState(false)
   const [libLoading,  setLibLoading]  = useState(false)
-  const [importLoading, setImportLoading] = useState(false)
+  const [importLoading,  setImportLoading]  = useState(false)
+  const [importSubTab,   setImportSubTab]   = useState<'library'|'scanner'>('library')
   const [deleteConf,  setDeleteConf]  = useState<string|null>(null)
   const [sharingId,   setSharingId]   = useState<string|null>(null)
   const [copiedId,    setCopiedId]    = useState<string|null>(null)
@@ -237,6 +240,21 @@ export default function AppPage() {
     catch { setError('Copy failed.') }
   }
 
+  function exportRekordbox() {
+    if (!set) return
+    const xml = toRekordboxXML(set.tracks, set.title)
+    downloadFile(xml, `${set.title.replace(/\s+/g,'_')}.xml`, 'application/xml')
+  }
+  function exportSerato() {
+    if (!set) return
+    const m3u = toSeratoM3U(set.tracks, set.title)
+    downloadFile(m3u, `${set.title.replace(/\s+/g,'_')}.m3u`, 'audio/x-mpegurl')
+  }
+  function exportTraktor() {
+    if (!set) return
+    const nml = toTraktorNML(set.tracks, set.title)
+    downloadFile(nml, `${set.title.replace(/\s+/g,'_')}.nml`, 'application/xml')
+  }
   function exportText() {
     if (!set) return
     const lines=[set.title.toUpperCase(),set.summary,'',...set.tracks.map(t=>`${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}  [${t.bpm} BPM · ${t.key} · E${t.energy}]\n     ↳ ${t.transition}`),'','Generated with SetForge']
@@ -535,14 +553,31 @@ export default function AppPage() {
 
             {/* ══ IMPORT ══ */}
             {view==='import' && (
-              <div>
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ fontSize:9, letterSpacing:2, color:M, marginBottom:4 }}>BRING YOUR OWN TRACKS</div>
-                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#e8e8f0', marginBottom:4 }}>Import from Rekordbox or Serato</div>
-                  <div style={{ fontSize:11, color:'#6a6a8a', lineHeight:1.6 }}>Upload a playlist and AI builds the optimal set ordering.</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div style={{ display:'flex', border:'1px solid #1f1f33', borderRadius:8, overflow:'hidden' }}>
+                  {(['library','scanner'] as const).map(t => (
+                    <button key={t} onClick={() => setImportSubTab(t)}
+                      style={{ flex:1, padding:'7px 0', border:'none', cursor:'pointer', fontSize:10,
+                        fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5, fontWeight:600,
+                        background: importSubTab===t ? `linear-gradient(100deg,${M}22,${C}22)` : '#0d0d18',
+                        color: importSubTab===t ? C : '#6a6a8a',
+                        borderBottom: `2px solid ${importSubTab===t ? C : 'transparent'}` }}>
+                      {t === 'library' ? '◈ DJ LIBRARY' : '🎵 TAG SCANNER'}
+                    </button>
+                  ))}
                 </div>
-                <SetlistImporter onImport={handleImport} loading={importLoading} />
-                {error && <div style={{ marginTop:10, padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
+                {importSubTab === 'library' && (
+                  <SetlistImporter onImport={handleImport} loading={importLoading} />
+                )}
+                {importSubTab === 'scanner' && (
+                  <TagScanner onAddToSet={tracks => {
+                    handleImport(tracks.map(t => ({
+                      id: t.filename, title: t.title || t.filename,
+                      artist: t.artist || 'Unknown', bpm: t.bpm, key: t.camelot,
+                    })) as Parameters<typeof handleImport>[0])
+                  }} />
+                )}
+                {error && <div style={{ padding:10, border:`1px solid ${M}`, borderRadius:8, color:M, fontSize:11 }}>{error}</div>}
               </div>
             )}
 
@@ -611,7 +646,12 @@ export default function AppPage() {
                   <button onClick={copyTracklist} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color:copied?C:undefined, borderColor:copied?C:undefined }}>
                     {copied?'✓ COPIED':'⧉ COPY LIST'}
                   </button>
-                  <button onClick={exportText} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11 }}>↓ EXPORT</button>
+                  <div style={{ display:'flex', gap:0 }}>
+                    <button onClick={exportText}      className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:'8px 0 0 8px', fontSize:10, borderRight:'none' }} title="Plain text">TXT</button>
+                    <button onClick={exportRekordbox} className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:0, fontSize:10, borderRight:'none' }} title="Rekordbox XML">RB</button>
+                    <button onClick={exportSerato}    className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:0, fontSize:10, borderRight:'none' }} title="Serato M3U">SRT</button>
+                    <button onClick={exportTraktor}   className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:'0 8px 8px 0', fontSize:10 }} title="Traktor NML">NML</button>
+                  </div>
                 </div>
               </div>
 
