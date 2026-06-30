@@ -247,14 +247,11 @@ export default function LandingPage() {
             <span className="logo-c">SET</span><span className="logo-m">FORGE</span>
           </div>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-            <Link href="/analyse" style={{ textDecoration:'none' }}>
-              <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:14 }}>🔍 Analyser</button>
-            </Link>
-                <Link href="/planner">
-                  <button>🌙 Night Planner</button>
-                </Link>
             {isSignedIn ? (
               <>
+                <Link href="/analyse" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Analyse</button></Link>
+                <Link href="/mix"     style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Mix</button></Link>
+                <Link href="/planner" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Planner</button></Link>
                 <Link href="/app"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Open App →</button></Link>
                 <UserButton />
               </>

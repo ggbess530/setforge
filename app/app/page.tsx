@@ -334,12 +334,13 @@ export default function AppPage() {
             </div>
           )}
           <Link href="/analyse" style={{ textDecoration:'none' }}>
-            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>
-              🔍 ANALYSE
-            </button>
+            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🔍 ANALYSE</button>
           </Link>
-          <Link href="/planner">
-            <button>🌙 Night Planner</button>
+          <Link href="/mix" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🎛️ MIX</button>
+          </Link>
+          <Link href="/planner" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🌙 PLANNER</button>
           </Link>
           <UserButton />
         </div>
