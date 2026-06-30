@@ -104,10 +104,7 @@ export default function AppPage() {
           genre: effectiveGenre, crowd, arc, vibe, refArtist,
           mode, minutes, count, bpmLow, bpmHigh, keyMatch,
           lockedTracks, energyPoints, includeMixingNotes,
-          recentTracks: [...trackHistory].slice(0, 60).map(k => {
-            const [artist, title] = k.split('::')
-            return `"${artist} — ${title}"`
-          }),
+          recentTracks: [],
         }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
