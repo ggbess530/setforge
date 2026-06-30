@@ -436,7 +436,7 @@ export default function PlannerPage() {
                 <div style={{ fontSize:9, color:'#4a4a66', marginBottom:3 }}>{field.label}</div>
                 <input
                   type={field.type || 'text'}
-                  value={(night as Record<string,string>)[field.key]}
+                  value={(night as unknown as Record<string,string>)[field.key]}
                   onChange={e => setNight(prev => ({ ...prev, [field.key]: e.target.value }))}
                   placeholder={field.placeholder}
                   style={{ width:'100%', background:'#06060c', border:'1px solid #1f1f33', color:'#e8e8f0', fontFamily:'JetBrains Mono,monospace', fontSize:11, padding:'6px 10px', borderRadius:7, outline:'none', boxSizing:'border-box' }}
