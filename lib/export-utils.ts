@@ -83,11 +83,11 @@ export function toTraktorNML(tracks: ExportTrack[], setTitle: string): string {
   }
 
   const entries = tracks.map(t => {
-    const keyVal = CAM_TO_TRAKTOR[t.key] ?? ''
+    const keyVal = CAM_TO_TRAKTOR[t.key] ?? -1
     return `    <ENTRY TITLE="${escXml(t.title)}" ARTIST="${escXml(t.artist)}">
       <LOCATION DIR="/SetForge/" FILE="${escXml(t.artist)} - ${escXml(t.title)}.mp3" VOLUME="" VOLUMEID=""/>
       <TEMPO BPM="${t.bpm.toFixed(2)}" BPM_QUALITY="100.000000"/>
-      ${keyVal !== '' ? `<MUSICAL_KEY VALUE="${keyVal}"/>` : ''}
+      ${keyVal !== -1 ? `<MUSICAL_KEY VALUE="${keyVal}"/>` : ''}
       <INFO RATING="${t.energy * 51}" COMMENT="${escXml(t.transition || '')}"/>
     </ENTRY>`
   })
