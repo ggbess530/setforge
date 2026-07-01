@@ -36,10 +36,13 @@ function ScoreArc({ score }: { score: number }) {
   )
 }
 
-function TrackInput({ label, value, onChange }: {
+function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoading }: {
   label: string
   value: TrackMeta & { energy: number }
   onChange: (v: Partial<TrackMeta & { energy: number }>) => void
+  onLookup?: () => void
+  lookupResult?: { found: boolean; bpm?: number; key?: string; spotifyUrl?: string }
+  lookupLoading?: boolean
 }) {
   return (
     <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:24, flex:1 }}>
@@ -67,6 +70,25 @@ function TrackInput({ label, value, onChange }: {
               placeholder="8A" className="sf-input" style={{ fontFamily:'JetBrains Mono,monospace' }} />
           </div>
         </div>
+        {/* Spotify lookup button */}
+        {onLookup && (
+          <button onClick={onLookup} disabled={lookupLoading || (!value.artist && !value.title)}
+            style={{ width:'100%', padding:'7px 0', borderRadius:8, border:'1px solid #1DB95444',
+              background: lookupResult?.found ? '#1DB95411' : 'transparent',
+              color: lookupResult?.found ? '#1DB954' : '#6a6a8a',
+              cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:11, transition:'.2s' }}>
+            {lookupLoading ? 'Looking up…'
+              : lookupResult?.found ? `✓ Found — ${lookupResult.bpm} BPM · ${lookupResult.key || '?'}`
+              : lookupResult?.found === false ? '✕ Not found on Spotify'
+              : '🎵 Lookup BPM & Key on Spotify'}
+          </button>
+        )}
+        {lookupResult?.found && lookupResult.spotifyUrl && (
+          <a href={lookupResult.spotifyUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize:10, color:'#1DB954', textDecoration:'none', textAlign:'center', display:'block' }}>
+            Open on Spotify →
+          </a>
+        )}
         <div>
           <div style={{ fontSize:10, color:'#4a4a66', marginBottom:6 }}>ENERGY LEVEL: <span style={{ color:C }}>{value.energy}/10</span></div>
           <input type="range" min={1} max={10} value={value.energy}
@@ -97,6 +119,8 @@ export default function MixPage() {
   const [mLoading,   setMLoading]  = useState(false)
   const [mError,     setMError]    = useState<string|null>(null)
   const [aiTips, setAiTips]     = useState<{ technique:string; eqTips:string; timing:string; warning?:string } | null>(null)
+  const [spotifyData, setSpotifyData] = useState<Record<string, { bpm?:number; key?:string; found:boolean; spotifyUrl?:string }>>({})
+  const [spotifyLoading, setSpotifyLoading] = useState<Record<string, boolean>>({})
   const [error, setError]       = useState<string|null>(null)
 
   const canSimulate = track1.bpm > 0 && track2.bpm > 0 && track1.key && track2.key
@@ -108,13 +132,38 @@ export default function MixPage() {
     try {
       const res  = await fetch('/api/mashup', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ artist:mArtist, title:mTitle, bpm:mBpm, key:mKey }),
+        body: JSON.stringify({
+          artist: mArtist, title: mTitle,
+          // Use Spotify data if available, fall back to user input
+          bpm:  spotifyData['mashup']?.bpm  || mBpm,
+          key:  spotifyData['mashup']?.key  || mKey,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setMError(data.error || 'Failed.'); return }
       setMResults(data)
     } catch { setMError('Network error.') }
     finally   { setMLoading(false) }
+  }
+
+  // Lookup BPM + key from Spotify for a track
+  async function lookupSpotify(slotKey: string, artist: string, title: string) {
+    if (!artist.trim() && !title.trim()) return
+    setSpotifyLoading(prev => ({ ...prev, [slotKey]: true }))
+    try {
+      const res  = await fetch('/api/spotify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artist, title }),
+      })
+      const data = await res.json()
+      setSpotifyData(prev => ({ ...prev, [slotKey]: data }))
+      return data
+    } catch {
+      setSpotifyData(prev => ({ ...prev, [slotKey]: { found: false } }))
+    } finally {
+      setSpotifyLoading(prev => ({ ...prev, [slotKey]: false }))
+    }
   }
 
   async function getAIAdvice() {
@@ -207,14 +256,30 @@ export default function MixPage() {
         {mode === 'mix' && (<>
         {/* Track inputs */}
         <div style={{ display:'flex', gap:16, marginBottom:24, flexWrap:'wrap' }}>
-          <TrackInput label="TRACK 1 — OUTGOING" value={track1} onChange={v => setTrack1(prev => ({ ...prev, ...v }))} />
+          <TrackInput label="TRACK 1 — OUTGOING" value={track1}
+            onChange={v => setTrack1(prev => ({ ...prev, ...v }))}
+            onLookup={async () => {
+              const data = await lookupSpotify('t1', track1.artist, track1.title)
+              if (data?.found) setTrack1(prev => ({ ...prev, bpm: data.bpm || prev.bpm, key: data.key || prev.key }))
+            }}
+            lookupResult={spotifyData['t1']}
+            lookupLoading={spotifyLoading['t1']}
+          />
 
           {/* Arrow */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, width:40 }}>
             <div style={{ fontSize:24, color:'#3a3a58' }}>→</div>
           </div>
 
-          <TrackInput label="TRACK 2 — INCOMING" value={track2} onChange={v => setTrack2(prev => ({ ...prev, ...v }))} />
+          <TrackInput label="TRACK 2 — INCOMING" value={track2}
+            onChange={v => setTrack2(prev => ({ ...prev, ...v }))}
+            onLookup={async () => {
+              const data = await lookupSpotify('t2', track2.artist, track2.title)
+              if (data?.found) setTrack2(prev => ({ ...prev, bpm: data.bpm || prev.bpm, key: data.key || prev.key }))
+            }}
+            lookupResult={spotifyData['t2']}
+            lookupLoading={spotifyLoading['t2']}
+          />
         </div>
 
         {/* Live compatibility result */}
@@ -357,9 +422,25 @@ export default function MixPage() {
                   <input value={mKey} onChange={e=>setMKey(e.target.value.toUpperCase())}
                     placeholder="8A" className="sf-input" style={{ fontFamily:'JetBrains Mono,monospace' }} />
                 </div>
-                <div style={{ display:'flex', alignItems:'flex-end' }}>
+                <div style={{ display:'flex', alignItems:'flex-end', gap:8, gridColumn:'span 1' }}>
+                  <button
+                    onClick={async () => {
+                      const data = await lookupSpotify('mashup', mArtist, mTitle)
+                      if (data?.found) {
+                        if (data.bpm && !mBpm) setMBpm(data.bpm)
+                        if (data.key  && !mKey) setMKey(data.key)
+                      }
+                    }}
+                    disabled={spotifyLoading['mashup'] || (!mArtist && !mTitle)}
+                    style={{ flex:1, padding:'10px 0', borderRadius:8, fontSize:12,
+                      border:`1px solid ${spotifyData['mashup']?.found ? '#1DB95444' : '#2a2a42'}`,
+                      background: spotifyData['mashup']?.found ? '#1DB95411' : 'transparent',
+                      color: spotifyData['mashup']?.found ? '#1DB954' : '#6a6a8a',
+                      cursor:'pointer', fontFamily:'JetBrains Mono,monospace', transition:'.2s' }}>
+                    {spotifyLoading['mashup'] ? '…' : spotifyData['mashup']?.found ? '✓ SP' : '🎵 SP'}
+                  </button>
                   <button onClick={findMashups} disabled={mLoading||(!mArtist&&!mTitle)}
-                    className="btn-cta" style={{ width:'100%', padding:'10px 0', borderRadius:8, fontSize:13,
+                    className="btn-cta" style={{ flex:2, padding:'10px 0', borderRadius:8, fontSize:13,
                       opacity:mLoading||(!mArtist&&!mTitle)?.6:1 }}>
                     {mLoading ? 'Finding…' : '⚡ Find Mashups'}
                   </button>
