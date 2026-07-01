@@ -63,6 +63,10 @@ export default function AppPage() {
   const [dragIndex,    setDragIndex]    = useState<number|null>(null)
   const [dragOverIndex,setDragOverIndex]= useState<number|null>(null)
   const [quota,    setQuota]    = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
+  const [trackHistory, setTrackHistory] = useState<string[]>([])
+  const [whyData,   setWhyData]   = useState<Record<number, {why:string;inbound:string;outbound:string;tip:string;keyNote:string}>>({})
+  const [loadingWhy, setLoadingWhy] = useState<Set<number>>(new Set())
+  const [openWhy,   setOpenWhy]   = useState<Set<number>>(new Set())
 
   // library
   const [view,        setView]        = useState<'forge'|'library'|'import'>('forge')
@@ -95,19 +99,25 @@ export default function AppPage() {
     }
   }, [])
   useEffect(() => { if (renamingId && renameRef.current) renameRef.current.focus() }, [renamingId])
+  useEffect(() => {
+    fetch('/api/track-history')
+      .then(r => r.json())
+      .then(d => { if (d.tracks) setTrackHistory(d.tracks.map((t:{artist:string;title:string}) => `"${t.artist} — ${t.title}"`)) })
+      .catch(() => {})
+  }, [])
 
   // ── Generate ──────────────────────────────────────────────
   async function generate(keepLocks = false) {
     setLoading(true); setError(null)
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
     if (!keepLocks) setLocked(new Set())
-    setSet(null)
+    setSet(null); setWhyData({}); setOpenWhy(new Set())
     try {
       const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
           genre: effectiveGenre, crowd, arc, vibe, refArtist,
           mode, minutes, count, bpmLow, bpmHigh, keyMatch,
           lockedTracks, energyPoints, includeMixingNotes,
-          recentTracks: [],
+          recentTracks: trackHistory,
         }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
@@ -118,6 +128,9 @@ export default function AppPage() {
         lockedTracks.forEach(lt => { const idx = data.set.tracks.findIndex((t: Track) => t.artist===lt.artist && t.title===lt.title); if (idx >= 0) newLocked.add(idx) })
         setLocked(newLocked)
       }
+      const newEntries = (data.set.tracks as Track[]).map((t: Track) => `"${t.artist} — ${t.title}"`)
+      setTrackHistory(prev => [...new Set([...newEntries, ...prev])].slice(0, 200))
+      fetch('/api/track-history', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tracks: data.set.tracks, context: `${effectiveGenre} / ${crowd}` }) }).catch(() => {})
     } catch { setError('Network error. Please try again.') }
     finally   { setLoading(false) }
   }
@@ -211,6 +224,24 @@ export default function AppPage() {
 
   // ── Utils ─────────────────────────────────────────────────
   function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) }
+
+  function fetchWhy(i: number) {
+    if (whyData[i] || loadingWhy.has(i) || !set) return
+    setLoadingWhy(prev => { const n = new Set(prev); n.add(i); return n })
+    const t = set.tracks[i]
+    fetch('/api/why', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      track: t, prevTrack: set.tracks[i-1]||null, nextTrack: set.tracks[i+1]||null,
+      genre: effectiveGenre, crowd, arc, setLength: set.tracks.length,
+    }) })
+      .then(r => r.json())
+      .then(d => { if (d.why) setWhyData(prev => ({ ...prev, [i]: d })) })
+      .catch(() => {})
+      .finally(() => setLoadingWhy(prev => { const n = new Set(prev); n.delete(i); return n }))
+  }
+
+  function toggleWhy(i: number) {
+    setOpenWhy(prev => { const n = new Set(prev); if (n.has(i)) { n.delete(i); return n }; n.add(i); fetchWhy(i); return n })
+  }
 
   function reorderTracks(from: number, to: number) {
     if (!set || from === to) return
@@ -467,7 +498,6 @@ export default function AppPage() {
                 </div>
                 <div className={`sf-chip ${includeMixingNotes?'on':''}`} onClick={()=>setIncludeMixingNotes(!includeMixingNotes)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }} title="Off = faster, tracklist only">
                   ↳ Mix notes {includeMixingNotes?'ON':'OFF'}
-                  ♪ Harmonic mixing {keyMatch?'ON':'OFF'}
                 </div>
 
                 <button className="sf-btn-primary" onClick={()=>generate(false)} disabled={loading||(genre==='__custom__'&&!customGenre.trim())} style={{ padding:'13px 0', borderRadius:10, fontSize:14, letterSpacing:2, width:'100%', marginTop:4 }}>
@@ -680,46 +710,63 @@ export default function AppPage() {
               {/* Track list */}
               <div style={{ marginTop:18, display:'flex', flexDirection:'column', gap:7 }}>
                 {set.tracks.map((t,i)=>(
-                  <div
-                    key={`${t.n}-${t.title}`}
-                    className="sf-row sf-track"
-                    onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
-                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
-                    onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
-                    style={{ animationDelay:`${i*0.025}s`, display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
-                      border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
-                      borderRadius:10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
-                    {/* drag handle */}
+                  <div key={`${t.n}-${t.title}`} className="sf-row" style={{ animationDelay:`${i*0.025}s`, display:'flex', flexDirection:'column' }}>
                     <div
-                      draggable
-                      onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
-                      onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
-                      title="Drag to reorder"
-                      style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px' }}
-                    >⠿</div>
-                    <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
-                      <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
-                        <span>{t.artist}</span>
-                        <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
-                        <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
-                        <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
-                        <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
+                      className="sf-track"
+                      onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
+                      onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
+                      style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
+                        border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                        borderRadius: openWhy.has(i) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
+                      {/* drag handle */}
+                      <div
+                        draggable
+                        onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
+                        onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+                        title="Drag to reorder"
+                        style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px' }}
+                      >⠿</div>
+                      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
+                        <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
+                          <span>{t.artist}</span>
+                          <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
+                          <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
+                          <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
+                          <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
+                        </div>
+                        {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
                       </div>
-                      {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
+                      <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
+                        <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
+                        <div>{t.key}</div>
+                        <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
+                      </div>
+                      <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
+                        {locked.has(i)?'🔒':'🔓'}
+                      </button>
+                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                        <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
+                      </button>
+                      <button onClick={()=>toggleWhy(i)} title="Why this track?" style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
+                        ?
+                      </button>
                     </div>
-                    <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
-                      <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
-                      <div>{t.key}</div>
-                      <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
-                    </div>
-                    <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
-                      {locked.has(i)?'🔒':'🔓'}
-                    </button>
-                    <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
-                      <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
-                    </button>
+                    {openWhy.has(i) && (
+                      <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding:'12px 14px' }}>
+                        {loadingWhy.has(i) ? (
+                          <div style={{ fontSize:11, color:'#4a4a66', fontFamily:"'JetBrains Mono',monospace", animation:'pulse 1.2s infinite' }}>Analysing track choice…</div>
+                        ) : whyData[i] ? (
+                          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                            <div style={{ fontSize:12, color:'#c8c8e0', lineHeight:1.6 }}>{whyData[i].why}</div>
+                            <div style={{ fontSize:11, color:'#8a8aa8', lineHeight:1.5 }}><span style={{ color:C, fontWeight:700 }}>In: </span>{whyData[i].inbound}</div>
+                            <div style={{ fontSize:11, color:'#8a8aa8', lineHeight:1.5 }}><span style={{ color:M, fontWeight:700 }}>Tip: </span>{whyData[i].tip}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
