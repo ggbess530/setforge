@@ -39,29 +39,45 @@ export async function POST(req: Request) {
 
     const token = await getSpotifyToken()
 
-    // 1. Search for the track
-    const q       = encodeURIComponent(`track:${title} artist:${artist}`)
-    const searchRes = await fetch(
-      `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
+    // 1. Try strict field-filter search first
+    const q1 = encodeURIComponent(`track:"${title}" artist:"${artist}"`)
+    const r1  = await fetch(
+      `https://api.spotify.com/v1/search?q=${q1}&type=track&limit=1`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    const searchData = await searchRes.json()
-    const track      = searchData?.tracks?.items?.[0]
+    const d1    = await r1.json()
+    let track   = d1?.tracks?.items?.[0]
 
+    // 2. Fallback: plain keyword search (handles multi-word artists, alternate spellings)
     if (!track) {
-      // Fallback: broader search without field filters
-      const q2         = encodeURIComponent(`${title} ${artist}`)
-      const fallbackRes = await fetch(
-        `https://api.spotify.com/v1/search?q=${q2}&type=track&limit=1`,
+      const q2 = encodeURIComponent(`${title} ${artist}`)
+      const r2  = await fetch(
+        `https://api.spotify.com/v1/search?q=${q2}&type=track&limit=3`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      const fallbackData = await fallbackRes.json()
-      const fallbackTrack = fallbackData?.tracks?.items?.[0]
-      if (!fallbackTrack) return NextResponse.json({ found: false })
-
-      return await fetchFeatures(fallbackTrack.id, fallbackTrack, token)
+      const d2 = await r2.json()
+      // Pick the best match — prefer exact title match
+      const candidates = d2?.tracks?.items || []
+      track = candidates.find((t: { name: string }) =>
+        t.name.toLowerCase().includes(title.toLowerCase())
+      ) || candidates[0]
     }
 
+    // 3. Fallback: title only (good for remixes, features)
+    if (!track && title) {
+      const q3 = encodeURIComponent(title)
+      const r3  = await fetch(
+        `https://api.spotify.com/v1/search?q=${q3}&type=track&limit=5`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const d3 = await r3.json()
+      const candidates = d3?.tracks?.items || []
+      track = candidates.find((t: { artists: {name:string}[] }) =>
+        t.artists.some((a: {name:string}) => a.name.toLowerCase().includes(artist.toLowerCase().split(' ')[0]))
+      ) || null
+    }
+
+    if (!track) return NextResponse.json({ found: false })
     return await fetchFeatures(track.id, track, token)
 
   } catch (err) {
