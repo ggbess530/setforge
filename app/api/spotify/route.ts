@@ -95,24 +95,38 @@ async function fetchFeatures(
     `https://api.spotify.com/v1/audio-features/${trackId}`,
     { headers: { Authorization: `Bearer ${token}` } }
   )
+
+  const trackBase = {
+    found:      true,
+    spotifyId:  trackId,
+    spotifyUrl: track.external_urls?.spotify,
+    trackName:  track.name,
+    artistName: track.artists?.[0]?.name,
+  }
+
+  if (!featRes.ok) {
+    // audio-features endpoint restricted (403) — return track match without BPM/key
+    console.warn(`[spotify] audio-features ${featRes.status} for ${trackId}`)
+    return NextResponse.json({ ...trackBase, audioFeaturesUnavailable: true })
+  }
+
   const features = await featRes.json()
 
-  if (!features?.tempo) return NextResponse.json({ found: false })
+  if (!features?.tempo) {
+    console.warn('[spotify] audio-features returned no tempo:', features)
+    return NextResponse.json({ ...trackBase, audioFeaturesUnavailable: true })
+  }
 
   const bpm     = Math.round(features.tempo)
   const camelot = SPOTIFY_TO_CAMELOT[`${features.key}-${features.mode}`]
 
   return NextResponse.json({
-    found:       true,
+    ...trackBase,
     bpm,
-    key:         camelot || null,
-    spotifyKey:  features.key,
-    mode:        features.mode,
-    energy:      Math.round(features.energy * 10),
+    key:          camelot || null,
+    spotifyKey:   features.key,
+    mode:         features.mode,
+    energy:       Math.round(features.energy * 10),
     danceability: Math.round(features.danceability * 10),
-    spotifyId:   trackId,
-    spotifyUrl:  track.external_urls?.spotify,
-    trackName:   track.name,
-    artistName:  track.artists?.[0]?.name,
   })
 }

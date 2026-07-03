@@ -41,9 +41,10 @@ function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoad
   value: TrackMeta & { energy: number }
   onChange: (v: Partial<TrackMeta & { energy: number }>) => void
   onLookup?: () => void
-  lookupResult?: { found: boolean; bpm?: number; key?: string; spotifyUrl?: string }
+  lookupResult?: { found: boolean; bpm?: number; key?: string; spotifyUrl?: string; audioFeaturesUnavailable?: boolean }
   lookupLoading?: boolean
 }) {
+  const hasBpm = lookupResult?.found && lookupResult.bpm != null
   return (
     <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:24, flex:1 }}>
       <div style={{ fontSize:10, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:16 }}>{label}</div>
@@ -78,7 +79,8 @@ function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoad
               color: lookupResult?.found ? '#1DB954' : '#6a6a8a',
               cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:11, transition:'.2s' }}>
             {lookupLoading ? 'Looking up…'
-              : lookupResult?.found ? `✓ Found — ${lookupResult.bpm} BPM · ${lookupResult.key || '?'}`
+              : hasBpm ? `✓ Found — ${lookupResult!.bpm} BPM · ${lookupResult!.key || '?'}`
+              : lookupResult?.found && lookupResult.audioFeaturesUnavailable ? '✓ Track found (BPM/key unavailable)'
               : lookupResult?.found === false ? '✕ Not found on Spotify'
               : '🎵 Lookup BPM & Key on Spotify'}
           </button>
@@ -119,7 +121,7 @@ export default function MixPage() {
   const [mLoading,   setMLoading]  = useState(false)
   const [mError,     setMError]    = useState<string|null>(null)
   const [aiTips, setAiTips]     = useState<{ technique:string; eqTips:string; timing:string; warning?:string } | null>(null)
-  const [spotifyData, setSpotifyData] = useState<Record<string, { bpm?:number; key?:string; found:boolean; spotifyUrl?:string }>>({})
+  const [spotifyData, setSpotifyData] = useState<Record<string, { bpm?:number; key?:string; found:boolean; spotifyUrl?:string; audioFeaturesUnavailable?:boolean }>>({})
   const [spotifyLoading, setSpotifyLoading] = useState<Record<string, boolean>>({})
   const [error, setError]       = useState<string|null>(null)
 
