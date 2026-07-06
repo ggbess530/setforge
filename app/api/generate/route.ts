@@ -151,6 +151,61 @@ ${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter swee
 }
 
 // ══════════════════════════════════════════════════════════════
+// SINGLE-TRACK REPLACEMENT
+// Used when a generated track fails existence verification (likely
+// hallucinated) — asks for exactly one confirmed-real substitute.
+// ══════════════════════════════════════════════════════════════
+type ReplaceableTrack = { artist: string; title: string; bpm: number; key: string; energy: number; transition?: string }
+
+async function regenerateTrack(params: {
+  genre: string; crowd: string; vibe: string; refArtist: string
+  bpmLow: number; bpmHigh: number; keyMatch: boolean
+  target: ReplaceableTrack
+  prevTrack?: { artist: string; title: string; bpm: number; key: string } | null
+  nextTrack?: { artist: string; title: string; bpm: number; key: string } | null
+  avoidList: string[]
+  includeMixingNotes: boolean
+}): Promise<ReplaceableTrack | null> {
+  const { genre, crowd, vibe, refArtist, bpmLow, bpmHigh, keyMatch, target, prevTrack, nextTrack, avoidList, includeMixingNotes } = params
+
+  const prompt = `You are a world-class DJ. A track suggested for a DJ set could not be confirmed as a real, existing release and must be replaced with exactly ONE different real track.
+
+Set context:
+- Genre: ${genre} | Crowd: ${crowd}${vibe ? ` | Vibe: ${vibe}` : ''}${refArtist ? ` | Ref: ${refArtist}` : ''}
+- BPM range: ${bpmLow}–${bpmHigh} | Harmonic key matching: ${keyMatch ? 'yes' : 'no'}
+
+Replace: "${target.artist} — ${target.title}" (${target.bpm} BPM, ${target.key}, energy ${target.energy}/10)
+${prevTrack ? `Previous track: "${prevTrack.artist} — ${prevTrack.title}" (${prevTrack.bpm} BPM, ${prevTrack.key})` : 'This is the first track.'}
+${nextTrack ? `Next track: "${nextTrack.artist} — ${nextTrack.title}" (${nextTrack.bpm} BPM, ${nextTrack.key})` : 'This is the last track.'}
+
+DO NOT suggest any of these (already in the set): ${avoidList.join(', ')}
+
+This is critical: the previous suggestion failed because it couldn't be found on Spotify or Beatport. Pick something you are highly confident is a real, well-known, commercially released track.
+
+Respond ONLY with valid JSON, no markdown:
+{ "artist": "...", "title": "...", "bpm": <integer within ${bpmLow}-${bpmHigh}>, "key": "Camelot key e.g. 8A", "energy": ${target.energy}${includeMixingNotes ? ', "transition": "short mix note into next track"' : ''} }`
+
+  const msg = await anthropic.messages.create({
+    model:      CLAUDE_MODEL,
+    max_tokens: 400,
+    messages:   [{ role: 'user', content: prompt }],
+  })
+
+  const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+  if (!data?.artist || !data?.title) return null
+
+  return {
+    artist:     data.artist,
+    title:      data.title,
+    bpm:        Math.round(data.bpm) || target.bpm,
+    key:        data.key || target.key,
+    energy:     data.energy ?? target.energy,
+    ...(includeMixingNotes ? { transition: data.transition } : {}),
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // MAIN ROUTE
 // ══════════════════════════════════════════════════════════════
 export async function POST(req: Request) {
@@ -288,10 +343,43 @@ export async function POST(req: Request) {
 
     recordUsage(userId, 'generate')
 
+    const tracksArr = finalSet.tracks as (EnrichableTrack & { n: number; energy: number; transition?: string })[]
+
     try {
-      await enrichTracks(finalSet.tracks as EnrichableTrack[])
+      await enrichTracks(tracksArr)
     } catch (err) {
       console.warn('[generate] metadata enrichment failed, keeping AI-guessed values', err)
+    }
+
+    // Tracks Spotify actively couldn't find are likely hallucinated — try one
+    // real replacement per slot before giving up and just flagging it.
+    const unverifiedIndices = tracksArr
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => t.verified === false)
+      .map(({ i }) => i)
+
+    if (unverifiedIndices.length) {
+      const avoidList = tracksArr.map(t => `"${t.artist} — ${t.title}"`)
+      await Promise.all(unverifiedIndices.map(async (i) => {
+        const target = tracksArr[i]
+        try {
+          const replacement = await regenerateTrack({
+            genre, crowd, vibe: vibe || '', refArtist: refArtist || '', bpmLow, bpmHigh, keyMatch,
+            target, prevTrack: tracksArr[i - 1] ?? null, nextTrack: tracksArr[i + 1] ?? null,
+            avoidList, includeMixingNotes,
+          })
+          if (!replacement) return // tracksArr[i].verified is already false
+
+          const replacementArr: EnrichableTrack[] = [{ ...replacement }]
+          await enrichTracks(replacementArr)
+
+          if (replacementArr[0].verified) {
+            tracksArr[i] = { ...target, ...replacementArr[0], n: target.n }
+          } // else: replacement also unverifiable — keep the original guess, still flagged false
+        } catch (err) {
+          console.warn('[generate] replacement attempt failed for unverified track', err)
+        }
+      }))
     }
 
     return NextResponse.json({

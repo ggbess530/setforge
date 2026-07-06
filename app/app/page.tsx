@@ -29,9 +29,10 @@ const C = '#00f0ff'
 const M = '#ff1e8a'
 
 // ── Types ─────────────────────────────────────────────────────
-type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string }
-type SetData = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
-type LibItem = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
+type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean }
+type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
+type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
+type Suggestion = Track & { label:string }
 
 // ── Main component ────────────────────────────────────────────
 export default function AppPage() {
@@ -58,6 +59,7 @@ export default function AppPage() {
   const [error,    setError]    = useState<string|null>(null)
   const [set,      setSet]      = useState<SetData|null>(null)
   const [swapping,      setSwapping]      = useState<number|null>(null)
+  const [swapModal,     setSwapModal]     = useState<{ index:number; suggestions:Suggestion[] }|null>(null)
   const [locked,       setLocked]       = useState<Set<number>>(new Set())
   const [copied,       setCopied]       = useState(false)
   const [dragIndex,    setDragIndex]    = useState<number|null>(null)
@@ -161,9 +163,17 @@ export default function AppPage() {
       const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Swap failed.'); return }
-      setSet(s => { if (!s) return s; const tracks=[...s.tracks]; tracks[index]={...data.track,n:target.n}; return {...s,tracks} })
+      setSwapModal({ index, suggestions: (data.suggestions||[]).map((s: Suggestion) => ({ ...s, n: target.n })) })
     } catch { setError('Network error.') }
     finally   { setSwapping(null) }
+  }
+
+  function applySwapSuggestion(suggestion: Suggestion) {
+    if (!swapModal) return
+    const { label: _label, ...track } = suggestion
+    void _label
+    setSet(s => { if (!s) return s; const tracks=[...s.tracks]; tracks[swapModal.index]=track; return {...s,tracks} })
+    setSwapModal(null)
   }
 
   // ── Save ──────────────────────────────────────────────────
@@ -370,6 +380,39 @@ export default function AppPage() {
 
       {/* Wizard overlay */}
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
+
+      {/* Swap picker modal */}
+      {swapModal && (
+        <div onClick={()=>setSwapModal(null)} style={{ position:'fixed', inset:0, zIndex:100, background:'#06060ccc', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:'#0a0a14', border:'1px solid #1f1f33', borderRadius:16, padding:24, width:'100%', maxWidth:640, maxHeight:'85vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:1, color:C }} className="sf-glow-c">CHOOSE A REPLACEMENT</div>
+              <button onClick={()=>setSwapModal(null)} style={{ background:'none', border:'none', color:'#4a4a66', cursor:'pointer', fontSize:20 }}>✕</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {swapModal.suggestions.map((s,i)=>(
+                <div key={i} style={{ background:'#06060c', border:'1px solid #16162a', borderRadius:12, padding:'14px 16px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <span style={{ fontSize:9, letterSpacing:1.5, color:M, border:'1px solid #ff1e8a44', borderRadius:999, padding:'2px 9px', fontWeight:700 }}>{s.label.toUpperCase()}</span>
+                    {s.verified===false && (
+                      <span title="Couldn't confirm this track exists on Spotify" style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b55', borderRadius:999, padding:'2px 8px', fontWeight:700 }}>⚠ UNVERIFIED</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>{s.title}</div>
+                  <div style={{ fontSize:12, color:'#8a8aa8', marginBottom:8 }}>{s.artist}</div>
+                  <div style={{ display:'flex', gap:14, fontSize:11, color:'#6a6a8a', marginBottom:8 }}>
+                    <span style={{ color:C }}>{s.bpm} BPM</span>
+                    <span>{s.key}</span>
+                    <span>E{s.energy}</span>
+                  </div>
+                  {s.transition && <div style={{ fontSize:11, color:'#5a5a78', marginBottom:10 }}>↳ {s.transition}</div>}
+                  <button onClick={()=>applySwapSuggestion(s)} className="sf-btn-primary" style={{ padding:'8px 0', borderRadius:8, fontSize:11, letterSpacing:1, width:'100%' }}>USE THIS</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── NAV ── */}
       <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding: isMobile ? '0 10px' : '0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40, overflowX:'auto' }}>
@@ -752,7 +795,12 @@ export default function AppPage() {
                       >⠿</div>
                       <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                       <div>
-                        <div style={{ fontSize:13, fontWeight:700 }}>{t.title}</div>
+                        <div style={{ fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+                          {t.title}
+                          {t.verified===false && (
+                            <span title="Couldn't confirm this track exists on Spotify — double-check it, or hit swap." style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b55', borderRadius:999, padding:'1px 6px', fontWeight:700, letterSpacing:.5 }}>⚠ UNVERIFIED</span>
+                          )}
+                        </div>
                         <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
                           <span>{t.artist}</span>
                           <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>

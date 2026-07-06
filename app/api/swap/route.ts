@@ -2,6 +2,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription } from '@/lib/subscription'
+import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
 
 export async function POST(req: Request) {
   try {
@@ -64,6 +65,12 @@ ${keyMatch ? `- Strict Camelot key rules: compatible keys for ${target.key} are 
 
     const raw  = message.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+
+    try {
+      await enrichTracks(data.suggestions as EnrichableTrack[])
+    } catch (err) {
+      console.warn('[swap] metadata enrichment failed, keeping AI-guessed values', err)
+    }
 
     return NextResponse.json({ suggestions: data.suggestions })
 
