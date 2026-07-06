@@ -19,11 +19,11 @@ function SharedSetContent() {
   const shareId = searchParams.get('id')
 
   const [set,     setSet]     = useState<{ title:string; set_data:{ title:string; summary:string; tracks:Track[] }; meta:Record<string,string|number> } | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string|null>(null)
+  const [loading, setLoading] = useState(() => !!shareId)
+  const [error,   setError]   = useState<string|null>(() => shareId ? null : 'Invalid share link.')
 
   useEffect(() => {
-    if (!shareId) { setError('Invalid share link.'); setLoading(false); return }
+    if (!shareId) return
     fetch(`/api/share?id=${shareId}`)
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {

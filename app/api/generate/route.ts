@@ -107,7 +107,9 @@ Respond ONLY with valid JSON, no markdown, no preamble:
   "title": ${setTitle ? `"${setTitle}"` : '"evocative set name (3–5 words)"'},
   "summary": "1 sentence describing the energy journey",
   "tracks": [
-    { "n": 1, "artist": "Artist", "title": "Title", "bpm": 124, "key": "8A", "energy": 4, "transition": "mix note into next track" }
+    ${includeMixingNotes
+      ? '{ "n": 1, "artist": "Artist", "title": "Title", "bpm": 124, "key": "8A", "energy": 4, "transition": "mix note into next track" }'
+      : '{ "n": 1, "artist": "Artist", "title": "Title", "bpm": 124, "key": "8A", "energy": 4 }'}
   ]
 }
 
@@ -123,7 +125,7 @@ Rules:
   · Compatible moves FROM 8B: → 8A (relative), → 7B (down), → 9B (up). Nothing else.
   · DO NOT skip positions — 8A→10A or 8A→3B are key clashes, not harmonic
   · BPM difference between adjacent tracks must be ≤ 6 BPM for smooth mixing` : 'Key matching off — focus on BPM and energy flow'}
-- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")
+${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")' : '- Do NOT include a "transition" field — omit it entirely for faster, tracklist-only output'}
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
 
   const msg = await anthropic.messages.create({

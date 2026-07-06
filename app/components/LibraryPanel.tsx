@@ -44,6 +44,7 @@ export default function LibraryPanel({ onDragStart, onDragEnd, onBuildSet, loadi
   // Reload tracks when crate changes
   useEffect(() => {
     if (hasLib === false) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag must flip the instant crateId/hasLib changes, before the fetch below resolves
     setFetching(true); setTracks([])
     fetch(`/api/user-library?crateId=${crateId}`)
       .then(r => r.json())

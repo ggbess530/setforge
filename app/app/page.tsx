@@ -37,19 +37,19 @@ type LibItem = { id:string; title:string; meta:Record<string,string|number>; cre
 export default function AppPage() {
 
   // form
-  const [genre,        setGenre]        = useState('Tech House')
-  const [crowd,        setCrowd]        = useState('Club Peak Hour')
-  const [arc,          setArc]          = useState('Slow Build')
+  const [genre,        setGenre]        = useState('House')
+  const [crowd,        setCrowd]        = useState('House Party')
+  const [arc,          setArc]          = useState('Wave (up & down)')
   const [vibe,         setVibe]         = useState('')
   const [refArtist,    setRefArtist]    = useState('')
   const [mode,         setMode]         = useState<'time'|'count'>('time')
   const [minutes,      setMinutes]      = useState(60)
   const [count,        setCount]        = useState(12)
-  const [bpmLow,       setBpmLow]       = useState(120)
-  const [bpmHigh,      setBpmHigh]      = useState(128)
+  const [bpmLow,       setBpmLow]       = useState(118)
+  const [bpmHigh,      setBpmHigh]      = useState(125)
   const [keyMatch,           setKeyMatch]           = useState(true)
   const [includeMixingNotes, setIncludeMixingNotes] = useState(true)
-  const [energyPoints, setEnergyPoints] = useState<number[]>([3,5,6,8,9])
+  const [energyPoints, setEnergyPoints] = useState<number[]>([...ENERGY_PRESETS['Wave']])
   const [customGenre,  setCustomGenre]  = useState('')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
 
@@ -69,7 +69,7 @@ export default function AppPage() {
   const [openWhy,   setOpenWhy]   = useState<Set<number>>(new Set())
 
   // library
-  const [view,        setView]        = useState<'forge'|'library'|'import'>('forge')
+  const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
   const [library,     setLibrary]     = useState<LibItem[]>([])
   const [libLoaded,   setLibLoaded]   = useState(false)
   const [saving,      setSaving]      = useState(false)
@@ -87,14 +87,22 @@ export default function AppPage() {
   const [showWizard,          setShowWizard]          = useState(() => { try { return !localStorage.getItem('sf_onboarded') } catch { return false } })
   const [firstSetCelebration, setFirstSetCelebration] = useState(false)
 
+  // mobile layout
+  const [isMobile,         setIsMobile]         = useState(false)
+  const [mobileShowResults,setMobileShowResults] = useState(false)
+
   const renameRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
   useEffect(() => { loadLibrary() }, [])
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tab = params.get('tab')
-    if (tab === 'library') {
-      setView('library')
+    if (new URLSearchParams(window.location.search).get('tab') === 'library') {
       window.history.replaceState({}, '', '/app')
     }
   }, [])
@@ -122,6 +130,7 @@ export default function AppPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
       setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, arc, vibe, refArtist } })
+      if (isMobile) setMobileShowResults(true)
       if (data.quota) setQuota(data.quota)
       if (keepLocks && lockedTracks.length > 0) {
         const newLocked = new Set<number>()
@@ -182,6 +191,7 @@ export default function AppPage() {
       if (!res.ok) { setError(data.error||'Load failed.'); return }
       const saved: SetData = data.set.set_data; setSet(saved)
       if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setArc(saved._meta.arc||arc); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
+      if (isMobile) { setView('forge'); setMobileShowResults(true) }
     } catch { setError('Network error.') }
     finally   { setLibLoading(false) }
   }
@@ -217,13 +227,15 @@ export default function AppPage() {
     try {
       const res=await fetch('/api/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tracks,bpmLow,bpmHigh,keyMatch}) }); const data=await res.json()
       if (!res.ok) { setError(data.error||'Import failed.'); return }
-      setSet({...data.set,_meta:{genre:'Imported',crowd:'',arc:'',vibe:'',refArtist:''}}); if (data.quota) setQuota(data.quota)
+      setSet({...data.set,_meta:{genre:'Imported',crowd:'',arc:'',vibe:'',refArtist:''}})
+      if (isMobile) setMobileShowResults(true)
+      if (data.quota) setQuota(data.quota)
     } catch { setError('Network error.') }
     finally   { setImportLoading(false) }
   }
 
   // ── Utils ─────────────────────────────────────────────────
-  function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); n.has(i)?n.delete(i):n.add(i); return n }) }
+  function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n }) }
 
   function fetchWhy(i: number) {
     if (whyData[i] || loadingWhy.has(i) || !set) return
@@ -314,7 +326,7 @@ export default function AppPage() {
   // RENDER
   // ─────────────────────────────────────────────────────────
   return (
-    <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#06060c', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", overflow:'hidden' }}>
+    <div style={{ height: isMobile ? '100dvh' : '100vh', display:'flex', flexDirection:'column', background:'#06060c', color:'#e8e8f0', fontFamily:"'JetBrains Mono',monospace", overflow:'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&display=swap');
         .sf-glow-c { text-shadow:0 0 8px ${C},0 0 24px ${C}80; }
@@ -360,36 +372,38 @@ export default function AppPage() {
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
 
       {/* ── NAV ── */}
-      <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40 }}>
-        <Link href="/" style={{ textDecoration:'none' }}>
-          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
+      <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding: isMobile ? '0 10px' : '0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40, overflowX:'auto' }}>
+        <Link href="/" style={{ textDecoration:'none', flexShrink:0 }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize: isMobile ? 20 : 24, letterSpacing:2 }}>
             <span style={{ color:C }} className="sf-glow-c">SET</span><span style={{ color:M }} className="sf-glow-m">FORGE</span>
           </div>
         </Link>
-        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          {quota?.trial?.active && (
+        <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 6 : 14, flexShrink:0 }}>
+          {quota?.trial?.active && !isMobile && (
             <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
               {quota.trial.daysLeft}d left in trial
             </div>
           )}
           {quota?.isFree && !quota?.trial?.active && (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color:'#9a9ab8' }}>
-                {quota.remaining===0 ? '0 sets left' : `${quota.remaining} free sets left`}
-              </div>
-              <a href="/#pricing" style={{ textDecoration:'none' }}>
+              {!isMobile && (
+                <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color:'#9a9ab8' }}>
+                  {quota.remaining===0 ? '0 sets left' : `${quota.remaining} free sets left`}
+                </div>
+              )}
+              <Link href="/#pricing" style={{ textDecoration:'none' }}>
                 <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer' }}>Upgrade</div>
-              </a>
+              </Link>
             </div>
           )}
           <Link href="/analyse" style={{ textDecoration:'none' }}>
-            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🔍 ANALYSE</button>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>🔍{!isMobile && ' ANALYSE'}</button>
           </Link>
           <Link href="/mix" style={{ textDecoration:'none' }}>
-            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🎛️ MIX</button>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>🎛️{!isMobile && ' MIX'}</button>
           </Link>
           <Link href="/planner" style={{ textDecoration:'none' }}>
-            <button className="sf-btn-ghost" style={{ padding:'5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace" }}>🌙 PLANNER</button>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>🌙{!isMobile && ' PLANNER'}</button>
           </Link>
           <UserButton />
         </div>
@@ -399,7 +413,7 @@ export default function AppPage() {
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
 
         {/* ════ LEFT PANEL ════ */}
-        <div style={{ width:370, flexShrink:0, borderRight:'1px solid #1a1a2e', display:'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
+        <div style={{ width: isMobile ? '100%' : 370, flexShrink:0, borderRight: isMobile ? 'none' : '1px solid #1a1a2e', display: isMobile && mobileShowResults ? 'none' : 'flex', flexDirection:'column', overflow:'hidden', background:'#06060c' }}>
 
           {/* Tab nav */}
           <div style={{ display:'flex', borderBottom:'1px solid #1a1a2e', flexShrink:0 }}>
@@ -518,7 +532,7 @@ export default function AppPage() {
                   <div style={{ padding:12, border:`1px solid ${M}`, borderRadius:10, color:M, fontSize:12, lineHeight:1.5 }}>
                     {error}
                     {(error.includes('free sets')||error.includes('trial')||error.includes('subscription')) && (
-                      <a href="/#pricing" style={{ display:'block', marginTop:8, color:C, textDecoration:'underline', fontSize:11 }}>View upgrade options →</a>
+                      <Link href="/#pricing" style={{ display:'block', marginTop:8, color:C, textDecoration:'underline', fontSize:11 }}>View upgrade options →</Link>
                     )}
                   </div>
                 )}
@@ -615,7 +629,16 @@ export default function AppPage() {
         </div>
 
         {/* ════ RIGHT PANEL ════ */}
-        <div style={{ flex:1, overflowY:'auto', background:'#07070e', position:'relative' }}>
+        <div style={{ flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, display: isMobile && !mobileShowResults ? 'none' : 'block', overflowY:'auto', background:'#07070e', position:'relative' }}>
+
+          {/* ── Mobile back bar ── */}
+          {isMobile && (
+            <div style={{ position:'sticky', top:0, zIndex:20, display:'flex', alignItems:'center', height:44, padding:'0 14px', background:'#06060cee', backdropFilter:'blur(12px)', borderBottom:'1px solid #1a1a2e' }}>
+              <button onClick={()=>setMobileShowResults(false)} className="sf-btn-ghost" style={{ padding:'6px 12px', borderRadius:8, fontSize:11, letterSpacing:1 }}>
+                ← EDIT SET
+              </button>
+            </div>
+          )}
 
           {/* ── Loading beam ── */}
           {(loading||importLoading) && (

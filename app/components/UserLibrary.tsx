@@ -200,8 +200,8 @@ async function parseSerato(files: File[]): Promise<{ tracks: Record<string,LibTr
   // Use the database V2 closest to the root (fewest path segments).
   const dbCandidates = files.filter(f => f.name === 'database V2')
   const dbFile = dbCandidates.sort((a, b) => {
-    const ra = ((a as any).webkitRelativePath || '').split('/').length
-    const rb = ((b as any).webkitRelativePath || '').split('/').length
+    const ra = ((a as File & { webkitRelativePath?: string }).webkitRelativePath || '').split('/').length
+    const rb = ((b as File & { webkitRelativePath?: string }).webkitRelativePath || '').split('/').length
     return ra - rb
   })[0]
   const dbMeta: Record<string,Partial<LibTrack>> = {}
@@ -431,7 +431,7 @@ export default function UserLibrary({ onBuildSet, loading }: Props) {
 
   // ── Crate tree ────────────────────────────────────────────────
   function toggleExpand(id: string) {
-    setExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n })
+    setExpanded(prev => { const n=new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   }
 
   function CrateNode({ crate, depth }: { crate: Crate; depth: number }) {

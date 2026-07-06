@@ -444,7 +444,7 @@ export default function LibraryImporter({ onBuildSet, loading }: Props) {
   const folderRef = useRef<HTMLInputElement>(null)
 
   // ── File handling ──────────────────────────────────────────
-  async function handleFiles(files: FileList | File[]) {
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files)
     setParsing(true); setParseError(null); setLibrary(null); setSelectedId(null)
     try {
@@ -477,17 +477,17 @@ export default function LibraryImporter({ onBuildSet, loading }: Props) {
     } finally {
       setParsing(false)
     }
-  }
+  }, [tab])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
     handleFiles(e.dataTransfer.files)
-  }, [tab])
+  }, [handleFiles])
 
   function toggleExpand(id: string) {
     setExpandedIds(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }

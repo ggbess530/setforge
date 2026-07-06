@@ -20,8 +20,6 @@ export interface BridgeData {
 }
 
 // ── Camelot compatibility ──────────────────────────────────────
-const CAM_ORDER = ['1','2','3','4','5','6','7','8','9','10','11','12']
-
 export function camelotCompatibility(k1: string, k2: string): {
   type: 'perfect' | 'adjacent' | 'relative' | 'energyshift' | 'clash'
   note: string

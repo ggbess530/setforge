@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link         from 'next/link'
 import { UserButton, useAuth } from '@clerk/nextjs'
 
@@ -149,6 +149,15 @@ export default function AnalysePage() {
   const [libSets,       setLibSets]       = useState<{id:string;title:string;set_data:{title:string;tracks:{artist:string;title:string;bpm?:number;key?:string;n:number}[];_meta?:Record<string,string>};meta:Record<string,string>}[]>([])
   const [showLibPicker, setShowLibPicker] = useState(false)
   const [loadingLib,    setLoadingLib]    = useState(false)
+  const [isMobile,      setIsMobile]      = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   async function analyse() {
     if (!rawText.trim()) return
@@ -284,31 +293,33 @@ export default function AnalysePage() {
       <div style={{ position:'fixed', top:-200, left:'50%', transform:'translateX(-50%)', width:700, height:500, background:`radial-gradient(circle,${M}12,transparent 65%)`, filter:'blur(80px)', pointerEvents:'none', zIndex:0 }} />
 
       {/* NAV */}
-      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.88)', padding:'0 24px' }}>
-        <div style={{ maxWidth:900, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:56 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:20 }}>
+      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.88)', padding: isMobile ? '0 10px' : '0 24px' }}>
+        <div style={{ maxWidth:900, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:56, overflowX:'auto' }}>
+          <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 10 : 20 }}>
             <Link href="/" style={{ textDecoration:'none' }}>
-              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize: isMobile ? 18 : 24, letterSpacing:2 }}>
                 <span style={{ color:C }}>SET</span><span style={{ color:M }}>FORGE</span>
               </div>
             </Link>
-            <div style={{ fontSize:12, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ ANALYSER</div>
+            {!isMobile && (
+              <div style={{ fontSize:12, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ ANALYSER</div>
+            )}
           </div>
-          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <div style={{ display:'flex', gap: isMobile ? 6 : 12, alignItems:'center', flexShrink:0 }}>
             {isSignedIn && (
               <Link href="/app?tab=library" style={{ textDecoration:'none' }}>
-                <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>◈ My Library</button>
+                <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13 }}>◈{!isMobile && ' My Library'}</button>
               </Link>
             )}
             <Link href="/app" style={{ textDecoration:'none' }}>
-              <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>⚡ Forge a set</button>
+              <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13 }}>⚡{!isMobile && ' Forge a set'}</button>
             </Link>
             <UserButton />
           </div>
         </div>
       </nav>
 
-      <div style={{ position:'relative', zIndex:1, maxWidth:900, margin:'0 auto', padding:'48px 24px 80px' }}>
+      <div style={{ position:'relative', zIndex:1, maxWidth:900, margin:'0 auto', padding: isMobile ? '28px 14px 60px' : '48px 24px 80px' }}>
 
         {/* Header */}
         <div style={{ textAlign:'center', marginBottom:48 }}>
@@ -324,12 +335,12 @@ export default function AnalysePage() {
 
         {/* Input panel */}
         {!report && (
-          <div className="rise" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:18, padding:28 }}>
+          <div className="rise" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:18, padding: isMobile ? 18 : 28 }}>
             <div style={{ fontSize:11, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:10 }}>
               PASTE YOUR TRACKLIST — any format works
             </div>
             <div style={{ fontSize:11, color:'#3a3a58', marginBottom:12, lineHeight:1.6 }}>
-              Works with: numbered lists, "Artist - Title" format, Serato copy-paste, Rekordbox exports, or just track names one per line. BPM and key are optional but improve the analysis.
+              Works with: numbered lists, &quot;Artist - Title&quot; format, Serato copy-paste, Rekordbox exports, or just track names one per line. BPM and key are optional but improve the analysis.
             </div>
 
             <textarea
@@ -406,7 +417,7 @@ export default function AnalysePage() {
                     {libSets.map(s => (
                       <div key={s.id}
                         onClick={() => analyseFromLibrary(s.id)}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px', cursor:'pointer', transition:'.15s' }}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'6px 12px', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px', cursor:'pointer', transition:'.15s' }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = C}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#1a1a2e'}>
                         <div>
@@ -437,7 +448,7 @@ export default function AnalysePage() {
                     {history.map((h, i) => {
                       const gc = gradeConfig(h.grade)
                       return (
-                        <div key={i} style={{ display:'flex', alignItems:'center', gap:12, background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px' }}>
+                        <div key={i} style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'10px 14px' }}>
                           <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:gc.color, minWidth:32 }}>{h.grade}</div>
                           <div>
                             <div style={{ fontSize:12, color:'#c8c8e0' }}>{h.track_count} tracks{h.context ? ` · ${h.context}` : ''}</div>
@@ -475,24 +486,24 @@ export default function AnalysePage() {
             </div>
 
             {/* Grade hero */}
-            <div style={{ background:`linear-gradient(135deg,#0d0d1a,#0a0a14)`, border:`1.5px solid ${gc.color}44`, borderRadius:20, padding:'36px 32px', marginBottom:20, position:'relative', overflow:'hidden' }}>
+            <div style={{ background:`linear-gradient(135deg,#0d0d1a,#0a0a14)`, border:`1.5px solid ${gc.color}44`, borderRadius:20, padding: isMobile ? '24px 20px' : '36px 32px', marginBottom:20, position:'relative', overflow:'hidden' }}>
               <div style={{ position:'absolute', top:-60, right:-60, width:220, height:220, background:`radial-gradient(circle,${gc.color}14,transparent 70%)`, filter:'blur(30px)', pointerEvents:'none' }} />
-              <div style={{ position:'relative', display:'flex', gap:24, alignItems:'center', flexWrap:'wrap' }}>
+              <div style={{ position:'relative', display:'flex', gap: isMobile ? 14 : 24, alignItems:'center', flexWrap:'wrap' }}>
                 <div style={{ textAlign:'center' }}>
-                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:96, lineHeight:1, color:gc.color, filter:`drop-shadow(0 0 20px ${gc.color}88)` }}>{report.grade}</div>
+                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize: isMobile ? 64 : 96, lineHeight:1, color:gc.color, filter:`drop-shadow(0 0 20px ${gc.color}88)` }}>{report.grade}</div>
                   <div style={{ fontSize:13, color:gc.color, fontWeight:700, background:gc.bg, borderRadius:999, padding:'3px 14px', marginTop:4 }}>{gc.label}</div>
                 </div>
-                <div style={{ flex:1, minWidth:240 }}>
+                <div style={{ flex:1, minWidth: isMobile ? '100%' : 240 }}>
                   <div style={{ fontSize:18, fontWeight:700, color:'#e8e8f0', marginBottom:8, lineHeight:1.4 }}>{report.overview}</div>
-                  <div style={{ fontSize:14, color:'#9a9ab8', fontStyle:'italic' }}>"{report.gradeReason}"</div>
+                  <div style={{ fontSize:14, color:'#9a9ab8', fontStyle:'italic' }}>&quot;{report.gradeReason}&quot;</div>
                 </div>
               </div>
             </div>
 
             {/* Score rings */}
-            <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:'24px 20px', marginBottom:20 }}>
+            <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding: isMobile ? '18px 14px' : '24px 20px', marginBottom:20 }}>
               <div style={{ fontSize:11, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:20 }}>SCORES</div>
-              <div style={{ display:'flex', gap:20, flexWrap:'wrap', justifyContent:'space-around' }}>
+              <div style={{ display:'flex', gap: isMobile ? 14 : 20, flexWrap:'wrap', justifyContent:'space-around' }}>
                 {Object.values(report.scores).map((s, i) => <ScoreRing key={i} {...s} />)}
               </div>
             </div>
@@ -508,7 +519,7 @@ export default function AnalysePage() {
             {/* Peak + weakest side by side */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginBottom:20 }}>
               {/* Peak moment */}
-              <div style={{ background:'#0a0a14', border:`1px solid #4ade8033`, borderRadius:14, padding:22 }}>
+              <div style={{ background:'#0a0a14', border:`1px solid #4ade8033`, borderRadius:14, padding: isMobile ? 16 : 22 }}>
                 <div style={{ fontSize:9, color:'#4ade80', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:10, fontWeight:700 }}>🔥 PEAK MOMENT</div>
                 <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:'#4ade80', marginBottom:4 }}>
                   Track {report.peakMoment.trackN}
@@ -519,7 +530,7 @@ export default function AnalysePage() {
               </div>
 
               {/* Weakest transition */}
-              <div style={{ background:'#0a0a14', border:`1px solid ${M}33`, borderRadius:14, padding:22 }}>
+              <div style={{ background:'#0a0a14', border:`1px solid ${M}33`, borderRadius:14, padding: isMobile ? 16 : 22 }}>
                 <div style={{ fontSize:9, color:M, fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:10, fontWeight:700 }}>⚠️ HARDEST TRANSITION</div>
                 <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:M, marginBottom:4 }}>
                   Track {report.weakestTransition.fromN} → {report.weakestTransition.toN}
@@ -535,7 +546,7 @@ export default function AnalysePage() {
             {/* Strengths + Improvements */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginBottom:20 }}>
               {/* Strengths */}
-              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding:22 }}>
+              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding: isMobile ? 16 : 22 }}>
                 <div style={{ fontSize:9, color:'#4ade80', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:14, fontWeight:700 }}>✓ STRENGTHS</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   {report.strengths.map((s, i) => (
@@ -547,7 +558,7 @@ export default function AnalysePage() {
               </div>
 
               {/* Improvements */}
-              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding:22 }}>
+              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding: isMobile ? 16 : 22 }}>
                 <div style={{ fontSize:9, color:'#f59e0b', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:14, fontWeight:700 }}>↑ IMPROVEMENTS</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                   {report.improvements.map((imp, i) => (
@@ -562,7 +573,7 @@ export default function AnalysePage() {
 
             {/* Track notes */}
             {report.trackNotes?.length > 0 && (
-              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding:22, marginBottom:20 }}>
+              <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:14, padding: isMobile ? 16 : 22, marginBottom:20 }}>
                 <div style={{ fontSize:9, color:C, fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:14, fontWeight:700 }}>TRACK-BY-TRACK NOTES</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                   {report.trackNotes.map(tn => {
@@ -582,9 +593,9 @@ export default function AnalysePage() {
             )}
 
             {/* Verdict */}
-            <div style={{ background:`linear-gradient(135deg,${M}0e,${C}0e)`, border:`1px solid ${C}33`, borderRadius:14, padding:'20px 24px', textAlign:'center' }}>
+            <div style={{ background:`linear-gradient(135deg,${M}0e,${C}0e)`, border:`1px solid ${C}33`, borderRadius:14, padding: isMobile ? '16px 18px' : '20px 24px', textAlign:'center' }}>
               <div style={{ fontSize:9, color:C, fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:10, fontWeight:700 }}>VERDICT</div>
-              <div style={{ fontSize:18, fontWeight:700, color:'#e8e8f0', lineHeight:1.5 }}>"{report.verdict}"</div>
+              <div style={{ fontSize:18, fontWeight:700, color:'#e8e8f0', lineHeight:1.5 }}>&quot;{report.verdict}&quot;</div>
             </div>
 
           </div>

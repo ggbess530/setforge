@@ -3,15 +3,13 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { UserButton } from '@clerk/nextjs'
 import { calcBridge, type TrackMeta } from '@/lib/mix-utils'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
-
-const GENRES = ['Tech House','House','Techno','Melodic Techno','Drum & Bass','Afro House','Hip Hop','Trance','Disco / Funk','Open Format']
 
 function ScoreArc({ score }: { score: number }) {
   const r = 54, circ = 2 * Math.PI * r
@@ -36,13 +34,14 @@ function ScoreArc({ score }: { score: number }) {
   )
 }
 
-function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoading }: {
+function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoading, isMobile }: {
   label: string
   value: TrackMeta & { energy: number }
   onChange: (v: Partial<TrackMeta & { energy: number }>) => void
   onLookup?: () => void
   lookupResult?: { found: boolean; bpm?: number; key?: string; spotifyUrl?: string; audioFeaturesUnavailable?: boolean }
   lookupLoading?: boolean
+  isMobile?: boolean
 }) {
   const hasBpm = lookupResult?.found && lookupResult.bpm != null
   return (
@@ -59,7 +58,7 @@ function TrackInput({ label, value, onChange, onLookup, lookupResult, lookupLoad
           <input value={value.title} onChange={e => onChange({ title: e.target.value })}
             placeholder="e.g. Losing It" className="sf-input" />
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:10 }}>
           <div>
             <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>BPM</div>
             <input value={value.bpm || ''} onChange={e => onChange({ bpm: parseFloat(e.target.value) || 0 })}
@@ -124,6 +123,15 @@ export default function MixPage() {
   const [spotifyData, setSpotifyData] = useState<Record<string, { bpm?:number; key?:string; found:boolean; spotifyUrl?:string; audioFeaturesUnavailable?:boolean }>>({})
   const [spotifyLoading, setSpotifyLoading] = useState<Record<string, boolean>>({})
   const [error, setError]       = useState<string|null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   const canSimulate = track1.bpm > 0 && track2.bpm > 0 && track1.key && track2.key
   const bridge = canSimulate ? calcBridge(track1, track2, track1.energy, track2.energy) : null
@@ -185,7 +193,7 @@ export default function MixPage() {
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflowX:'hidden' }}>
+    <div style={{ minHeight: isMobile ? '100dvh' : '100vh', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflowX:'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
         .sf-input { background:#06060c; border:1px solid #1f1f33; color:#e8e8f0; font-family:'Inter',sans-serif; font-size:13px; padding:9px 12px; border-radius:8px; width:100%; outline:none; transition:border-color .2s; box-sizing:border-box; }
@@ -202,22 +210,24 @@ export default function MixPage() {
       <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${C}06 1px,transparent 1px),linear-gradient(90deg,${C}06 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 0%,black,transparent 70%)', pointerEvents:'none', zIndex:0 }} />
 
       {/* NAV */}
-      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.88)', padding:'0 24px' }}>
+      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.88)', padding: isMobile ? '0 10px' : '0 24px', overflowX:'auto' }}>
         <div style={{ maxWidth:900, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:56 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+          <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 8 : 16 }}>
             <Link href="/" style={{ textDecoration:'none' }}>
-              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, letterSpacing:2 }}>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize: isMobile ? 20 : 24, letterSpacing:2 }}>
                 <span style={{ color:C }}>SET</span><span style={{ color:M }}>FORGE</span>
               </div>
             </Link>
-            <div style={{ fontSize:12, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ MIX SIMULATOR</div>
+            {!isMobile && (
+              <div style={{ fontSize:12, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ MIX SIMULATOR</div>
+            )}
           </div>
-          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <div style={{ display:'flex', gap: isMobile ? 6 : 12, alignItems:'center' }}>
             <Link href="/app" style={{ textDecoration:'none' }}>
-              <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>⚡ Forge a set</button>
+              <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13, whiteSpace:'nowrap' }}>⚡{!isMobile && ' Forge a set'}</button>
             </Link>
             <Link href="/analyse" style={{ textDecoration:'none' }}>
-              <button className="btn-ghost" style={{ padding:'7px 16px', borderRadius:8, fontSize:13 }}>🔍 Analyse</button>
+              <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13, whiteSpace:'nowrap' }}>🔍{!isMobile && ' Analyse'}</button>
             </Link>
             <UserButton />
           </div>
@@ -266,6 +276,7 @@ export default function MixPage() {
             }}
             lookupResult={spotifyData['t1']}
             lookupLoading={spotifyLoading['t1']}
+            isMobile={isMobile}
           />
 
           {/* Arrow */}
@@ -281,6 +292,7 @@ export default function MixPage() {
             }}
             lookupResult={spotifyData['t2']}
             lookupLoading={spotifyLoading['t2']}
+            isMobile={isMobile}
           />
         </div>
 
@@ -293,7 +305,7 @@ export default function MixPage() {
               <ScoreArc score={bridge.score} />
 
               {/* Details */}
-              <div style={{ flex:1, minWidth:280, display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ flex:1, minWidth: isMobile ? '100%' : 280, display:'flex', flexDirection:'column', gap:14 }}>
                 {/* Key */}
                 <div style={{ background:'#06060c', borderRadius:10, padding:'12px 16px' }}>
                   <div style={{ fontSize:9, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace', letterSpacing:1, marginBottom:4 }}>HARMONIC COMPATIBILITY</div>
@@ -401,7 +413,7 @@ export default function MixPage() {
             {/* Source track input */}
             <div style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:16, padding:24 }}>
               <div style={{ fontSize:10, color:'#6a6a8a', fontFamily:'JetBrains Mono,monospace', letterSpacing:2, marginBottom:16 }}>SOURCE TRACK</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:12, marginBottom:12 }}>
                 <div>
                   <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>ARTIST</div>
                   <input value={mArtist} onChange={e=>setMArtist(e.target.value)} placeholder="e.g. Fisher"
@@ -413,7 +425,7 @@ export default function MixPage() {
                     className="sf-input" onKeyDown={e=>e.key==='Enter'&&findMashups()} />
                 </div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:16 }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap:12, marginBottom:16 }}>
                 <div>
                   <div style={{ fontSize:10, color:'#4a4a66', marginBottom:4 }}>BPM <span style={{ color:'#3a3a58' }}>optional</span></div>
                   <input value={mBpm||''} onChange={e=>setMBpm(parseFloat(e.target.value)||undefined)}

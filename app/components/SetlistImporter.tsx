@@ -160,7 +160,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: ImportedTrack[]; cr
     return !SKIP_DIRS.some(d => rp.includes(`/${d}/`) || rp.startsWith(`${d}/`))
   })
   const dbFile = files.filter(f=>f.name==='database V2')
-    .sort((a,b) => ((a as any).webkitRelativePath||'').split('/').length - ((b as any).webkitRelativePath||'').split('/').length)[0]
+    .sort((a,b) => ((a as File & {webkitRelativePath?:string}).webkitRelativePath||'').split('/').length - ((b as File & {webkitRelativePath?:string}).webkitRelativePath||'').split('/').length)[0]
 
   if (dbFile) {
     const bytes = new Uint8Array(await dbFile.arrayBuffer()); let pos = 0
@@ -186,7 +186,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: ImportedTrack[]; cr
   }
 
   await Promise.all(crateFiles.map(async cf => {
-    const rp = ((cf as any).webkitRelativePath||'').replace(/\\/g,'/')
+    const rp = ((cf as File & {webkitRelativePath?:string}).webkitRelativePath||'').replace(/\\/g,'/')
     let key = cf.name.replace(/\.crate$/i,'')
     if (rp) {
       const parts=rp.split('/'), subIdx=parts.findIndex((p:string)=>p.toLowerCase()==='subcrates')
@@ -280,7 +280,7 @@ export default function SetlistImporter({ onImport, loading, setExists, onLibrar
 
   function switchTab(t: Tab) { setTab(t); setTracks([]); setCrates([]); setCrateSel('__all__'); setParseErr(null); setTextInput('') }
 
-  async function processFiles(files: File[]) {
+  const processFiles = useCallback(async (files: File[]) => {
     if (!files.length) return
     setParsing(true); setParseErr(null); setTracks([]); setCrates([])
     try {
@@ -298,7 +298,7 @@ export default function SetlistImporter({ onImport, loading, setExists, onLibrar
         const relevant=files.filter(f=>{
           if(f.name==='database V2') return true
           if(!f.name.endsWith('.crate')) return false
-          const rp=((f as any).webkitRelativePath||'').replace(/\\/g,'/').toLowerCase()
+          const rp=((f as File & {webkitRelativePath?:string}).webkitRelativePath||'').replace(/\\/g,'/').toLowerCase()
           return !skip.some(d=>rp.includes(`/${d}/`)||rp.startsWith(`${d}/`))
         })
         if(!relevant.length) throw new Error('No Serato files found. Drop your _Serato_ folder.')
@@ -311,13 +311,13 @@ export default function SetlistImporter({ onImport, loading, setExists, onLibrar
       setTracks(result.tracks); setCrates(result.crates); setCrateSel('__all__')
     } catch (e: unknown) { setParseErr(e instanceof Error ? e.message : 'Parse failed. Please try again.') }
     finally { setParsing(false) }
-  }
+  }, [tab])
 
   const onDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
     const files = tab==='serato' ? await getFilesFromDrop(e.dataTransfer) : Array.from(e.dataTransfer.files)
     processFiles(files)
-  }, [tab])
+  }, [tab, processFiles])
 
   function handleTextBuild() {
     const raw = textInput.trim(); if (!raw) return

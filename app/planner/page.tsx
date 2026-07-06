@@ -1,7 +1,7 @@
 // ▸ Create: app/planner/page.tsx
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { UserButton } from '@clerk/nextjs'
 import { calcBridge } from '@/lib/mix-utils'
@@ -60,11 +60,6 @@ function addMinutes(time: string, mins: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`
 }
 
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(':').map(Number)
-  return h * 60 + m
-}
-
 // ── Handoff badge ─────────────────────────────────────────────
 function HandoffBadge({ s1, s2 }: { s1: Slot; s2: Slot }) {
   const t1 = s1.set?.tracks?.at(-1)
@@ -87,21 +82,14 @@ function HandoffBadge({ s1, s2 }: { s1: Slot; s2: Slot }) {
 }
 
 // ── Timeline slot card ────────────────────────────────────────
-function SlotCard({ slot, index, total, onUpdate, onDelete, onGenerate, onSelect, selected, generating }: {
-  slot: Slot; index: number; total: number
-  onUpdate: (id: string, patch: Partial<Slot>) => void
+function SlotCard({ slot, index, onDelete, onGenerate, onSelect, selected, generating }: {
+  slot: Slot; index: number
   onDelete: (id: string) => void
   onGenerate: (id: string) => void
   onSelect: (id: string) => void
   selected: boolean
   generating: boolean
 }) {
-  const sfInput: React.CSSProperties = {
-    background:'#06060c', border:'1px solid #1f1f33', color:'#e8e8f0',
-    fontFamily:'JetBrains Mono,monospace', fontSize:11, padding:'6px 10px',
-    borderRadius:6, width:'100%', outline:'none', boxSizing:'border-box',
-  }
-
   return (
     <div onClick={() => onSelect(slot.id)}
       style={{ background:'#0a0a14', border:`2px solid ${selected ? slot.color : '#1a1a2e'}`, borderRadius:14,
@@ -244,10 +232,31 @@ export default function PlannerPage() {
   const [exporting,    setExporting]    = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
 
+  // Mobile layout. Unlike app/page.tsx, the primary workspace here (add slot /
+  // generate / timeline) lives in the RIGHT panel, so `mobileShowResults`
+  // defaults to true (timeline visible). Selecting a slot or opening night
+  // settings flips it to false (night meta / slot editor visible); loading a
+  // saved night or generating a set flips it back to true.
+  const [isMobile,          setIsMobile]          = useState(false)
+  const [mobileShowResults, setMobileShowResults] = useState(true)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
   const selectedSlot = night.slots.find(s => s.id === selectedId) || null
 
   function updateSlot(id: string, patch: Partial<Slot>) {
     setNight(prev => ({ ...prev, slots: prev.slots.map(s => s.id === id ? { ...s, ...patch } : s) }))
+  }
+
+  function selectSlot(id: string) {
+    setSelectedId(id)
+    if (isMobile) setMobileShowResults(false)
   }
 
   function addSlot() {
@@ -255,7 +264,7 @@ export default function PlannerPage() {
     const prevEnd = last ? addMinutes(last.startTime, last.duration) : '22:00'
     const slot = newSlot(night.slots.length, prevEnd)
     setNight(prev => ({ ...prev, slots: [...prev.slots, slot] }))
-    setSelectedId(slot.id)
+    selectSlot(slot.id)
   }
 
   function deleteSlot(id: string) {
@@ -298,8 +307,12 @@ export default function PlannerPage() {
         }),
       })
       const data = await res.json()
-      if (res.ok) updateSlot(id, { set: data.set, generating: false })
-      else updateSlot(id, { generating: false })
+      if (res.ok) {
+        updateSlot(id, { set: data.set, generating: false })
+        if (isMobile) setMobileShowResults(true)
+      } else {
+        updateSlot(id, { generating: false })
+      }
     } catch {
       updateSlot(id, { generating: false })
     } finally {
@@ -381,7 +394,7 @@ export default function PlannerPage() {
   const slotsWithSets = night.slots.filter(s => s.set).length
 
   return (
-    <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflow:'hidden' }}>
+    <div style={{ height: isMobile ? '100dvh' : '100vh', display:'flex', flexDirection:'column', background:'#06060c', color:'#e8e8f0', fontFamily:"'Inter',system-ui,sans-serif", overflow:'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
         .sf-display { font-family:'Bebas Neue',sans-serif; }
@@ -398,21 +411,21 @@ export default function PlannerPage() {
       `}</style>
 
       {/* NAV */}
-      <nav style={{ flexShrink:0, height:52, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.95)', padding:'0 20px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+      <nav style={{ flexShrink:0, height:52, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(16px)', background:'rgba(6,6,12,.95)', padding: isMobile ? '0 10px' : '0 20px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, overflowX:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 8 : 16, flexShrink:0 }}>
           <Link href="/" style={{ textDecoration:'none' }}>
-            <div className="sf-display" style={{ fontSize:24, letterSpacing:2 }}>
+            <div className="sf-display" style={{ fontSize: isMobile ? 20 : 24, letterSpacing:2 }}>
               <span style={{ color:C }}>SET</span><span style={{ color:M }}>FORGE</span>
             </div>
           </Link>
-          <div style={{ fontSize:11, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ NIGHT PLANNER</div>
+          {!isMobile && <div style={{ fontSize:11, color:'#4a4a66', fontFamily:'JetBrains Mono,monospace' }}>/ NIGHT PLANNER</div>}
         </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <div style={{ display:'flex', gap: isMobile ? 6 : 8, alignItems:'center', flexShrink:0 }}>
           <Link href="/app" style={{ textDecoration:'none' }}>
-            <button className="btn-ghost" style={{ padding:'5px 14px', borderRadius:7, fontSize:12 }}>⚡ Forge</button>
+            <button className="btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 14px', borderRadius:7, fontSize:12, whiteSpace:'nowrap' }}>⚡{!isMobile && ' Forge'}</button>
           </Link>
           <Link href="/mix" style={{ textDecoration:'none' }}>
-            <button className="btn-ghost" style={{ padding:'5px 14px', borderRadius:7, fontSize:12 }}>🎛️ Mix</button>
+            <button className="btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 14px', borderRadius:7, fontSize:12, whiteSpace:'nowrap' }}>🎛️{!isMobile && ' Mix'}</button>
           </Link>
           <UserButton />
         </div>
@@ -422,7 +435,16 @@ export default function PlannerPage() {
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
 
         {/* ── LEFT: Night meta + slot editor ── */}
-        <div style={{ width:300, flexShrink:0, borderRight:'1px solid #1a1a2e', overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ width: isMobile ? '100%' : 300, flexShrink:0, borderRight: isMobile ? 'none' : '1px solid #1a1a2e', overflowY:'auto', padding:16, display: isMobile && mobileShowResults ? 'none' : 'flex', flexDirection:'column', gap:14 }}>
+
+          {/* Mobile back bar */}
+          {isMobile && (
+            <div style={{ position:'sticky', top:-16, marginTop:-16, marginLeft:-16, marginRight:-16, marginBottom:2, zIndex:20, display:'flex', alignItems:'center', height:44, padding:'0 14px', background:'#06060cee', backdropFilter:'blur(12px)', borderBottom:'1px solid #1a1a2e' }}>
+              <button onClick={() => setMobileShowResults(true)} className="btn-ghost" style={{ padding:'6px 12px', borderRadius:8, fontSize:11, letterSpacing:1 }}>
+                ← BACK TO TIMELINE
+              </button>
+            </div>
+          )}
 
           {/* Night info */}
           <div>
@@ -488,7 +510,7 @@ export default function PlannerPage() {
           {showNights && nights.length > 0 && (
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {nights.map(n => (
-                <div key={n.id} onClick={() => { setNight(n); setNightId(n.id); setShowNights(false) }}
+                <div key={n.id} onClick={() => { setNight(n); setNightId(n.id); setShowNights(false); if (isMobile) setMobileShowResults(true) }}
                   style={{ background:'#06060c', border:'1px solid #1a1a2e', borderRadius:8, padding:'8px 12px', cursor:'pointer', fontSize:12 }}>
                   <div style={{ color:'#e8e8f0', fontWeight:600 }}>{n.name}</div>
                   <div style={{ fontSize:10, color:'#4a4a66' }}>{n.date || 'No date'} · {n.slots?.length || 0} slots</div>
@@ -499,7 +521,7 @@ export default function PlannerPage() {
         </div>
 
         {/* ── RIGHT: Timeline canvas ── */}
-        <div style={{ flex:1, overflowY:'auto', overflowX:'auto', padding:24, background:'#07070e', position:'relative' }}>
+        <div style={{ flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, display: isMobile && !mobileShowResults ? 'none' : 'block', overflowY:'auto', overflowX:'auto', padding:24, background:'#07070e', position:'relative' }}>
 
           {/* Toolbar */}
           <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap', alignItems:'center' }}>
@@ -510,6 +532,11 @@ export default function PlannerPage() {
               <button onClick={generateAll} disabled={generatingId !== null}
                 style={{ padding:'10px 20px', borderRadius:9, fontSize:13, border:`1.5px solid ${C}`, background:'transparent', color:C, cursor:'pointer', fontFamily:'Inter,sans-serif', fontWeight:700, transition:'.2s' }}>
                 {generatingId ? 'Generating…' : '⚡ Generate All Sets'}
+              </button>
+            )}
+            {isMobile && (
+              <button onClick={() => setMobileShowResults(false)} className="btn-ghost" style={{ padding:'10px 20px', borderRadius:9, fontSize:13, marginLeft:'auto' }}>
+                ⚙ Night Settings
               </button>
             )}
           </div>
@@ -539,7 +566,7 @@ export default function PlannerPage() {
                       const pct = (slot.duration / totalDuration) * 100
                       return (
                         <div key={slot.id}
-                          onClick={() => setSelectedId(slot.id)}
+                          onClick={() => selectSlot(slot.id)}
                           title={`${slot.djName || 'DJ'} — ${slot.startTime} (${slot.duration}min)`}
                           style={{ width:`${pct}%`, minWidth:20, background:`${slot.color}55`, border:`1px solid ${slot.color}`, borderRadius:4, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', transition:'.2s', outline: selectedId === slot.id ? `2px solid ${slot.color}` : 'none' }}>
                           <span style={{ fontSize:9, color:slot.color, fontFamily:'JetBrains Mono,monospace', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', padding:'0 4px' }}>
@@ -567,10 +594,10 @@ export default function PlannerPage() {
                       style={{ marginBottom: i < night.slots.length - 1 ? 0 : 0 }}
                     >
                       <SlotCard
-                        slot={slot} index={i} total={night.slots.length}
-                        onUpdate={updateSlot} onDelete={deleteSlot}
+                        slot={slot} index={i}
+                        onDelete={deleteSlot}
                         onGenerate={generateSlot}
-                        onSelect={setSelectedId}
+                        onSelect={selectSlot}
                         selected={selectedId === slot.id}
                         generating={generatingId === slot.id}
                       />

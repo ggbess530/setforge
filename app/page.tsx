@@ -85,6 +85,15 @@ export default function LandingPage() {
   const { isSignedIn } = useAuth()
   const [openFaq,   setOpenFaq]   = useState<number|null>(null)
   const [upgrading, setUpgrading] = useState<string|null>(null)
+  const [isMobile,  setIsMobile]  = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   async function handleUpgrade(tier: string) {
     if (!isSignedIn) return
@@ -96,6 +105,7 @@ export default function LandingPage() {
         body: JSON.stringify({ tier }),
       })
       const data = await res.json()
+      // eslint-disable-next-line react-hooks/immutability -- navigation only ever runs from this click handler, never during render
       if (data.url) window.location.href = data.url
     } catch {}
     finally { setUpgrading(null) }
@@ -241,24 +251,28 @@ export default function LandingPage() {
       </div>
 
       {/* ── NAV ── */}
-      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(20px)', background:'rgba(6,6,12,.88)', padding:'0 24px' }}>
-        <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
-          <div style={{ fontSize:30, letterSpacing:2 }}>
+      <nav style={{ position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #1a1a2e', backdropFilter:'blur(20px)', background:'rgba(6,6,12,.88)', padding: isMobile ? '0 14px' : '0 24px' }}>
+        <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height: isMobile ? 56 : 64 }}>
+          <div style={{ fontSize: isMobile ? 22 : 30, letterSpacing:2 }}>
             <span className="logo-c">SET</span><span className="logo-m">FORGE</span>
           </div>
-          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          <div style={{ display:'flex', gap: isMobile ? 8 : 10, alignItems:'center' }}>
             {isSignedIn ? (
               <>
-                <Link href="/analyse" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Analyse</button></Link>
-                <Link href="/mix"     style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Mix</button></Link>
-                <Link href="/planner" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Planner</button></Link>
-                <Link href="/app"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Open App →</button></Link>
+                {!isMobile && (
+                  <>
+                    <Link href="/analyse" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Analyse</button></Link>
+                    <Link href="/mix"     style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Mix</button></Link>
+                    <Link href="/planner" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Planner</button></Link>
+                  </>
+                )}
+                <Link href="/app"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Open App' : 'Open App →'}</button></Link>
                 <UserButton />
               </>
             ) : (
               <>
-                <SignInButton mode="modal"><button className="btn-ghost" style={{ padding:'9px 18px', borderRadius:8, fontSize:14 }}>Log in</button></SignInButton>
-                <SignUpButton mode="modal"><button className="btn-cta" style={{ padding:'9px 22px', borderRadius:8, fontSize:14 }}>Start free →</button></SignUpButton>
+                <SignInButton mode="modal"><button className="btn-ghost" style={{ padding: isMobile ? '8px 12px' : '9px 18px', borderRadius:8, fontSize: isMobile ? 12 : 14 }}>Log in</button></SignInButton>
+                <SignUpButton mode="modal"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Start free' : 'Start free →'}</button></SignUpButton>
               </>
             )}
           </div>
@@ -268,7 +282,7 @@ export default function LandingPage() {
       <div style={{ position:'relative', zIndex:1 }}>
 
         {/* ── HERO ── */}
-        <section style={{ textAlign:'center', padding:'100px 24px 80px', maxWidth:820, margin:'0 auto' }}>
+        <section style={{ textAlign:'center', padding: isMobile ? '56px 18px 56px' : '100px 24px 80px', maxWidth:820, margin:'0 auto' }}>
           {/* Floating 🎧 */}
           <div className="float" style={{ fontSize:60, marginBottom:20, lineHeight:1, display:'inline-block' }}>🎧</div>
 
@@ -334,7 +348,7 @@ export default function LandingPage() {
               <div style={{ position:'relative' }}>
                 <div style={{ fontSize:12, color:C, fontWeight:700, letterSpacing:3, marginBottom:14, textTransform:'uppercase' }}>✦ Made for beginners</div>
                 <h2 style={{ fontSize:'clamp(24px,4vw,38px)', fontWeight:800, margin:'0 0 16px', lineHeight:1.2, letterSpacing:'-0.02em' }}>
-                  You don't need to know anything<br />about DJing to start.
+                  You don&apos;t need to know anything<br />about DJing to start.
                 </h2>
                 <p style={{ fontSize:16, color:'#8a8aaa', maxWidth:580, lineHeight:1.8, marginBottom:32 }}>
                   Setflow, Rekordbox, Traktor — those tools assume you have years of experience and a massive tagged library. SetForge assumes nothing. Just tell it what you like.
@@ -363,7 +377,7 @@ export default function LandingPage() {
                 { n:'1', color:M, title:'Tell it your vibe', desc:'Pick a genre (or describe your own in plain English), choose your crowd, set the mood.', tag:'Takes 30 seconds' },
                 { n:'2', color:C, title:'AI builds your set', desc:'SetForge picks real tracks, orders them for harmonic flow, shapes the energy, and writes transition notes.', tag:'Ready in ~20 seconds' },
                 { n:'3', color:M, title:'Tweak and take it', desc:"Swap tracks, drag to reorder, lock favourites. Copy, export, or share your finished set.", tag:'Your set, your way' },
-              ].map((step, i) => (
+              ].map((step) => (
                 <div key={step.n} style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:18, padding:34, position:'relative', overflow:'hidden', transition:'transform .2s,box-shadow .2s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow=`0 16px 50px rgba(0,0,0,.3)` }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform=''; (e.currentTarget as HTMLElement).style.boxShadow='' }}>
@@ -434,7 +448,7 @@ export default function LandingPage() {
           <section id="pricing" style={{ padding:'0 24px 72px', maxWidth:1040, margin:'0 auto' }}>
             <div style={{ textAlign:'center', marginBottom:52 }}>
               <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Simple pricing</h2>
-              <p style={{ fontSize:16, color:'#6a6a8a' }}>Start free forever. Upgrade when you're ready.</p>
+              <p style={{ fontSize:16, color:'#6a6a8a' }}>Start free forever. Upgrade when you&apos;re ready.</p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(290px,1fr))', gap:22 }}>
               {TIERS.map(tier => (

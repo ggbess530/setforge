@@ -119,10 +119,10 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
           <div style={{ textAlign:'center' }}>
             <div style={{ fontSize:52, marginBottom:16 }}>🎧</div>
             <h2 style={{ fontSize:26, fontWeight:700, margin:'0 0 12px', fontFamily:"'Inter',sans-serif", lineHeight:1.2 }}>
-              Let's build your first DJ set
+              Let&apos;s build your first DJ set
             </h2>
             <p style={{ fontSize:16, color:'#9a9ab8', lineHeight:1.7, margin:'0 0 28px' }}>
-              We'll ask you 5 quick questions, then our AI builds you a complete, ready-to-play set. Takes about 2 minutes.
+              We&apos;ll ask you 5 quick questions, then our AI builds you a complete, ready-to-play set. Takes about 2 minutes.
             </p>
             <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:28, textAlign:'left' }}>
               {[
@@ -136,7 +136,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
               ))}
             </div>
             <button onClick={next} className="wiz-btn-primary" style={{ padding:'15px 0', borderRadius:12, fontSize:16, width:'100%' }}>
-              Let's go →
+              Let&apos;s go →
             </button>
           </div>
         )}
@@ -145,7 +145,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
         {step === 1 && (
           <div>
             <h2 style={{ fontSize:22, fontWeight:700, margin:'0 0 6px', fontFamily:"'Inter',sans-serif" }}>What kind of music do you love? 🎵</h2>
-            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 20px', lineHeight:1.5 }}>Pick the style that gets you moving. Tap to select — we'll move to the next step automatically.</p>
+            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 20px', lineHeight:1.5 }}>Pick the style that gets you moving. Tap to select — we&apos;ll move to the next step automatically.</p>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:20 }}>
               {WIZARD_GENRES.map(g => (
                 <div key={g.value} className="wiz-card" onClick={() => { setGenre(g.value); setTimeout(next, 180) }}
@@ -205,7 +205,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
         {step === 4 && (
           <div>
             <h2 style={{ fontSize:22, fontWeight:700, margin:'0 0 6px', fontFamily:"'Inter',sans-serif" }}>How long is your set? ⏱️</h2>
-            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 24px', lineHeight:1.5 }}>Most beginners start with 30–60 minutes — that's 8–15 tracks. Perfect for a first set.</p>
+            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 24px', lineHeight:1.5 }}>Most beginners start with 30–60 minutes — that&apos;s 8–15 tracks. Perfect for a first set.</p>
             <div style={{ background:'#06060c', border:'1px solid #1a1a2e', borderRadius:14, padding:'24px 20px', marginBottom:20 }}>
               <input type="range" min={30} max={180} step={15} value={minutes} onChange={e => setMinutes(+e.target.value)}
                 style={{ width:'100%', accentColor:C, marginBottom:16, height:10, cursor:'pointer' }} />
