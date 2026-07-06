@@ -33,6 +33,7 @@ export default function AdminPage() {
   const [loading,     setLoading]     = useState(true)
   const [refreshing,  setRefreshing]  = useState(false)
   const [refreshMsg,  setRefreshMsg]  = useState<string | null>(null)
+  const [refreshErrors, setRefreshErrors] = useState<{ genre: string; playlistId: string; error: string }[]>([])
 
   async function loadStatus() {
     try {
@@ -49,12 +50,14 @@ export default function AdminPage() {
   async function handleRefresh() {
     setRefreshing(true)
     setRefreshMsg(null)
+    setRefreshErrors([])
     try {
       const res = await fetch('/api/admin/trends', { method: 'POST' })
       const data = await res.json()
       setRefreshMsg(res.ok
         ? `Scanned ${data.genresScanned} genres, upserted ${data.tracksUpserted} tracks.`
         : `Failed: ${data.error || 'unknown error'}`)
+      setRefreshErrors(data.errors ?? [])
       await loadStatus()
     } catch {
       setRefreshMsg('Failed: request error')
@@ -120,6 +123,21 @@ export default function AdminPage() {
             {refreshMsg && (
               <div style={{ ...cardStyle, marginBottom:20, fontSize:13, color: refreshMsg.startsWith('Failed') ? M : '#4ade80' }}>
                 {refreshMsg}
+              </div>
+            )}
+
+            {refreshErrors.length > 0 && (
+              <div style={{ ...cardStyle, marginBottom:20 }}>
+                <div style={{ fontSize:13, color:M, fontWeight:700, marginBottom:10 }}>
+                  {refreshErrors.length} playlist{refreshErrors.length === 1 ? '' : 's'} failed
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {refreshErrors.map((e, i) => (
+                    <div key={i} style={{ fontSize:12, color:'#8a8aa6', fontFamily:'JetBrains Mono,monospace' }}>
+                      <span style={{ color:'#e8e8f0' }}>{e.genre}</span> ({e.playlistId}): {e.error}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

@@ -27,19 +27,21 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
 
 type PlaylistTrack = { spotifyId: string; artist: string; title: string; rank: number }
 
-async function fetchPlaylistTracks(playlistId: string, token: string): Promise<PlaylistTrack[]> {
+async function fetchPlaylistTracks(playlistId: string, token: string): Promise<{ tracks: PlaylistTrack[]; error?: string }> {
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name)))`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (!res.ok) {
-    console.warn('[trend-ingest] playlist fetch failed', playlistId, res.status)
-    return []
+    const body = await res.text().catch(() => '')
+    const error = `${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 200)}` : ''}`
+    console.warn('[trend-ingest] playlist fetch failed', playlistId, error)
+    return { tracks: [], error }
   }
 
   const data = await res.json()
   type Item = { track: { id: string; name: string; artists: { name: string }[] } | null }
-  return ((data?.items ?? []) as Item[])
+  const tracks = ((data?.items ?? []) as Item[])
     .map((item, i) => item.track && ({
       spotifyId: item.track.id,
       artist:    item.track.artists?.map(a => a.name).join(', ') ?? '',
@@ -47,6 +49,8 @@ async function fetchPlaylistTracks(playlistId: string, token: string): Promise<P
       rank:      i,
     }))
     .filter((t): t is PlaylistTrack => !!t && !!t.spotifyId && !!t.title)
+
+  return tracks.length ? { tracks } : { tracks: [], error: 'Playlist returned 0 tracks (empty response)' }
 }
 
 async function upsertTrendingTrack(row: {
@@ -87,13 +91,18 @@ async function upsertTrendingTrack(row: {
   }
 }
 
-export async function refreshTrendingTracks(): Promise<{ genresScanned: number; tracksUpserted: number }> {
+export async function refreshTrendingTracks(): Promise<{
+  genresScanned: number; tracksUpserted: number
+  errors: { genre: string; playlistId: string; error: string }[]
+}> {
   const token = await getSpotifyToken()
   let tracksUpserted = 0
+  const errors: { genre: string; playlistId: string; error: string }[] = []
 
   for (const [genre, { spotifyPlaylistIds }] of Object.entries(GENRE_TREND_SOURCES)) {
     for (const playlistId of spotifyPlaylistIds) {
-      const tracks = await fetchPlaylistTracks(playlistId, token)
+      const { tracks, error } = await fetchPlaylistTracks(playlistId, token)
+      if (error) errors.push({ genre, playlistId, error })
       if (!tracks.length) continue
 
       const bpmKeyMap = await getBpmKeyForSpotifyIds(tracks.map(t => t.spotifyId))
@@ -113,5 +122,5 @@ export async function refreshTrendingTracks(): Promise<{ genresScanned: number; 
     }
   }
 
-  return { genresScanned: Object.keys(GENRE_TREND_SOURCES).length, tracksUpserted }
+  return { genresScanned: Object.keys(GENRE_TREND_SOURCES).length, tracksUpserted, errors }
 }
