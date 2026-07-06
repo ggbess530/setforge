@@ -3,17 +3,23 @@
 
 import { NextResponse } from 'next/server'
 
-// ── Spotify client credentials flow ──────────────────────────
+// ── Spotify client credentials flow (token cached across warm invocations) ──
+let cachedToken: { token: string; expiresAt: number } | null = null
+
 async function getSpotifyToken(): Promise<string> {
-  const creds  = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')
-  const res    = await fetch('https://accounts.spotify.com/api/token', {
+  if (cachedToken && cachedToken.expiresAt - 60_000 > Date.now()) return cachedToken.token
+
+  const creds = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')
+  const res   = await fetch('https://accounts.spotify.com/api/token', {
     method:  'POST',
     headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    'grant_type=client_credentials',
   })
   const data = await res.json()
   if (!data.access_token) throw new Error('Spotify auth failed')
-  return data.access_token
+
+  cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000 }
+  return cachedToken.token
 }
 
 // ── Spotify key integers → Camelot ───────────────────────────
@@ -29,6 +35,83 @@ const SPOTIFY_TO_CAMELOT: Record<string, string> = {
   '8-0':'1A',  '9-0':'8A',  '10-0':'3A', '11-0':'10A',
 }
 
+// ── Normalization ─────────────────────────────────────────────
+// Strips diacritics, remix/edit noise words, and punctuation so query
+// building and candidate scoring compare like-for-like.
+const NOISE_WORDS = /\b(original mix|extended mix|radio edit|club mix|remix|edit|vip mix|rework|re[- ]?master(ed)?(\s\d{4})?|mono|stereo|clean|explicit|instrumental|acoustic|live|deluxe(\sedition)?|bonus track|single version|album version)\b/gi
+
+function normalizeTitle(s: string): string {
+  return (s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[([][^)\]]*(feat\.?|ft\.?|featuring)[^)\]]*[)\]]/gi, '')
+    .replace(/\b(feat\.?|ft\.?|featuring)\b.*$/i, '')
+    .replace(NOISE_WORDS, '')
+    .replace(/[()[\]{}\-–—_,.'"!?:;]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Splits a multi-artist string ("A feat. B & C x D") into individual, normalized names.
+function normalizeArtists(s: string): string[] {
+  return (s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|&|\bx\b|\bvs\.?\b|\band\b|,/gi)
+    .map(p => p.replace(/[()[\]{}.'"!?:;]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+// ── Fuzzy similarity (normalized Levenshtein, 0..1) ──────────
+function levenshtein(a: string, b: string): number {
+  if (!a.length) return b.length
+  if (!b.length) return a.length
+  const dp = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0]; dp[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = tmp
+    }
+  }
+  return dp[b.length]
+}
+
+function similarity(a: string, b: string): number {
+  if (!a && !b) return 1
+  const maxLen = Math.max(a.length, b.length)
+  if (!maxLen) return 1
+  return 1 - levenshtein(a, b) / maxLen
+}
+
+type SpotifyTrack = { id: string; name: string; artists: { name: string }[]; album: { name: string }; external_urls: { spotify: string } }
+
+// Scores a candidate against the query — title weighted higher (more discriminating),
+// but a real artist match is still required to avoid same-title/wrong-artist mixups.
+function scoreCandidate(track: SpotifyTrack, queryTitleNorm: string, queryArtistTokens: string[]): number {
+  const titleSim = similarity(normalizeTitle(track.name), queryTitleNorm)
+  const trackArtistTokens = track.artists.flatMap(a => normalizeArtists(a.name))
+  const artistSim = queryArtistTokens.length && trackArtistTokens.length
+    ? Math.max(...queryArtistTokens.flatMap(q => trackArtistTokens.map(t => similarity(q, t))))
+    : 0
+  const score = titleSim * 0.55 + artistSim * 0.45
+  // A near-perfect title match means nothing if the artist is clearly different —
+  // two unrelated songs can easily share a title. Penalize hard when there's no real artist evidence.
+  return artistSim < 0.3 ? score * 0.6 : score
+}
+
+async function searchTracks(q: string, limit: number, token: string): Promise<SpotifyTrack[]> {
+  const res  = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json()
+  return data?.tracks?.items || []
+}
+
+const HIGH_CONFIDENCE = 0.82  // good enough to stop searching early
+const MIN_ACCEPTABLE  = 0.55  // below this, we'd rather say "not found" than guess wrong
+
 // ── POST /api/spotify ─────────────────────────────────────────
 // Body: { artist: string, title: string }
 // Returns: { bpm, key (Camelot), spotifyId, found: boolean }
@@ -39,46 +122,41 @@ export async function POST(req: Request) {
 
     const token = await getSpotifyToken()
 
-    // 1. Try strict field-filter search first
-    const q1 = encodeURIComponent(`track:"${title}" artist:"${artist}"`)
-    const r1  = await fetch(
-      `https://api.spotify.com/v1/search?q=${q1}&type=track&limit=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    const d1    = await r1.json()
-    let track   = d1?.tracks?.items?.[0]
+    const queryTitleNorm    = normalizeTitle(title || '')
+    const queryArtistTokens = normalizeArtists(artist || '')
 
-    // 2. Fallback: plain keyword search (handles multi-word artists, alternate spellings)
-    if (!track) {
-      const q2 = encodeURIComponent(`${title} ${artist}`)
-      const r2  = await fetch(
-        `https://api.spotify.com/v1/search?q=${q2}&type=track&limit=3`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      const d2 = await r2.json()
-      // Pick the best match — prefer exact title match
-      const candidates = d2?.tracks?.items || []
-      track = candidates.find((t: { name: string }) =>
-        t.name.toLowerCase().includes(title.toLowerCase())
-      ) || candidates[0]
+    const seen = new Map<string, SpotifyTrack>()
+    function addCandidates(tracks: SpotifyTrack[]) {
+      for (const t of tracks) if (!seen.has(t.id)) seen.set(t.id, t)
+    }
+    function currentBest(): { track: SpotifyTrack; score: number } | null {
+      let top: { track: SpotifyTrack; score: number } | null = null
+      for (const t of seen.values()) {
+        const score = scoreCandidate(t, queryTitleNorm, queryArtistTokens)
+        if (!top || score > top.score) top = { track: t, score }
+      }
+      return top
     }
 
-    // 3. Fallback: title only (good for remixes, features)
-    if (!track && title) {
-      const q3 = encodeURIComponent(title)
-      const r3  = await fetch(
-        `https://api.spotify.com/v1/search?q=${q3}&type=track&limit=5`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      const d3 = await r3.json()
-      const candidates = d3?.tracks?.items || []
-      track = candidates.find((t: { artists: {name:string}[] }) =>
-        t.artists.some((a: {name:string}) => a.name.toLowerCase().includes(artist.toLowerCase().split(' ')[0]))
-      ) || null
+    // 1. Strict field-filter search — cheapest, most precise when it hits
+    addCandidates(await searchTracks(`track:"${title}" artist:"${artist}"`, 3, token))
+    let best = currentBest()
+
+    // 2. Normalized free-text search — catches remix/edit suffix mismatches, typos
+    if (!best || best.score < HIGH_CONFIDENCE) {
+      addCandidates(await searchTracks(`${queryTitleNorm} ${queryArtistTokens.join(' ')}`.trim(), 5, token))
+      best = currentBest()
     }
 
-    if (!track) return NextResponse.json({ found: false })
-    return await fetchFeatures(track.id, track, token)
+    // 3. Title-only search — widest net, for heavily-retagged remixes/features
+    if ((!best || best.score < HIGH_CONFIDENCE) && queryTitleNorm) {
+      addCandidates(await searchTracks(queryTitleNorm, 8, token))
+      best = currentBest()
+    }
+
+    if (!best || best.score < MIN_ACCEPTABLE) return NextResponse.json({ found: false })
+
+    return await fetchFeatures(best.track.id, best.track, token)
 
   } catch (err) {
     console.error('[POST /api/spotify]', err)
