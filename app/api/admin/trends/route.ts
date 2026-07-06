@@ -8,9 +8,10 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { isAdmin }         from '@/lib/subscription'
-import { getTrendStatus }  from '@/lib/trending'
+import { isAdmin }             from '@/lib/subscription'
+import { getTrendStatus }      from '@/lib/trending'
 import { refreshTrendingTracks } from '@/lib/trend-ingest'
+import { isSpotifyConnected }   from '@/lib/spotify-user-auth'
 
 export const maxDuration = 120
 
@@ -18,8 +19,8 @@ export async function GET() {
   const { userId } = await auth()
   if (!userId || !isAdmin(userId)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
-  const status = await getTrendStatus()
-  return NextResponse.json(status)
+  const [status, spotifyConnected] = await Promise.all([getTrendStatus(), isSpotifyConnected()])
+  return NextResponse.json({ ...status, spotifyConnected })
 }
 
 export async function POST() {
@@ -31,6 +32,7 @@ export async function POST() {
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     console.error('[POST /api/admin/trends]', err)
-    return NextResponse.json({ error: 'Refresh failed' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Refresh failed'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -11,9 +11,17 @@ const C = '#00f0ff'
 const M = '#ff1e8a'
 
 type TrendStatus = {
-  totalTracks:   number
-  lastRefreshed: string | null
-  byGenre:       { genre: string; trackCount: number }[]
+  totalTracks:      number
+  lastRefreshed:    string | null
+  byGenre:          { genre: string; trackCount: number }[]
+  spotifyConnected: boolean
+}
+
+const SPOTIFY_BANNER: Record<string, { text: string; ok: boolean }> = {
+  connected:     { text: 'Spotify connected successfully.',                          ok: true },
+  denied:        { text: 'Spotify authorization was denied.',                        ok: false },
+  invalid_state: { text: 'Login session expired or was invalid — please try again.', ok: false },
+  error:         { text: 'Spotify connection failed — check server logs.',           ok: false },
 }
 
 function timeAgo(iso: string | null): string {
@@ -34,6 +42,14 @@ export default function AdminPage() {
   const [refreshing,  setRefreshing]  = useState(false)
   const [refreshMsg,  setRefreshMsg]  = useState<string | null>(null)
   const [refreshErrors, setRefreshErrors] = useState<{ genre: string; playlistId: string; error: string }[]>([])
+  const [spotifyParam, setSpotifyParam]   = useState<string | null>(null)
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get('spotify')
+    if (!p) return
+    window.history.replaceState({}, '', '/admin')
+    Promise.resolve().then(() => setSpotifyParam(p))
+  }, [])
 
   async function loadStatus() {
     try {
@@ -102,6 +118,29 @@ export default function AdminPage() {
             <h1 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, letterSpacing:1, marginBottom:24 }}>
               Trending Tracks Pipeline
             </h1>
+
+            {spotifyParam && SPOTIFY_BANNER[spotifyParam] && (
+              <div style={{ ...cardStyle, marginBottom:20, fontSize:13, color: SPOTIFY_BANNER[spotifyParam].ok ? '#4ade80' : M }}>
+                {SPOTIFY_BANNER[spotifyParam].text}
+              </div>
+            )}
+
+            <div style={{ ...cardStyle, marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
+              <div>
+                <div style={{ fontSize:13, color:'#8a8aa6' }}>Spotify account</div>
+                <div style={{ fontSize:18, fontWeight:700, color: status?.spotifyConnected ? '#4ade80' : M }}>
+                  {loading ? '…' : status?.spotifyConnected ? '✓ Connected' : 'Not connected'}
+                </div>
+                <div style={{ fontSize:12, color:'#6a6a8a', marginTop:4, maxWidth:360 }}>
+                  Reading Spotify&apos;s editorial playlists requires a real logged-in Spotify account — an app-only token isn&apos;t allowed to read them.
+                </div>
+              </div>
+              <a href="/api/admin/spotify/login" style={{ textDecoration:'none' }}>
+                <button className="btn-cta" style={{ padding:'10px 20px', borderRadius:8, fontSize:14 }}>
+                  {status?.spotifyConnected ? 'Reconnect Spotify' : 'Connect Spotify'}
+                </button>
+              </a>
+            </div>
 
             <div style={{ ...cardStyle, marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
               <div>

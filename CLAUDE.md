@@ -30,8 +30,9 @@ LEMON_SQUEEZY_STORE_ID=402701
 LEMON_SQUEEZY_VARIANT_PRO=1820113
 LEMON_SQUEEZY_VARIANT_TEAM=1820124
 ADMIN_USER_IDS=user_xxx               # comma-separated Clerk user IDs for unlimited access
-SPOTIFY_CLIENT_ID                      # client-credentials flow — track verification + trend ingestion
+SPOTIFY_CLIENT_ID                      # same app creds, used for both Client Credentials (track verification) and Authorization Code (trend ingestion)
 SPOTIFY_CLIENT_SECRET
+SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback  # must exactly match the URI registered in the Spotify Developer Dashboard
 CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
 ```
 
@@ -72,14 +73,18 @@ app/
 │   ├── checkout/route.ts             # Lemon Squeezy checkout URL creation
 │   ├── webhooks/lemon-squeezy/route.ts  # Subscription webhook handler
 │   ├── cron/refresh-trends/route.ts  # Daily Vercel Cron — refreshes trending_tracks (CRON_SECRET-gated)
-│   └── admin/trends/route.ts         # GET status / POST manual refresh for /admin (ADMIN_USER_IDS-gated)
+│   ├── admin/trends/route.ts         # GET status / POST manual refresh for /admin (ADMIN_USER_IDS-gated)
+│   └── admin/spotify/
+│       ├── login/route.ts            # Redirects to Spotify's Authorization Code login
+│       └── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_auth table
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
-└── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
+├── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
+└── spotify-user-auth.ts              # Spotify Authorization Code flow (spotify_auth table) — see gotcha below
 ```
 
 ## Supabase Schema
@@ -181,6 +186,8 @@ Reduces any crate (up to 500 tracks) to ≤30 candidates:
 `GET /api/cron/refresh-trends` (daily, Vercel Cron) scans 10 seeded Spotify editorial playlists (one per major genre, `lib/trend-sources.ts`), resolves real bpm/key via ReccoBeats, and upserts into Supabase `trending_tracks` — durability-scored via `times_seen` (bumped each scan a track reappears) and decayed via `last_seen_at` (ignored after 14 days stale). Also piggybacks `track_metadata_cache` so trending tracks are pre-verified before Claude ever picks them. `generate/route.ts` fetches up to 20 trending tracks per request (`getTrendingTracksForGenre`) and injects them into the prompt as a "TRENDING NOW" block, same mechanism as the existing library-tracks injection — biases picks toward currently-popular real tracks without forcing them.
 
 Admins can check pipeline health and force a scan without touching curl/Vercel logs at `/admin` — reads `getTrendStatus()` (per-genre counts + last-refreshed time) and can trigger `refreshTrendingTracks()` directly via a signed-in-admin-gated POST, as an alternative to the CRON_SECRET-gated cron endpoint.
+
+**Gotcha:** Spotify blocks its own editorial playlists (`37i9dQZF1DX...`) from being read via the Client Credentials flow (no-login, app-only token) — returns 403 for apps without Extended Quota Mode approval. `lib/track-match.ts`'s `getSpotifyToken()` (Client Credentials) still works fine for track search/verification, but playlist reads for trend ingestion need a *real logged-in* Spotify user token instead. `lib/spotify-user-auth.ts` implements the Authorization Code flow for this — admin visits `/admin`, clicks "Connect Spotify" once, and the resulting refresh token is stored in the `spotify_auth` table (schema in that file's header comment) and auto-refreshed thereafter. `trend-ingest.ts` uses `getUserAccessToken()`, not `getSpotifyToken()`. Requires `SPOTIFY_REDIRECT_URI` registered exactly in the Spotify Developer Dashboard.
 
 ## App Features (all live)
 **Core:**

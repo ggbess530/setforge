@@ -7,7 +7,8 @@
 // Spotify search call during generation.
 
 import { createAdminClient } from './supabase'
-import { getSpotifyToken, normalizeTitle, normalizeArtists } from './track-match'
+import { normalizeTitle, normalizeArtists } from './track-match'
+import { getUserAccessToken } from './spotify-user-auth'
 import { getBpmKeyForSpotifyIds } from './reccobeats'
 import { upsertCachedMetadata } from './metadata-cache'
 import { GENRE_TREND_SOURCES } from './trend-sources'
@@ -95,7 +96,7 @@ export async function refreshTrendingTracks(): Promise<{
   genresScanned: number; tracksUpserted: number
   errors: { genre: string; playlistId: string; error: string }[]
 }> {
-  const token = await getSpotifyToken()
+  const token = await getUserAccessToken()
   let tracksUpserted = 0
   const errors: { genre: string; playlistId: string; error: string }[] = []
 
