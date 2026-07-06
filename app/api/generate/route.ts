@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
+import { getTrendingTracksForGenre, type TrendingTrack } from '@/lib/trending'
 
 // ── Energy interpolation ──────────────────────────────────────
 function interpolateEnergy(points: number[], n: number): number[] {
@@ -53,6 +54,7 @@ async function generateChunk(params: {
   setTitle?:    string
   recentTracks?: string[]
   libraryTracks?: { artist:string; title:string; bpm?:number; key?:string }[]
+  trendingTracks?: TrendingTrack[]
 }): Promise<{ title: string; summary: string; tracks: unknown[] }> {
 
   const {
@@ -60,7 +62,7 @@ async function generateChunk(params: {
     bpmLow, bpmHigh, keyMatch,
     targetCount, energyStart, energyEnd, energyCurve,
     position, includeMixingNotes = true, lockedTracks, prevTracks, setTitle, recentTracks = [],
-    libraryTracks = [],
+    libraryTracks = [], trendingTracks = [],
   } = params
 
   const vibeLine    = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}`              : ''
@@ -92,6 +94,12 @@ async function generateChunk(params: {
       }\nUse library tracks over equivalent alternatives when they fit. Supplement with other real tracks when the library lacks a suitable option for a slot.`
     : ''
 
+  const trendingBlock = trendingTracks.length
+    ? `\n\nTRENDING NOW in ${genre} (real tracks currently popular on genre charts — use several where they fit, to keep the set feeling current rather than leaning only on older well-known tracks):\n${
+        trendingTracks.slice(0, 20).map(t => `- "${t.artist} — ${t.title}"${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`).join('\n')
+      }`
+    : ''
+
   // Illustrative key/BPM used in the schema example and rules text below are randomized
   // per request — a fixed example (e.g. always "8A") measurably biases the model toward
   // reproducing that exact value and its neighbors across generated sets.
@@ -112,7 +120,7 @@ Parameters:
 - Harmonic key matching: ${keyMatch ? 'YES — adjacent Camelot keys must be compatible (same number, ±1, or A↔B)' : 'not required'}
 - Track count: ${targetCount} tracks
 - Energy: start ${energyStart}/10 → end ${energyEnd}/10
-- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}
+- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}${trendingBlock}
 
 Respond ONLY with valid JSON, no markdown, no preamble (the field values below are placeholder illustrations, not suggested values):
 {
@@ -262,6 +270,8 @@ export async function POST(req: Request) {
 
     const baseParams = { genre, crowd, vibe: vibe||'', refArtist: refArtist||'', bpmLow, bpmHigh, keyMatch }
 
+    const trendingTracks = await getTrendingTracksForGenre(genre)
+
     const CHUNK_SIZE = 13
 
     let finalSet: { title: string; summary: string; tracks: unknown[] }
@@ -279,6 +289,7 @@ export async function POST(req: Request) {
         includeMixingNotes,
         recentTracks,
         libraryTracks,
+        trendingTracks,
       })
 
     } else {
@@ -307,6 +318,7 @@ export async function POST(req: Request) {
         includeMixingNotes,
         recentTracks,
         libraryTracks,
+        trendingTracks,
       })
 
       // Chunk 2: closing, seeded from chunk 1's last 2 tracks
@@ -327,6 +339,7 @@ export async function POST(req: Request) {
         includeMixingNotes,
         recentTracks: [...recentTracks, ...chunk1Used],
         libraryTracks,
+        trendingTracks,
       })
 
       // Renumber chunk 2 tracks

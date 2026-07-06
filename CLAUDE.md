@@ -30,6 +30,9 @@ LEMON_SQUEEZY_STORE_ID=402701
 LEMON_SQUEEZY_VARIANT_PRO=1820113
 LEMON_SQUEEZY_VARIANT_TEAM=1820124
 ADMIN_USER_IDS=user_xxx               # comma-separated Clerk user IDs for unlimited access
+SPOTIFY_CLIENT_ID                      # client-credentials flow — track verification + trend ingestion
+SPOTIFY_CLIENT_SECRET
+CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
 ```
 
 ## Key File Structure
@@ -65,11 +68,15 @@ app/
 │   ├── why/route.ts                  # "Why this track" explanations
 │   ├── share/route.ts                # Public set sharing
 │   ├── checkout/route.ts             # Lemon Squeezy checkout URL creation
-│   └── webhooks/lemon-squeezy/route.ts  # Subscription webhook handler
+│   ├── webhooks/lemon-squeezy/route.ts  # Subscription webhook handler
+│   └── cron/refresh-trends/route.ts  # Daily Vercel Cron — refreshes trending_tracks
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass
-└── supabase.ts                       # Admin client
+├── supabase.ts                       # Admin client
+├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
+├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
+└── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
 ```
 
 ## Supabase Schema
@@ -166,6 +173,9 @@ Reduces any crate (up to 500 tracks) to ≤30 candidates:
 
 ### History-aware generation
 `recentTracks` array (up to 60 tracks from user's history) sent with every generate call. Prompt instructs Claude to avoid all tracks in the list. Prevents repeat songs across sessions.
+
+### Trend-grounded generation
+`GET /api/cron/refresh-trends` (daily, Vercel Cron) scans 10 seeded Spotify editorial playlists (one per major genre, `lib/trend-sources.ts`), resolves real bpm/key via ReccoBeats, and upserts into Supabase `trending_tracks` — durability-scored via `times_seen` (bumped each scan a track reappears) and decayed via `last_seen_at` (ignored after 14 days stale). Also piggybacks `track_metadata_cache` so trending tracks are pre-verified before Claude ever picks them. `generate/route.ts` fetches up to 20 trending tracks per request (`getTrendingTracksForGenre`) and injects them into the prompt as a "TRENDING NOW" block, same mechanism as the existing library-tracks injection — biases picks toward currently-popular real tracks without forcing them.
 
 ## App Features (all live)
 **Core:**
