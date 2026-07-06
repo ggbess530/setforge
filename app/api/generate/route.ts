@@ -7,6 +7,7 @@ export const maxDuration = 120
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
+import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
 
 // ── Energy interpolation ──────────────────────────────────────
 function interpolateEnergy(points: number[], n: number): number[] {
@@ -91,6 +92,17 @@ async function generateChunk(params: {
       }\nUse library tracks over equivalent alternatives when they fit. Supplement with other real tracks when the library lacks a suitable option for a slot.`
     : ''
 
+  // Illustrative key/BPM used in the schema example and rules text below are randomized
+  // per request — a fixed example (e.g. always "8A") measurably biases the model toward
+  // reproducing that exact value and its neighbors across generated sets.
+  const exNum    = 1 + Math.floor(Math.random() * 12)
+  const exLetter = Math.random() < 0.5 ? 'A' : 'B'
+  const exKey    = `${exNum}${exLetter}`
+  const exRelKey = `${exNum}${exLetter === 'A' ? 'B' : 'A'}`
+  const exDownNum = exNum === 1 ? 12 : exNum - 1
+  const exUpNum   = exNum === 12 ? 1 : exNum + 1
+  const exBpm     = Math.round(bpmLow + Math.random() * Math.max(0, bpmHigh - bpmLow))
+
   const prompt = `You are a world-class DJ set curator. Build a ${position === 'full' ? 'complete' : position} DJ set section.
 
 Parameters:
@@ -102,14 +114,14 @@ Parameters:
 - Energy: start ${energyStart}/10 → end ${energyEnd}/10
 - Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}
 
-Respond ONLY with valid JSON, no markdown, no preamble:
+Respond ONLY with valid JSON, no markdown, no preamble (the field values below are placeholder illustrations, not suggested values):
 {
   "title": ${setTitle ? `"${setTitle}"` : '"evocative set name (3–5 words)"'},
   "summary": "1 sentence describing the energy journey",
   "tracks": [
     ${includeMixingNotes
-      ? '{ "n": 1, "artist": "Artist", "title": "Title", "bpm": 124, "key": "8A", "energy": 4, "transition": "mix note into next track" }'
-      : '{ "n": 1, "artist": "Artist", "title": "Title", "bpm": 124, "key": "8A", "energy": 4 }'}
+      ? `{ "n": 1, "artist": "Artist", "title": "Title", "bpm": ${exBpm}, "key": "${exKey}", "energy": 4, "transition": "mix note into next track" }`
+      : `{ "n": 1, "artist": "Artist", "title": "Title", "bpm": ${exBpm}, "key": "${exKey}", "energy": 4 }`}
   ]
 }
 
@@ -118,12 +130,12 @@ Rules:
 - NEVER suggest: unreleased tracks, dubplates, SoundCloud-only tracks, bootlegs, unofficial edits, or tracks you are uncertain about
 - If you cannot fill the track count with verified streaming tracks, use fewer tracks rather than inventing or guessing
 - Match each track's energy to the per-position value above
-- ${keyMatch ? `Harmonic key mixing REQUIRED. Camelot wheel rules (strict):
-  · Each position nA (minor) pairs with nB (major): same number is always compatible (8A↔8B)
-  · Adjacent on same ring: (n-1)X↔nX↔(n+1)X where 12 wraps to 1 (12A↔1A, 12B↔1B)
-  · Compatible moves FROM 8A: → 8B (relative), → 7A (down), → 9A (up). Nothing else.
-  · Compatible moves FROM 8B: → 8A (relative), → 7B (down), → 9B (up). Nothing else.
-  · DO NOT skip positions — 8A→10A or 8A→3B are key clashes, not harmonic
+- Use the FULL range of Camelot key numbers (1–12) and BPM values across the set based on what genuinely fits each real track — do NOT default to any one key or gravitate toward the same 2–3 keys out of habit; a set that never leaves one or two key numbers is a bug, not a feature
+- ${keyMatch ? `Harmonic key mixing REQUIRED. Camelot wheel rules (strict, using N as a generic position 1–12):
+  · Each position NA (minor) pairs with NB (major): same number is always compatible (e.g. ${exKey}↔${exRelKey})
+  · Adjacent on same ring: (N-1)X↔NX↔(N+1)X where 12 wraps to 1 (12A↔1A, 12B↔1B)
+  · Compatible moves FROM ${exKey}: → ${exRelKey} (relative), → ${exDownNum}${exLetter} (down), → ${exUpNum}${exLetter} (up). Nothing else.
+  · DO NOT skip positions — jumping more than one position on the wheel is a key clash, not harmonic
   · BPM difference between adjacent tracks must be ≤ 6 BPM for smooth mixing` : 'Key matching off — focus on BPM and energy flow'}
 ${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")' : '- Do NOT include a "transition" field — omit it entirely for faster, tracklist-only output'}
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
@@ -275,6 +287,12 @@ export async function POST(req: Request) {
     }
 
     recordUsage(userId, 'generate')
+
+    try {
+      await enrichTracks(finalSet.tracks as EnrichableTrack[])
+    } catch (err) {
+      console.warn('[generate] metadata enrichment failed, keeping AI-guessed values', err)
+    }
 
     return NextResponse.json({
       set: finalSet,

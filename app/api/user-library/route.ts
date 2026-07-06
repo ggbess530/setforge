@@ -4,6 +4,11 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { upsertCachedMetadata } from '@/lib/metadata-cache'
+
+// Only DJ-software exports carry analyzer-tagged (trustworthy) bpm/key — not worth
+// seeding the shared cache from anything else.
+const TRUSTED_METADATA_SOURCES = ['rekordbox', 'serato', 'traktor']
 
 function db() {
   return createClient(
@@ -131,6 +136,16 @@ export async function POST(req: Request) {
         .from('user_tracks')
         .upsert(batch, { onConflict: 'user_id,track_id', ignoreDuplicates: false })
       if (error) throw error
+    }
+
+    // Seed the shared metadata cache from real DJ-software-analyzed bpm/key —
+    // fire-and-forget, must never block or fail this request.
+    if (TRUSTED_METADATA_SOURCES.includes(source)) {
+      for (const row of trackRows) {
+        if (row.bpm && row.key) {
+          upsertCachedMetadata(row.artist, row.title, row.bpm, row.key, source).catch(() => {})
+        }
+      }
     }
 
     // ── Upsert crates ─────────────────────────────────────────
