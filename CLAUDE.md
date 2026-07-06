@@ -45,6 +45,8 @@ app/
 │   └── page.tsx                      # Set analyser standalone page (/analyse)
 ├── s/
 │   └── page.tsx                      # Public shared set page (/s?id=xxx)
+├── admin/
+│   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
 ├── sign-up/[[...sign-up]]/page.tsx
 ├── components/
@@ -69,7 +71,8 @@ app/
 │   ├── share/route.ts                # Public set sharing
 │   ├── checkout/route.ts             # Lemon Squeezy checkout URL creation
 │   ├── webhooks/lemon-squeezy/route.ts  # Subscription webhook handler
-│   └── cron/refresh-trends/route.ts  # Daily Vercel Cron — refreshes trending_tracks
+│   ├── cron/refresh-trends/route.ts  # Daily Vercel Cron — refreshes trending_tracks (CRON_SECRET-gated)
+│   └── admin/trends/route.ts         # GET status / POST manual refresh for /admin (ADMIN_USER_IDS-gated)
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass
@@ -176,6 +179,8 @@ Reduces any crate (up to 500 tracks) to ≤30 candidates:
 
 ### Trend-grounded generation
 `GET /api/cron/refresh-trends` (daily, Vercel Cron) scans 10 seeded Spotify editorial playlists (one per major genre, `lib/trend-sources.ts`), resolves real bpm/key via ReccoBeats, and upserts into Supabase `trending_tracks` — durability-scored via `times_seen` (bumped each scan a track reappears) and decayed via `last_seen_at` (ignored after 14 days stale). Also piggybacks `track_metadata_cache` so trending tracks are pre-verified before Claude ever picks them. `generate/route.ts` fetches up to 20 trending tracks per request (`getTrendingTracksForGenre`) and injects them into the prompt as a "TRENDING NOW" block, same mechanism as the existing library-tracks injection — biases picks toward currently-popular real tracks without forcing them.
+
+Admins can check pipeline health and force a scan without touching curl/Vercel logs at `/admin` — reads `getTrendStatus()` (per-genre counts + last-refreshed time) and can trigger `refreshTrendingTracks()` directly via a signed-in-admin-gated POST, as an alternative to the CRON_SECRET-gated cron endpoint.
 
 ## App Features (all live)
 **Core:**

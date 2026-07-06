@@ -22,6 +22,36 @@ function resolveGenreKey(genre: string): string | null {
   return Object.keys(GENRE_TREND_SOURCES).find(k => lower.includes(k.toLowerCase())) ?? null
 }
 
+export type TrendStatus = {
+  totalTracks:    number
+  lastRefreshed:  string | null   // most recent last_seen_at across all rows, or null if never run
+  byGenre:        { genre: string; trackCount: number }[]
+}
+
+// Powers the admin dashboard — reads the whole table rather than a SQL GROUP BY
+// since row counts are small (10 genres x ~100 tracks) and this avoids needing
+// a Postgres view/RPC just for an internal status readout.
+export async function getTrendStatus(): Promise<TrendStatus> {
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('trending_tracks').select('genre, last_seen_at')
+  const rows = data ?? []
+
+  const counts = new Map<string, number>()
+  let lastRefreshed: string | null = null
+  for (const row of rows) {
+    counts.set(row.genre, (counts.get(row.genre) ?? 0) + 1)
+    if (!lastRefreshed || row.last_seen_at > lastRefreshed) lastRefreshed = row.last_seen_at
+  }
+
+  return {
+    totalTracks: rows.length,
+    lastRefreshed,
+    byGenre: [...counts.entries()]
+      .map(([genre, trackCount]) => ({ genre, trackCount }))
+      .sort((a, b) => b.trackCount - a.trackCount),
+  }
+}
+
 export async function getTrendingTracksForGenre(genre: string, limit = 20): Promise<TrendingTrack[]> {
   const genreKey = resolveGenreKey(genre || '')
   if (!genreKey) return []

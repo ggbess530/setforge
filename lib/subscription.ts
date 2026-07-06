@@ -32,7 +32,7 @@ function createAdminClient() {
   )
 }
 
-function isAdmin(userId: string): boolean {
+export function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS || '')
     .split(',').map(id => id.trim()).filter(Boolean)
     .includes(userId)

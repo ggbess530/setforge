@@ -55,6 +55,56 @@ function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
 }
 
 // ── Data ─────────────────────────────────────────────────────
+const TICKER_ITEMS = [
+  '✦ No DJ experience needed',
+  '✦ AI harmonic key matching',
+  '✦ 42 genres available',
+  '✦ Free forever plan',
+  '✦ Rekordbox & Serato import',
+  '✦ Real tracks from real artists',
+  '✦ Custom energy curves',
+  '✦ 7-day Pro trial',
+  '✦ Public set sharing',
+  '✦ Grade any tracklist with Analyser',
+  '✦ Built-in Mashup Finder',
+  '✦ Multi-DJ night planning',
+  '✦ Tracks grounded in what’s trending',
+  '✦ Drag to reorder tracks',
+  '✦ Lock your favourite tracks',
+  '✦ Works in any browser',
+]
+
+const TOOLS = [
+  {
+    icon: '⚡', name: 'Forge', href: '/app',
+    title: 'Generate a complete DJ set from a description',
+    plain: 'The main event — start here if you’re new.',
+    desc: 'Pick a genre, crowd, and energy arc (or type your own in plain English) and SetForge builds a full tracklist: real songs, matched BPM, compatible musical keys, and notes on exactly how to mix each transition.',
+    tag: 'No experience needed',
+  },
+  {
+    icon: '📊', name: 'Analyser', href: '/analyse',
+    title: 'Get any tracklist graded like a pro would',
+    plain: 'Already built a set yourself? See how it holds up.',
+    desc: 'Paste a tracklist from anywhere — your own set, a festival lineup, a friend’s mix — and get a full breakdown: energy flow, harmonic mixing, BPM progression, the weakest transition (and how to fix it), plus an overall grade.',
+    tag: 'Works with any format',
+  },
+  {
+    icon: '🎛️', name: 'Mix & Mashup Lab', href: '/mix',
+    title: 'Test transitions and find mashup-ready pairings',
+    plain: 'Wondering if two songs actually work together?',
+    desc: 'The Mix Simulator checks whether two tracks blend cleanly before you ever play them live. The Mashup Finder takes one track and surfaces real candidates in compatible keys and BPMs, even across genres.',
+    tag: 'Great for creative mixing',
+  },
+  {
+    icon: '🗓️', name: 'Night Planner', href: '/planner',
+    title: 'Coordinate a full night across multiple DJs',
+    plain: 'Running an event with more than one DJ on the bill?',
+    desc: 'Lay out every slot on a timeline — genre, crowd, energy — and generate a set for each one. SetForge checks the handoff between back-to-back DJs so the key and BPM actually connect when one set ends and the next begins.',
+    tag: 'Built for events, not just solo sets',
+  },
+]
+
 const FEATURES = [
   { icon:'🎵', title:'Picks the perfect tracks',        plain:'No more hours searching for songs that go together.', desc:"Our AI listens to your vibe — genre, mood, crowd — and selects real tracks that actually flow together. Like having a DJ friend who knows everything." },
   { icon:'🔗', title:'Songs that flow back-to-back',    plain:'Ever heard two songs clash when mixed? This stops that.', desc:"SetForge orders tracks so the musical keys are compatible. Every transition sounds intentional — even if you've never mixed before." },
@@ -64,11 +114,19 @@ const FEATURES = [
   { icon:'📤', title:'Ready for your DJ software',      plain:'Works with Rekordbox, Serato, Traktor, and more.', desc:'Export any set straight into your DJ software, or copy and paste it anywhere. One click to take it live.' },
 ]
 
+const WORKFLOW_FEATURES = [
+  { icon:'📁', title:'Bring your own library',          plain:'Already have thousands of tracks tagged in Rekordbox or Serato?', desc:'Import your existing Rekordbox XML, Traktor NML, or Serato crates once — SetForge remembers it permanently and can build sets straight from your own music instead of only suggesting new tracks.' },
+  { icon:'💡', title:'"Why this track?" — always explained', plain:'Never wonder why the AI picked something.', desc:'Every track in a generated set can be expanded to see exactly why it was chosen — how it fits the energy, the key, and the vibe you asked for. Nothing is a black box.' },
+  { icon:'📡', title:'Grounded in what’s trending right now', plain:'Not just historically famous tracks — what’s actually popping off today.', desc:'SetForge continuously tracks real, currently-charting tracks across genres and weaves relevant, current picks into your set alongside proven classics, so your sets don’t feel stuck in the past.' },
+  { icon:'🔗', title:'Share it like a mixtape',          plain:'Show off a set without sending a screenshot.', desc:'Every saved set gets a clean public link with the full tracklist and a "Forge Your Own" button — perfect for socials, group chats, or handing off to another DJ.' },
+]
+
 const FAQS = [
   { q:'Do I need to be a DJ to use SetForge?', a:"Not at all. SetForge was built with beginners in mind. If you love music and want to build a set — even your first one ever — SetForge does the hard work. No experience needed." },
+  { q:'What’s the difference between Forge, Analyser, Mix, and Planner?', a:'Forge builds a brand-new set from scratch — start here. Analyser grades a tracklist you (or someone else) already made. Mix & Mashup Lab checks whether two specific tracks work together, or finds mashup candidates for one. Night Planner coordinates multiple back-to-back DJ sets for an event. Most people only ever need Forge — the others are there when you need them.' },
   { q:'What is BPM and why does it matter?', a:"BPM is Beats Per Minute — basically how fast a song is. Most club music sits between 120–130 BPM. Matching BPMs makes mixes smooth instead of jarring. SetForge handles this automatically." },
   { q:'What is harmonic mixing? Do I need to understand it?', a:"Harmonic mixing means choosing songs in compatible musical keys. Pro DJs spend years learning this. SetForge does it instantly for every track, so you get pro transitions without knowing any music theory." },
-  { q:'Do I need DJ equipment or software?', a:"No. SetForge works in any browser on any device. If you have Rekordbox or Serato, you can export directly. But you can also just use SetForge to plan and discover music." },
+  { q:'Do I need DJ equipment or software?', a:"No. SetForge works in any browser on any device. If you have Rekordbox or Serato, you can export directly, or import your existing library so sets are built from music you already own. But you can also just use SetForge to plan and discover music." },
   { q:'Will the AI suggest real songs I can find?', a:"Yes. SetForge picks real, well-known tracks on Beatport, Spotify, and major platforms. Every track has direct search links so you can preview and buy instantly." },
   { q:'What is an energy arc and which should I pick?', a:'"Energy arc" is how your set builds over time. Slow Build starts mellow and peaks hard — great for warming up a crowd. Peak Time keeps energy high throughout. Cool Down works for the end of a night. When in doubt, Slow Build is the most crowd-pleasing.' },
   { q:'How is this different from a Spotify playlist?', a:"A Spotify playlist is just songs in a row. SetForge creates a DJ set — every track chosen for BPM, musical key, energy level, and how it flows into the next one. You also get transition notes telling you exactly how to mix. It's the difference between a list and a performance." },
@@ -174,6 +232,10 @@ export default function LandingPage() {
         .feature-card:hover .feature-icon { animation:icon-bounce .4s ease; }
         @keyframes icon-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
 
+        /* ── Tool cards ── */
+        .tool-card { transition:transform .25s,box-shadow .25s,border-color .25s; }
+        .tool-card:hover { transform:translateY(-6px); box-shadow:0 20px 70px rgba(0,0,0,.35); border-color:#2a2a42!important; }
+
         /* ── Tier cards ── */
         .tier-card { transition:transform .2s,box-shadow .2s; }
         .tier-card:hover { transform:translateY(-6px); }
@@ -217,32 +279,7 @@ export default function LandingPage() {
         <div style={{ position:'absolute', left:0, top:0, bottom:0, width:60, background:'linear-gradient(90deg,#08080f,transparent)', zIndex:2, pointerEvents:'none' }} />
         <div style={{ position:'absolute', right:0, top:0, bottom:0, width:60, background:'linear-gradient(270deg,#08080f,transparent)', zIndex:2, pointerEvents:'none' }} />
         <div className="ticker-track" style={{ padding:'10px 0' }}>
-          {[
-            '✦ No DJ experience needed',
-            '✦ AI harmonic key matching',
-            '✦ 42 genres available',
-            '✦ Free forever plan',
-            '✦ Rekordbox & Serato import',
-            '✦ Real tracks from real artists',
-            '✦ Custom energy curves',
-            '✦ 7-day Pro trial',
-            '✦ Public set sharing',
-            '✦ Drag to reorder tracks',
-            '✦ Lock your favourite tracks',
-            '✦ Works in any browser',
-            '✦ No DJ experience needed',
-            '✦ AI harmonic key matching',
-            '✦ 42 genres available',
-            '✦ Free forever plan',
-            '✦ Rekordbox & Serato import',
-            '✦ Real tracks from real artists',
-            '✦ Custom energy curves',
-            '✦ 7-day Pro trial',
-            '✦ Public set sharing',
-            '✦ Drag to reorder tracks',
-            '✦ Lock your favourite tracks',
-            '✦ Works in any browser',
-          ].map((item, i) => (
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
             <span key={i} style={{ fontSize:12, color: i % 4 === 0 ? C : i % 4 === 2 ? M : '#6a6a8a', fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5, paddingRight:48, flexShrink:0 }}>
               {item}
             </span>
@@ -301,9 +338,17 @@ export default function LandingPage() {
           <p style={{ fontSize:20, color:'#9a9ab8', maxWidth:560, margin:'0 auto 18px', lineHeight:1.75 }}>
             Tell SetForge your vibe — genre, mood, crowd — and the AI builds you a complete, professionally structured tracklist. No music theory. No equipment. No experience.
           </p>
-          <p style={{ fontSize:15, color:'#5a5a7a', maxWidth:480, margin:'0 auto 48px', lineHeight:1.6 }}>
+          <p style={{ fontSize:15, color:'#5a5a7a', maxWidth:520, margin:'0 auto 30px', lineHeight:1.6 }}>
             Perfect for beginners, producers planning sets, and anyone who loves music.
           </p>
+
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:18 }}>
+            <a href="#tools" style={{ textDecoration:'none', display:'inline-flex', alignItems:'center', gap:8, fontSize:13, color:'#6a6a8a', border:'1px solid #1a1a2e', borderRadius:999, padding:'8px 16px', transition:'border-color .2s,color .2s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor=C; (e.currentTarget as HTMLElement).style.color=C }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#1a1a2e'; (e.currentTarget as HTMLElement).style.color='#6a6a8a' }}>
+              Plus an Analyser, Mix &amp; Mashup Lab, and Night Planner ↓
+            </a>
+          </div>
 
           <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
             {isSignedIn ? (
@@ -365,11 +410,49 @@ export default function LandingPage() {
           </section>
         </Reveal>
 
+        {/* ── TOOLS ── */}
+        <Reveal>
+          <section id="tools" style={{ padding:'0 24px 72px', maxWidth:1120, margin:'0 auto' }}>
+            <div style={{ textAlign:'center', marginBottom:52 }}>
+              <div style={{ fontSize:12, color:M, fontWeight:700, letterSpacing:3, marginBottom:14, textTransform:'uppercase' }}>✦ Four tools, one platform</div>
+              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Everything from your first set to a full night</h2>
+              <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:560, margin:'0 auto', lineHeight:1.7 }}>
+                Most people only ever need Forge. The rest are here for when you outgrow a single generated set.
+              </p>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:18 }}>
+              {TOOLS.map(tool => (
+                <div key={tool.name} className="tool-card" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:20, padding:32, display:'flex', flexDirection:'column' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+                    <div style={{ fontSize:32, lineHeight:1 }}>{tool.icon}</div>
+                    <div>
+                      <div style={{ fontSize:19, fontWeight:800, color:'#e8e8f0' }}>{tool.name}</div>
+                      <div style={{ fontSize:11, color:C, fontWeight:700, letterSpacing:.5, marginTop:2 }}>{tool.tag}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:15, fontWeight:700, color:'#e8e8f0', marginBottom:6, lineHeight:1.4 }}>{tool.title}</div>
+                  <div style={{ fontSize:13, color:M, marginBottom:12, fontWeight:600 }}>{tool.plain}</div>
+                  <p style={{ fontSize:14, color:'#8a8aa6', lineHeight:1.75, marginBottom:22, flex:1 }}>{tool.desc}</p>
+                  {isSignedIn ? (
+                    <Link href={tool.href} style={{ textDecoration:'none' }}>
+                      <button className="btn-ghost" style={{ width:'100%', padding:'11px 0', borderRadius:10, fontSize:14, fontWeight:700 }}>Try {tool.name} →</button>
+                    </Link>
+                  ) : (
+                    <SignUpButton mode="modal">
+                      <button className="btn-ghost" style={{ width:'100%', padding:'11px 0', borderRadius:10, fontSize:14, fontWeight:700 }}>Try {tool.name} →</button>
+                    </SignUpButton>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        </Reveal>
+
         {/* ── HOW IT WORKS ── */}
         <Reveal>
           <section id="how-it-works" style={{ padding:'0 24px 72px', maxWidth:1040, margin:'0 auto' }}>
             <div style={{ textAlign:'center', marginBottom:52 }}>
-              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>How it works</h2>
+              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>How Forge works</h2>
               <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:420, margin:'0 auto' }}>Three steps from blank page to a ready-to-play set.</p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:16 }}>
@@ -403,7 +486,7 @@ export default function LandingPage() {
         <Reveal>
           <section style={{ padding:'0 24px 72px', maxWidth:1120, margin:'0 auto' }}>
             <div style={{ textAlign:'center', marginBottom:52 }}>
-              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Everything you need to build great sets</h2>
+              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>What happens when you hit generate</h2>
               <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:480, margin:'0 auto' }}>Professional DJ tools, explained in plain English.</p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:18 }}>
@@ -412,6 +495,26 @@ export default function LandingPage() {
                   <div className="feature-icon" style={{ fontSize:36, marginBottom:16 }}>{f.icon}</div>
                   <div style={{ fontSize:17, fontWeight:700, marginBottom:6, color:'#e8e8f0' }}>{f.title}</div>
                   <div style={{ fontSize:13, color:C, marginBottom:10, fontWeight:600 }}>{f.plain}</div>
+                  <div style={{ fontSize:14, color:'#6a6a8a', lineHeight:1.75 }}>{f.desc}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </Reveal>
+
+        {/* ── WORKFLOW FEATURES ── */}
+        <Reveal>
+          <section style={{ padding:'0 24px 72px', maxWidth:1120, margin:'0 auto' }}>
+            <div style={{ textAlign:'center', marginBottom:52 }}>
+              <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Built to fit a real DJ&apos;s workflow</h2>
+              <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:480, margin:'0 auto' }}>The details that matter once you&apos;re using SetForge regularly.</p>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:18 }}>
+              {WORKFLOW_FEATURES.map(f => (
+                <div key={f.title} className="feature-card" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:18, padding:30, backdropFilter:'blur(8px)' }}>
+                  <div className="feature-icon" style={{ fontSize:36, marginBottom:16 }}>{f.icon}</div>
+                  <div style={{ fontSize:17, fontWeight:700, marginBottom:6, color:'#e8e8f0' }}>{f.title}</div>
+                  <div style={{ fontSize:13, color:M, marginBottom:10, fontWeight:600 }}>{f.plain}</div>
                   <div style={{ fontSize:14, color:'#6a6a8a', lineHeight:1.75 }}>{f.desc}</div>
                 </div>
               ))}
