@@ -622,6 +622,10 @@ export default function AppPage() {
                           <button onClick={()=>loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1 }}>
                             {libLoading?'…':'▶ LOAD'}
                           </button>
+                          <a href={`/live?id=${item.id}`} target="_blank" rel="noopener noreferrer" className="sf-btn-ghost"
+                            style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1, textDecoration:'none', textAlign:'center', display:'inline-block' }}>
+                            🔴 LIVE
+                          </a>
                           {deleteConf===item.id ? (
                             <>
                               <button onClick={()=>deleteSet(item.id)} style={{ background:M, color:'#06060c', border:'none', padding:'4px 8px', borderRadius:6, fontSize:9, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>YES</button>
