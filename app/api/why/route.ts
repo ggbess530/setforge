@@ -4,7 +4,7 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
-import { checkSubscription, recordUsage } from '@/lib/subscription'
+import { checkSubscription } from '@/lib/subscription'
 
 // ── POST /api/why ─────────────────────────────────────────────
 // Returns plain-English reasoning for a specific track choice
@@ -16,8 +16,8 @@ export async function POST(req: Request) {
 
     const sub = await checkSubscription(userId)
     if (!sub.active) return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
-    if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
-      return NextResponse.json({ error: 'Generation limit reached.', code: 'LIMIT_REACHED' }, { status: 429 })
+    if (sub.tier === 'free') {
+      return NextResponse.json({ error: '"Why this track?" is a Pro feature.', code: 'PRO_REQUIRED' }, { status: 403 })
     }
 
     const { track, prevTrack, nextTrack, genre, crowd, arc, setLength } = await req.json()
@@ -89,7 +89,6 @@ Respond with JSON only:
     const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json(data)
 
   } catch (err) {

@@ -104,6 +104,9 @@ export default function AppPage() {
   }, [])
   useEffect(() => { loadLibrary() }, [])
   useEffect(() => {
+    fetch('/api/quota').then(r => r.json()).then(d => { if (!d.error) setQuota(d) }).catch(() => {})
+  }, [])
+  useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'library') {
       window.history.replaceState({}, '', '/app')
     }
@@ -262,7 +265,10 @@ export default function AppPage() {
   }
 
   function toggleWhy(i: number) {
-    setOpenWhy(prev => { const n = new Set(prev); if (n.has(i)) { n.delete(i); return n }; n.add(i); fetchWhy(i); return n })
+    setOpenWhy(prev => {
+      const n = new Set(prev); if (n.has(i)) { n.delete(i); return n }
+      n.add(i); if (quota?.tier !== 'free') fetchWhy(i); return n
+    })
   }
 
   function reorderTracks(from: number, to: number) {
@@ -825,13 +831,18 @@ export default function AppPage() {
                       <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                         <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
                       </button>
-                      <button onClick={()=>toggleWhy(i)} title="Why this track?" style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
-                        ?
+                      <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
+                        {quota?.tier==='free' ? '🔒' : '?'}
                       </button>
                     </div>
                     {openWhy.has(i) && (
                       <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding:'12px 14px' }}>
-                        {loadingWhy.has(i) ? (
+                        {quota?.tier==='free' ? (
+                          <div style={{ fontSize:12, color:'#8a8aa8', lineHeight:1.6 }}>
+                            🔒 &quot;Why this track?&quot; explanations are a <span style={{ color:C, fontWeight:700 }}>Pro</span> feature.
+                            <Link href="/#pricing" style={{ display:'inline', marginLeft:6, color:C, textDecoration:'underline' }}>Upgrade →</Link>
+                          </div>
+                        ) : loadingWhy.has(i) ? (
                           <div style={{ fontSize:11, color:'#4a4a66', fontFamily:"'JetBrains Mono',monospace", animation:'pulse 1.2s infinite' }}>Analysing track choice…</div>
                         ) : whyData[i] ? (
                           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -839,7 +850,9 @@ export default function AppPage() {
                             <div style={{ fontSize:11, color:'#8a8aa8', lineHeight:1.5 }}><span style={{ color:C, fontWeight:700 }}>In: </span>{whyData[i].inbound}</div>
                             <div style={{ fontSize:11, color:'#8a8aa8', lineHeight:1.5 }}><span style={{ color:M, fontWeight:700 }}>Tip: </span>{whyData[i].tip}</div>
                           </div>
-                        ) : null}
+                        ) : (
+                          <div style={{ fontSize:11, color:'#4a4a66' }}>Couldn&apos;t load — try again.</div>
+                        )}
                       </div>
                     )}
                   </div>
