@@ -3,20 +3,13 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient as db } from '@/lib/supabase'
 import { upsertCachedMetadata } from '@/lib/metadata-cache'
+import { logError } from '@/lib/log-error'
 
 // Only DJ-software exports carry analyzer-tagged (trustworthy) bpm/key — not worth
 // seeding the shared cache from anything else.
 const TRUSTED_METADATA_SOURCES = ['rekordbox', 'serato', 'traktor']
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // ── GET — fetch the user's full library (crates + tracks) ─────
 export async function GET(req: Request) {
@@ -92,7 +85,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ crates: crates || [], trackCount: trackCount || 0 })
 
   } catch (err) {
-    console.error('[GET /api/user-library]', err)
+    logError('[GET /api/user-library]', err)
     return NextResponse.json({ error: 'Failed to load library.' }, { status: 500 })
   }
 }
@@ -195,7 +188,7 @@ export async function POST(req: Request) {
     })
 
   } catch (err) {
-    console.error('[POST /api/user-library]', err)
+    logError('[POST /api/user-library]', err)
     return NextResponse.json({ error: 'Failed to save library.' }, { status: 500 })
   }
 }
@@ -213,7 +206,7 @@ export async function DELETE() {
 
     return NextResponse.json({ cleared: true })
   } catch (err) {
-    console.error('[DELETE /api/user-library]', err)
+    logError('[DELETE /api/user-library]', err)
     return NextResponse.json({ error: 'Failed to clear library.' }, { status: 500 })
   }
 }

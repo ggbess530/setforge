@@ -4,6 +4,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 export async function POST(req: Request) {
   try {
@@ -62,7 +63,7 @@ Return ONLY valid JSON, no markdown:
     await recordUsage(userId, 'generate')
     return NextResponse.json(data)
   } catch (err) {
-    console.error('[POST /api/mashup]', err)
+    logError('[POST /api/mashup]', err)
     return NextResponse.json({ error: 'Failed to find mashup candidates.' }, { status: 500 })
   }
 }

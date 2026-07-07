@@ -5,6 +5,7 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { logError } from '@/lib/log-error'
 
 function getId(req: Request): string | null {
   return new URL(req.url).searchParams.get('id')
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ set })
 
   } catch (err) {
-    console.error('[GET /api/library/item]', err)
+    logError('[GET /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to load set.' }, { status: 500 })
   }
 }
@@ -61,7 +62,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ set: updated })
 
   } catch (err) {
-    console.error('[PATCH /api/library/item]', err)
+    logError('[PATCH /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to rename set.' }, { status: 500 })
   }
 }
@@ -86,7 +87,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ deleted: true })
 
   } catch (err) {
-    console.error('[DELETE /api/library/item]', err)
+    logError('[DELETE /api/library/item]', err)
     return NextResponse.json({ error: 'Failed to delete set.' }, { status: 500 })
   }
 }

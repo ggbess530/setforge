@@ -12,6 +12,7 @@ import { isAdmin }             from '@/lib/subscription'
 import { getTrendStatus }      from '@/lib/trending'
 import { refreshTrendingTracks } from '@/lib/trend-ingest'
 import { isSpotifyConnected }   from '@/lib/spotify-user-auth'
+import { logError } from '@/lib/log-error'
 
 export const maxDuration = 120
 
@@ -31,7 +32,7 @@ export async function POST() {
     const result = await refreshTrendingTracks()
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
-    console.error('[POST /api/admin/trends]', err)
+    logError('[POST /api/admin/trends]', err)
     const message = err instanceof Error ? err.message : 'Refresh failed'
     return NextResponse.json({ error: message }, { status: 500 })
   }

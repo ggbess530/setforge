@@ -34,6 +34,8 @@ SPOTIFY_CLIENT_ID                      # same app creds, used for both Client Cr
 SPOTIFY_CLIENT_SECRET
 SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback  # must exactly match the URI registered in the Spotify Developer Dashboard
 CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
+SENTRY_DSN                             # server/edge error reporting — unset means Sentry is a no-op, nothing breaks
+NEXT_PUBLIC_SENTRY_DSN                 # same, for browser-side errors
 ```
 
 ## Key File Structure
@@ -84,7 +86,10 @@ lib/
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
 ├── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
-└── spotify-user-auth.ts              # Spotify Authorization Code flow (spotify_auth table) — see gotcha below
+├── spotify-user-auth.ts              # Spotify Authorization Code flow (spotify_auth table) — see gotcha below
+├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
+├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
+└── log-error.ts                      # logError() — console.error + Sentry.captureException/Message
 ```
 
 ## Supabase Schema

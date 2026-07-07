@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/subscription'
 import { exchangeCodeForRefreshToken } from '@/lib/spotify-user-auth'
+import { logError } from '@/lib/log-error'
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth()
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     res.cookies.delete('sf_spotify_oauth_state')
     return res
   } catch (err) {
-    console.error('[GET /api/admin/spotify/callback]', err)
+    logError('[GET /api/admin/spotify/callback]', err)
     return NextResponse.redirect(new URL('/admin?spotify=error', req.url))
   }
 }

@@ -4,16 +4,9 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient as db } from '@/lib/supabase'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { logError } from '@/lib/log-error'
 
 // ── Parse freeform tracklist text ─────────────────────────────
 function parseTracklist(raw: string): { n: number; artist: string; title: string; bpm?: number; key?: string }[] {
@@ -160,7 +153,7 @@ IMPORTANT: Keep ALL text fields SHORT (1-2 sentences max). For trackNotes, only 
       try {
         report = JSON.parse(candidate)
       } catch {
-        console.error('[analyse] Raw response that failed to parse:', raw.slice(0, 500))
+        logError('[analyse] Raw response that failed to parse:', raw.slice(0, 500))
         throw new SyntaxError('AI response could not be parsed')
       }
     }
@@ -212,7 +205,7 @@ IMPORTANT: Keep ALL text fields SHORT (1-2 sentences max). For trackNotes, only 
     return NextResponse.json({ report, tracks })
 
   } catch (err) {
-    console.error('[POST /api/analyse]', err)
+    logError('[POST /api/analyse]', err)
     if (err instanceof SyntaxError) {
       return NextResponse.json({ error: 'AI returned malformed data. Try again.' }, { status: 502 })
     }

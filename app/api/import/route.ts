@@ -4,6 +4,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 // ── Types ─────────────────────────────────────────────────────
 interface RawTrack {
@@ -323,7 +324,7 @@ export async function POST(req: Request) {
     })
 
   } catch (err: unknown) {
-    console.error('[POST /api/import]', err)
+    logError('[POST /api/import]', err)
     if (err instanceof SyntaxError) {
       return NextResponse.json({ error: 'AI returned malformed data. Please try again.' }, { status: 502 })
     }

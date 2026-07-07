@@ -5,6 +5,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 export const maxDuration = 120
 
@@ -69,7 +70,7 @@ Respond ONLY with valid JSON:
     return NextResponse.json({ set, quota: { tier: sub.tier, remaining: sub.remainingGenerations === null ? 'unlimited' : sub.remainingGenerations - 1 } })
 
   } catch (err) {
-    console.error('[POST /api/planner/generate]', err)
+    logError('[POST /api/planner/generate]', err)
     return NextResponse.json({ error: 'Generation failed.' }, { status: 500 })
   }
 }

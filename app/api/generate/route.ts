@@ -9,6 +9,7 @@ import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
 import { getTrendingTracksForGenre, type TrendingTrack } from '@/lib/trending'
+import { logError } from '@/lib/log-error'
 
 // ── Energy interpolation ──────────────────────────────────────
 function interpolateEnergy(points: number[], n: number): number[] {
@@ -406,7 +407,7 @@ export async function POST(req: Request) {
     })
 
   } catch (err: unknown) {
-    console.error('[POST /api/generate]', err)
+    logError('[POST /api/generate]', err)
     if (err instanceof SyntaxError) {
       return NextResponse.json({ error: 'AI returned malformed data. Please try again.' }, { status: 502 })
     }

@@ -6,6 +6,7 @@
 
 
 import { createAdminClient } from './supabase'
+import { fetchWithTimeout } from './fetch-timeout'
 
 let cachedAccessToken: { token: string; expiresAt: number } | null = null
 
@@ -30,7 +31,7 @@ export async function isSpotifyConnected(): Promise<boolean> {
 
 // Called once, right after the admin completes the Spotify login redirect.
 export async function exchangeCodeForRefreshToken(code: string, redirectUri: string): Promise<void> {
-  const res = await fetch('https://accounts.spotify.com/api/token', {
+  const res = await fetchWithTimeout('https://accounts.spotify.com/api/token', {
     method:  'POST',
     headers: { Authorization: `Basic ${basicAuthHeader()}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri }),
@@ -42,16 +43,18 @@ export async function exchangeCodeForRefreshToken(code: string, redirectUri: str
   cachedAccessToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000 }
 }
 
-// Real user-authenticated access token — unlike getSpotifyToken() in
-// track-match.ts (Client Credentials), this can read Spotify's own
-// editorial playlists. Cached across warm invocations same as that one.
+// Real user-authenticated access token, cached across warm invocations same
+// as getSpotifyToken() in track-match.ts. NOTE: as of Spotify's Feb 2026 API
+// changes, `Get Playlist Items` only works for playlists the token's owner
+// created or collaborates on — this can no longer read Spotify's own
+// editorial playlists either, despite being a real user login (see trend-ingest.ts).
 export async function getUserAccessToken(): Promise<string> {
   if (cachedAccessToken && cachedAccessToken.expiresAt - 60_000 > Date.now()) return cachedAccessToken.token
 
   const refreshToken = await getStoredRefreshToken()
   if (!refreshToken) throw new Error('Spotify account not connected — visit /admin and connect Spotify first.')
 
-  const res = await fetch('https://accounts.spotify.com/api/token', {
+  const res = await fetchWithTimeout('https://accounts.spotify.com/api/token', {
     method:  'POST',
     headers: { Authorization: `Basic ${basicAuthHeader()}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),

@@ -3,15 +3,8 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { createAdminClient as db } from '@/lib/supabase'
+import { logError } from '@/lib/log-error'
 
 // ── GET — fetch recent track history for a user ───────────────
 // Returns last 200 unique tracks used, with use counts
@@ -69,7 +62,7 @@ export async function GET() {
     return NextResponse.json({ tracks })
 
   } catch (err) {
-    console.error('[GET /api/track-history]', err)
+    logError('[GET /api/track-history]', err)
     return NextResponse.json({ error: 'Failed to load track history.' }, { status: 500 })
   }
 }
@@ -105,7 +98,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ logged: rows.length })
 
   } catch (err) {
-    console.error('[POST /api/track-history]', err)
+    logError('[POST /api/track-history]', err)
     return NextResponse.json({ error: 'Failed to log tracks.' }, { status: 500 })
   }
 }

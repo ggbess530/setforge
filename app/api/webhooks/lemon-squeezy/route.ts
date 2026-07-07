@@ -2,16 +2,10 @@
 // ▸ Place at:      app/api/webhooks/lemon-squeezy/route.ts
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import crypto           from 'crypto'
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { createAdminClient as db } from '@/lib/supabase'
+import { timingSafeEqualStr } from '@/lib/secure-compare'
+import { logError } from '@/lib/log-error'
 
 // ── Verify Lemon Squeezy webhook signature ────────────────────
 function verifySignature(payload: string, signature: string): boolean {
@@ -21,7 +15,7 @@ function verifySignature(payload: string, signature: string): boolean {
     .createHmac('sha256', secret)
     .update(payload)
     .digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(signature))
+  return timingSafeEqualStr(hmac, signature)
 }
 
 // ── Map LS status → our tier/status ──────────────────────────
@@ -89,7 +83,7 @@ export async function POST(req: Request) {
     }
 
     if (!userId) {
-      console.error('[webhook] No user_id in custom_data')
+      logError('[webhook] No user_id in custom_data')
       return NextResponse.json({ error: 'No user_id' }, { status: 400 })
     }
 
@@ -108,7 +102,7 @@ export async function POST(req: Request) {
       }, { onConflict: 'user_id' })
 
     if (error) {
-      console.error('[webhook] Supabase error:', error)
+      logError('[webhook] Supabase error:', error)
       return NextResponse.json({ error: 'DB update failed' }, { status: 500 })
     }
 
@@ -116,7 +110,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true })
 
   } catch (err) {
-    console.error('[webhook] Error:', err)
+    logError('[webhook] Error:', err)
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

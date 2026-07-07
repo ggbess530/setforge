@@ -4,6 +4,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { checkSubscription } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 // ── GET /api/library — fetch all sets for the current user ────
 export async function GET() {
@@ -28,7 +29,7 @@ export async function GET() {
     return NextResponse.json({ sets: sets ?? [] })
 
   } catch (err) {
-    console.error('[GET /api/library]', err)
+    logError('[GET /api/library]', err)
     return NextResponse.json({ error: 'Failed to load library.' }, { status: 500 })
   }
 }
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ set: saved }, { status: 201 })
 
   } catch (err) {
-    console.error('[POST /api/library]', err)
+    logError('[POST /api/library]', err)
     return NextResponse.json({ error: 'Failed to save set.' }, { status: 500 })
   }
 }

@@ -5,6 +5,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 // ── POST /api/why ─────────────────────────────────────────────
 // Returns plain-English reasoning for a specific track choice
@@ -92,7 +93,7 @@ Respond with JSON only:
     return NextResponse.json(data)
 
   } catch (err) {
-    console.error('[POST /api/why]', err)
+    logError('[POST /api/why]', err)
     return NextResponse.json({ error: 'Failed to explain track choice.' }, { status: 500 })
   }
 }

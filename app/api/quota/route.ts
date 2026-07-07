@@ -1,6 +1,7 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { checkSubscription } from '@/lib/subscription'
+import { logError } from '@/lib/log-error'
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
       isFree:    sub.isFree ?? false,
     })
   } catch (err) {
-    console.error('[GET /api/quota]', err)
+    logError('[GET /api/quota]', err)
     return NextResponse.json({ error: 'Failed' }, { status: 500 })
   }
 }

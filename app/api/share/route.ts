@@ -3,15 +3,8 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { createAdminClient as db } from '@/lib/supabase'
+import { logError } from '@/lib/log-error'
 
 // Generates a short, URL-safe share ID like "x7Kp2mQ9"
 function makeShareId(): string {
@@ -62,7 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ shareId })
 
   } catch (err) {
-    console.error('[POST /api/share]', err)
+    logError('[POST /api/share]', err)
     return NextResponse.json({ error: 'Failed to create share link.' }, { status: 500 })
   }
 }
@@ -87,7 +80,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ set })
 
   } catch (err) {
-    console.error('[GET /api/share]', err)
+    logError('[GET /api/share]', err)
     return NextResponse.json({ error: 'Failed to load shared set.' }, { status: 500 })
   }
 }
@@ -112,7 +105,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ unshared: true })
 
   } catch (err) {
-    console.error('[DELETE /api/share]', err)
+    logError('[DELETE /api/share]', err)
     return NextResponse.json({ error: 'Failed to unshare.' }, { status: 500 })
   }
 }

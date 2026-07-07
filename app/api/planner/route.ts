@@ -2,15 +2,8 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function db() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { createAdminClient as db } from '@/lib/supabase'
+import { logError } from '@/lib/log-error'
 
 // GET — list saved nights
 export async function GET() {
@@ -26,7 +19,7 @@ export async function GET() {
     if (error) throw error
     return NextResponse.json({ nights: data || [] })
   } catch (err) {
-    console.error('[GET /api/planner]', err)
+    logError('[GET /api/planner]', err)
     return NextResponse.json({ error: 'Failed to load.' }, { status: 500 })
   }
 }
@@ -54,7 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ night: data })
     }
   } catch (err) {
-    console.error('[POST /api/planner]', err)
+    logError('[POST /api/planner]', err)
     return NextResponse.json({ error: 'Failed to save.' }, { status: 500 })
   }
 }
@@ -69,7 +62,7 @@ export async function DELETE(req: Request) {
     await db().from('planner_nights').delete().eq('id', id).eq('user_id', userId)
     return NextResponse.json({ deleted: true })
   } catch (err) {
-    console.error('[DELETE /api/planner]', err)
+    logError('[DELETE /api/planner]', err)
     return NextResponse.json({ error: 'Failed to delete.' }, { status: 500 })
   }
 }

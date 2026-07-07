@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
+import { logError } from '@/lib/log-error'
 
 export async function POST(req: Request) {
   try {
@@ -79,7 +80,7 @@ ${keyMatch ? `- Strict Camelot key rules: compatible keys for ${target.key} are 
     return NextResponse.json({ suggestions: data.suggestions })
 
   } catch (err: unknown) {
-    console.error('[POST /api/swap]', err)
+    logError('[POST /api/swap]', err)
     if (err instanceof SyntaxError) return NextResponse.json({ error: 'AI returned malformed data. Please try again.' }, { status: 502 })
     return NextResponse.json({ error: 'Swap failed. Please try again.' }, { status: 500 })
   }

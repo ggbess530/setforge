@@ -8,6 +8,7 @@
 // audio-features per resolved track.
 
 import { SPOTIFY_TO_CAMELOT } from './track-match'
+import { fetchWithTimeout } from './fetch-timeout'
 
 const BASE = 'https://api.reccobeats.com/v1'
 
@@ -23,7 +24,7 @@ async function resolveReccoBeatsIds(spotifyIds: string[]): Promise<Map<string, s
   const map = new Map<string, string>()
   if (!spotifyIds.length) return map
 
-  const res = await fetch(`${BASE}/track?ids=${spotifyIds.join(',')}`, { headers: { Accept: 'application/json' } })
+  const res = await fetchWithTimeout(`${BASE}/track?ids=${spotifyIds.join(',')}`, { headers: { Accept: 'application/json' } })
   if (!res.ok) return map
 
   const data = await res.json()
@@ -35,7 +36,7 @@ async function resolveReccoBeatsIds(spotifyIds: string[]): Promise<Map<string, s
 }
 
 async function fetchAudioFeatures(reccoId: string): Promise<{ bpm: number; key: string | null } | null> {
-  const res = await fetch(`${BASE}/track/${reccoId}/audio-features`, { headers: { Accept: 'application/json' } })
+  const res = await fetchWithTimeout(`${BASE}/track/${reccoId}/audio-features`, { headers: { Accept: 'application/json' } })
   if (!res.ok) return null
 
   const data = await res.json()

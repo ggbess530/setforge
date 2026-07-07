@@ -18,38 +18,5 @@ export function createAdminClient() {
   )
 }
 
-// ─────────────────────────────────────────────
-// Supabase schema (run this SQL in your dashboard)
-// ─────────────────────────────────────────────
-//
-// -- Stores Lemon Squeezy subscription state per user
-// CREATE TABLE subscriptions (
-//   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   user_id            text NOT NULL UNIQUE,   -- Clerk user ID
-//   tier               text NOT NULL DEFAULT 'starter',
-//   status             text NOT NULL DEFAULT 'inactive',
-//   ls_subscription_id text,
-//   ls_customer_id     text,
-//   updated_at         timestamptz DEFAULT now()
-// );
-//
-// -- Stores saved DJ sets
-// CREATE TABLE sets (
-//   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   user_id    text NOT NULL,
-//   title      text NOT NULL,
-//   set_data   jsonb NOT NULL,
-//   meta       jsonb,
-//   created_at timestamptz DEFAULT now(),
-//   updated_at timestamptz DEFAULT now()
-// );
-// CREATE INDEX sets_user_id_idx ON sets (user_id);
-//
-// -- Tracks API usage for rate limiting
-// CREATE TABLE usage (
-//   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   user_id    text NOT NULL,
-//   action     text NOT NULL,   -- 'generate' | 'swap'
-//   created_at timestamptz DEFAULT now()
-// );
-// CREATE INDEX usage_user_action_idx ON usage (user_id, action, created_at);
+// Full, current schema lives in CLAUDE.md ("Supabase Schema") — don't
+// duplicate it here, it just drifts out of sync with reality.

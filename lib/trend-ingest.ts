@@ -12,6 +12,7 @@ import { getUserAccessToken } from './spotify-user-auth'
 import { getBpmKeyForSpotifyIds } from './reccobeats'
 import { upsertCachedMetadata } from './metadata-cache'
 import { GENRE_TREND_SOURCES } from './trend-sources'
+import { fetchWithTimeout } from './fetch-timeout'
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
@@ -29,7 +30,7 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
 type PlaylistTrack = { spotifyId: string; artist: string; title: string; rank: number }
 
 async function fetchPlaylistTracks(playlistId: string, token: string): Promise<{ tracks: PlaylistTrack[]; error?: string }> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name)))`,
     { headers: { Authorization: `Bearer ${token}` } },
   )

@@ -7,12 +7,14 @@
 
 import { NextResponse } from 'next/server'
 import { refreshTrendingTracks } from '@/lib/trend-ingest'
+import { timingSafeEqualStr } from '@/lib/secure-compare'
+import { logError } from '@/lib/log-error'
 
 export const maxDuration = 60
 
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const auth = req.headers.get('authorization') || ''
+  if (!process.env.CRON_SECRET || !timingSafeEqualStr(auth, `Bearer ${process.env.CRON_SECRET}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -20,7 +22,7 @@ export async function GET(req: Request) {
     const result = await refreshTrendingTracks()
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
-    console.error('[GET /api/cron/refresh-trends]', err)
+    logError('[GET /api/cron/refresh-trends]', err)
     return NextResponse.json({ error: 'Refresh failed' }, { status: 500 })
   }
 }

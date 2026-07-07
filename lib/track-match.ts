@@ -1,7 +1,9 @@
 // ▸ Place at: lib/track-match.ts
-// Shared Spotify track search/fuzzy-matching used by /api/spotify and the
-// generation-time metadata enrichment pipeline. Also the Camelot mapping table,
-// since ReccoBeats' audio-features response uses the same key/mode integer scheme.
+// Shared Spotify track search/fuzzy-matching used by the metadata enrichment
+// pipeline. Also the Camelot mapping table, since ReccoBeats' audio-features
+// response uses the same key/mode integer scheme.
+
+import { fetchWithTimeout } from './fetch-timeout'
 
 // ── Spotify client credentials flow (token cached across warm invocations) ──
 let cachedToken: { token: string; expiresAt: number } | null = null
@@ -10,7 +12,7 @@ export async function getSpotifyToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt - 60_000 > Date.now()) return cachedToken.token
 
   const creds = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')
-  const res   = await fetch('https://accounts.spotify.com/api/token', {
+  const res   = await fetchWithTimeout('https://accounts.spotify.com/api/token', {
     method:  'POST',
     headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    'grant_type=client_credentials',
@@ -103,7 +105,7 @@ function scoreCandidate(track: SpotifyTrack, queryTitleNorm: string, queryArtist
 }
 
 async function searchTracks(q: string, limit: number, token: string): Promise<SpotifyTrack[]> {
-  const res  = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`, {
+  const res  = await fetchWithTimeout(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   const data = await res.json()

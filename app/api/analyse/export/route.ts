@@ -2,6 +2,7 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { logError } from '@/lib/log-error'
 
 export async function POST(req: Request) {
   try {
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
     })
 
   } catch (err) {
-    console.error('[POST /api/analyse/export]', err)
+    logError('[POST /api/analyse/export]', err)
     return NextResponse.json({ error: 'Export failed.' }, { status: 500 })
   }
 }

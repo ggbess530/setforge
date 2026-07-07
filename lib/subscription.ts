@@ -1,6 +1,6 @@
 // ▸ Place at: lib/subscription.ts
 
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient } from './supabase'
 
 export type Tier = 'free' | 'pro' | 'team'
 
@@ -22,14 +22,6 @@ export interface SubscriptionStatus {
   remainingGenerations: number | null  // null = unlimited
   trial?:               TrialInfo
   isFree?:              boolean        // true when on permanent free tier
-}
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
 }
 
 export function isAdmin(userId: string): boolean {

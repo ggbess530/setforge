@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import crypto           from 'crypto'
 import { createAdminClient } from '@/lib/supabase'
+import { logError } from '@/lib/log-error'
 
 // Lemon Squeezy sends a signature header we verify to confirm the request
 // is genuinely from them — not a spoofed call from someone else
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
   } catch (err) {
-    console.error('[webhook] Signature verification failed', err)
+    logError('[webhook] Signature verification failed', err)
     return NextResponse.json({ error: 'Signature check failed' }, { status: 500 })
   }
 

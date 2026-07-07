@@ -3,6 +3,7 @@
 
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { logError } from '@/lib/log-error'
 
 export async function POST(req: Request) {
   try {
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
     const data = await res.json()
 
     if (!res.ok) {
-      console.error('[checkout] LS error:', JSON.stringify(data))
+      logError('[checkout] LS error:', JSON.stringify(data))
       return NextResponse.json({ error: 'Failed to create checkout.' }, { status: 500 })
     }
 
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: checkoutUrl })
 
   } catch (err) {
-    console.error('[POST /api/checkout]', err)
+    logError('[POST /api/checkout]', err)
     return NextResponse.json({ error: 'Checkout failed.' }, { status: 500 })
   }
 }
