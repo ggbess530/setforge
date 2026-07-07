@@ -77,8 +77,24 @@ interface Props {
 export default function EnergyEditor({ points, onChange }: Props) {
   const [dragging, setDragging] = useState<number | null>(null)
   const [hovered,  setHovered]  = useState<number | null>(null)
+  const [focused,  setFocused]  = useState<number | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const N = points.length
+
+  // Keyboard alternative to dragging — Up/Right raises, Down/Left lowers,
+  // Home/End jump to the ends of the 1-10 range.
+  function onPointKeyDown(e: React.KeyboardEvent, i: number) {
+    let next: number | null = null
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight')  next = Math.min(10, points[i] + 1)
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = Math.max(1, points[i] - 1)
+    else if (e.key === 'Home') next = 1
+    else if (e.key === 'End')  next = 10
+    if (next === null) return
+    e.preventDefault()
+    const newPts = [...points]
+    newPts[i] = next
+    onChange(newPts)
+  }
 
   const xs   = points.map((_, i) => iToX(i, N))
   const ys   = points.map(eToY)
@@ -218,35 +234,47 @@ export default function EnergyEditor({ points, onChange }: Props) {
           {svgPts.map((pt, i) => {
             const isDragging = dragging === i
             const isHovered  = hovered  === i
+            const isFocused  = focused  === i
             const color      = isDragging ? M : C
-            const r          = isDragging ? 8 : isHovered ? 7 : 6
+            const r          = isDragging ? 8 : isHovered || isFocused ? 7 : 6
 
             return (
               <g
                 key={i}
+                tabIndex={0}
+                role="slider"
+                aria-label={`Energy for track ${i + 1} of ${N}`}
+                aria-valuemin={1}
+                aria-valuemax={10}
+                aria-valuenow={points[i]}
                 onMouseDown={e => { e.preventDefault(); setDragging(i) }}
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
                 onTouchStart={e => { e.preventDefault(); setDragging(i) }}
-                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                onFocus={() => setFocused(i)}
+                onBlur={() => setFocused(null)}
+                onKeyDown={e => onPointKeyDown(e, i)}
+                style={{ cursor: isDragging ? 'grabbing' : 'grab', outline:'none' }}
                 filter="url(#pt-glow)"
               >
                 {/* Large invisible hit target */}
                 <circle cx={pt.x} cy={pt.y} r={18} fill="transparent" />
+                {/* Focus ring — visible keyboard-focus indicator (SVG has no native outline) */}
+                {isFocused && <circle cx={pt.x} cy={pt.y} r={r + 8} fill="none" stroke={C} strokeWidth={1.5} strokeDasharray="3 3" />}
                 {/* Outer ring */}
                 <circle cx={pt.x} cy={pt.y} r={r + 4} fill={`${color}22`} stroke={`${color}44`} strokeWidth={1} />
                 {/* Main dot */}
                 <circle cx={pt.x} cy={pt.y} r={r} fill={color} stroke="#06060c" strokeWidth={2} />
                 {/* Energy label — always visible */}
                 <text
-                  x={pt.x} y={isDragging ? pt.y - 20 : pt.y - 16}
+                  x={pt.x} y={isDragging || isFocused ? pt.y - 20 : pt.y - 16}
                   textAnchor="middle"
-                  fontSize={isDragging ? 13 : 10}
+                  fontSize={isDragging || isFocused ? 13 : 10}
                   fontWeight="700"
-                  fill={isDragging ? M : '#6a6a8a'}
+                  fill={isDragging ? M : isFocused ? C : '#6a6a8a'}
                   fontFamily="'JetBrains Mono',monospace"
                 >
-                  {isDragging ? `E${points[i]}` : points[i]}
+                  {isDragging || isFocused ? `E${points[i]}` : points[i]}
                 </text>
               </g>
             )
@@ -256,7 +284,7 @@ export default function EnergyEditor({ points, onChange }: Props) {
         {/* Bottom hint */}
         <div style={{ padding:'6px 16px 10px', display:'flex', justifyContent:'space-between', fontSize:10, color:'#3a3a58', fontFamily:"'JetBrains Mono',monospace" }}>
           <span style={{ color:'#4a4a66' }}>LOW</span>
-          <span>DRAG POINTS TO SHAPE YOUR SET ENERGY</span>
+          <span>DRAG POINTS (OR TAB + ARROW KEYS) TO SHAPE YOUR SET ENERGY</span>
           <span style={{ color:'#4a4a66' }}>HIGH</span>
         </div>
       </div>

@@ -26,6 +26,13 @@ const CROWDS  = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding',
 const FAMILIARITY_OPTIONS = ['Popular Hits','Balanced Mix','Deep Cuts / Underground']
 const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
 const MIN_CURVE_POINTS = 3
+const GENERATE_STAGES = [
+  'Picking real tracks…',
+  'Matching BPM and energy…',
+  'Checking harmonic keys…',
+  'Verifying releases exist…',
+  'Writing transition notes…',
+]
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
@@ -35,33 +42,65 @@ type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<
 type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 type Suggestion = Track & { label:string }
 
+// ── Draft persistence ─────────────────────────────────────────
+// Recovers an in-progress, unsaved session (form inputs + generated set) after
+// an accidental refresh/tab close — the only durable copy otherwise is the
+// explicit "Save to library" action.
+type Draft = {
+  genre?: string; customGenre?: string; crowd?: string; familiarity?: string
+  vibe?: string; refArtist?: string; mode?: 'time'|'count'; minutes?: number; count?: number
+  bpmLow?: number; bpmHigh?: number; keyMatch?: boolean; includeMixingNotes?: boolean
+  energyPoints?: number[]; set?: SetData | null; locked?: number[]
+}
+function readDraft(): Draft {
+  try {
+    const raw = localStorage.getItem('sf_draft')
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
 // ── Main component ────────────────────────────────────────────
 export default function AppPage() {
+  const [draft] = useState<Draft>(() => readDraft())
 
-  // form
-  const [genre,        setGenre]        = useState('House')
-  const [crowd,        setCrowd]        = useState('House Party')
-  const [familiarity,  setFamiliarity]  = useState('Balanced Mix')
-  const [vibe,         setVibe]         = useState('')
-  const [refArtist,    setRefArtist]    = useState('')
-  const [mode,         setMode]         = useState<'time'|'count'>('time')
-  const [minutes,      setMinutes]      = useState(60)
-  const [count,        setCount]        = useState(12)
-  const [bpmLow,       setBpmLow]       = useState(118)
-  const [bpmHigh,      setBpmHigh]      = useState(125)
-  const [keyMatch,           setKeyMatch]           = useState(true)
-  const [includeMixingNotes, setIncludeMixingNotes] = useState(true)
-  const [energyPoints, setEnergyPoints] = useState<number[]>(() => resampleEnergyPoints(ENERGY_PRESETS['Wave'], Math.round(minutes / 4.5)))
-  const [customGenre,  setCustomGenre]  = useState('')
+  // form — restored from the last unsaved session where available
+  const [genre,        setGenre]        = useState(() => draft.genre ?? 'House')
+  const [crowd,        setCrowd]        = useState(() => draft.crowd ?? 'House Party')
+  const [familiarity,  setFamiliarity]  = useState(() => draft.familiarity ?? 'Balanced Mix')
+  const [vibe,         setVibe]         = useState(() => draft.vibe ?? '')
+  const [refArtist,    setRefArtist]    = useState(() => draft.refArtist ?? '')
+  const [mode,         setMode]         = useState<'time'|'count'>(() => draft.mode ?? 'time')
+  const [minutes,      setMinutes]      = useState(() => draft.minutes ?? 60)
+  const [count,        setCount]        = useState(() => draft.count ?? 12)
+  const [bpmLow,       setBpmLow]       = useState(() => draft.bpmLow ?? 118)
+  const [bpmHigh,      setBpmHigh]      = useState(() => draft.bpmHigh ?? 125)
+  const [keyMatch,           setKeyMatch]           = useState(() => draft.keyMatch ?? true)
+  const [includeMixingNotes, setIncludeMixingNotes] = useState(() => draft.includeMixingNotes ?? true)
+  const [energyPoints, setEnergyPoints] = useState<number[]>(() =>
+    Array.isArray(draft.energyPoints) && draft.energyPoints.length >= MIN_CURVE_POINTS
+      ? draft.energyPoints
+      : resampleEnergyPoints(ENERGY_PRESETS['Wave'], Math.round((draft.minutes ?? 60) / 4.5)))
+  const [customGenre,  setCustomGenre]  = useState(() => draft.customGenre ?? '')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
 
   // generator
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string|null>(null)
-  const [set,      setSet]      = useState<SetData|null>(null)
+  const [loadingStage, setLoadingStage] = useState(0)
+  const [wasLoading,   setWasLoading]   = useState(false)
+  if (loading !== wasLoading) {
+    setWasLoading(loading)
+    if (loading) setLoadingStage(0)
+  }
+  useEffect(() => {
+    if (!loading) return
+    const t = setInterval(() => setLoadingStage(s => (s + 1) % GENERATE_STAGES.length), 2200)
+    return () => clearInterval(t)
+  }, [loading])
+  const [set,      setSet]      = useState<SetData|null>(() => draft.set ?? null)
   const [swapping,      setSwapping]      = useState<number|null>(null)
   const [swapModal,     setSwapModal]     = useState<{ index:number; suggestions:Suggestion[] }|null>(null)
-  const [locked,       setLocked]       = useState<Set<number>>(new Set())
+  const [locked,       setLocked]       = useState<Set<number>>(() => new Set(draft.locked ?? []))
   const [copied,       setCopied]       = useState(false)
   const [dragIndex,    setDragIndex]    = useState<number|null>(null)
   const [dragOverIndex,setDragOverIndex]= useState<number|null>(null)
@@ -72,6 +111,17 @@ export default function AppPage() {
   const [openWhy,   setOpenWhy]   = useState<Set<number>>(new Set())
   const [editingIndex, setEditingIndex] = useState<number|null>(null)
   const [editDraft,    setEditDraft]    = useState<{artist:string;title:string;bpm:string;key:string;energy:number;transition:string}|null>(null)
+
+  // toasts — surfaces feedback for actions taken from the results panel (swap,
+  // save, share, edit…), which the old single `error` banner couldn't reach on
+  // mobile once the left form panel is hidden behind the results view.
+  const [toasts, setToasts] = useState<{id:number;type:'success'|'error';message:string}[]>([])
+  const toastIdRef = useRef(0)
+  function pushToast(type: 'success'|'error', message: string) {
+    const id = ++toastIdRef.current
+    setToasts(prev => [...prev, { id, type, message }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+  }
 
   // library
   const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
@@ -97,6 +147,19 @@ export default function AppPage() {
   const [mobileShowResults,setMobileShowResults] = useState(false)
 
   const renameRef = useRef<HTMLInputElement>(null)
+
+  // Mirror the current session to localStorage so a refresh/tab-close doesn't
+  // lose an unsaved generated set. Plain sync-to-external-storage effect, not
+  // a derived-state one — no setState calls here.
+  useEffect(() => {
+    try {
+      localStorage.setItem('sf_draft', JSON.stringify({
+        genre, customGenre, crowd, familiarity, vibe, refArtist, mode, minutes, count,
+        bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints,
+        set, locked: [...locked],
+      } satisfies Draft))
+    } catch {}
+  }, [genre, customGenre, crowd, familiarity, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints, set, locked])
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
@@ -174,14 +237,14 @@ export default function AppPage() {
   // ── Swap ──────────────────────────────────────────────────
   async function swapTrack(index: number) {
     if (!set) return
-    setSwapping(index); setError(null)
+    setSwapping(index)
     const target = set.tracks[index]
     try {
       const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, familiarity, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Swap failed.'); return }
+      if (!res.ok) { pushToast('error', data.error || 'Swap failed.'); return }
       setSwapModal({ index, suggestions: (data.suggestions||[]).map((s: Suggestion) => ({ ...s, n: target.n })) })
-    } catch { setError('Network error.') }
+    } catch { pushToast('error', 'Network error.') }
     finally   { setSwapping(null) }
   }
 
@@ -199,9 +262,9 @@ export default function AppPage() {
     try {
       const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, familiarity:set._meta?.familiarity||familiarity, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() } }) })
       const data = await res.json()
-      if (!res.ok) { setError(data.error||'Save failed.'); return }
+      if (!res.ok) { pushToast('error', data.error||'Save failed.'); return }
       setLibrary(prev => [data.set,...prev]); setSavedFlash(true); setTimeout(()=>setSavedFlash(false),2000)
-    } catch { setError('Network error.') }
+    } catch { pushToast('error', 'Network error.') }
     finally   { setSaving(false) }
   }
 
@@ -215,27 +278,32 @@ export default function AppPage() {
     setLibLoading(true)
     try {
       const res=await fetch(`/api/library/item?id=${id}`); const data=await res.json()
-      if (!res.ok) { setError(data.error||'Load failed.'); return }
+      if (!res.ok) { pushToast('error', data.error||'Load failed.'); return }
       const saved: SetData = data.set.set_data; setSet(saved)
       if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setFamiliarity(saved._meta.familiarity||'Balanced Mix'); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
       if (isMobile) { setView('forge'); setMobileShowResults(true) }
-    } catch { setError('Network error.') }
+    } catch { pushToast('error', 'Network error.') }
     finally   { setLibLoading(false) }
   }
 
   async function deleteSet(id: string) {
-    await fetch(`/api/library/item?id=${id}`, { method:'DELETE' })
-    setLibrary(prev=>prev.filter(s=>s.id!==id)); setDeleteConf(null)
+    try {
+      const res = await fetch(`/api/library/item?id=${id}`, { method:'DELETE' })
+      if (!res.ok) { pushToast('error', 'Delete failed.'); return }
+      setLibrary(prev=>prev.filter(s=>s.id!==id))
+      pushToast('success', 'Set deleted.')
+    } catch { pushToast('error', 'Network error.') }
+    finally { setDeleteConf(null) }
   }
 
   async function shareSet(setId: string) {
     setSharingId(setId)
     try {
       const res=await fetch('/api/share',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({setId}) }); const data=await res.json()
-      if (!res.ok) { setError(data.error||'Share failed.'); return }
+      if (!res.ok) { pushToast('error', data.error||'Share failed.'); return }
       await navigator.clipboard.writeText(`${window.location.origin}/s?id=${data.shareId}`)
       setCopiedId(setId); setTimeout(()=>setCopiedId(null),2500)
-    } catch { setError('Share failed.') }
+    } catch { pushToast('error', 'Share failed.') }
     finally   { setSharingId(null) }
   }
 
@@ -244,7 +312,8 @@ export default function AppPage() {
     try {
       const res=await fetch(`/api/library/item?id=${id}`,{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:trimmed}) })
       if (res.ok) { setLibrary(prev=>prev.map(s=>s.id===id?{...s,title:trimmed}:s)); if (set?.title&&renamingId===id) setSet(s=>s?{...s,title:trimmed}:s) }
-    } catch {}
+      else { pushToast('error', 'Rename failed.') }
+    } catch { pushToast('error', 'Network error.') }
     finally { setRenamingId(null); setRenameVal('') }
   }
 
@@ -292,6 +361,7 @@ export default function AppPage() {
       return { ...s, tracks }
     })
     setEditingIndex(null); setEditDraft(null)
+    pushToast('success', 'Track updated.')
   }
 
   function fetchWhy(i: number) {
@@ -340,7 +410,7 @@ export default function AppPage() {
     if (!set) return
     const text = set.tracks.map(t=>`${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title} [${t.bpm} BPM · ${t.key}]`).join('\n')
     try { await navigator.clipboard.writeText(`${set.title.toUpperCase()}\n\n${text}\n\nForged with SetForge — setforge.online`); setCopied(true); setTimeout(()=>setCopied(false),2000) }
-    catch { setError('Copy failed.') }
+    catch { pushToast('error', 'Copy failed.') }
   }
 
   function exportRekordbox() {
@@ -423,6 +493,7 @@ export default function AppPage() {
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
         @keyframes flash { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px ${C}88} }
         @keyframes scan  { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+        @keyframes toast-in { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
         .sf-row { animation:rise .4s ease backwards; }
         * { box-sizing:border-box; }
         ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#1f1f33; border-radius:2px; }
@@ -430,6 +501,16 @@ export default function AppPage() {
 
       {/* Wizard overlay */}
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
+
+      {/* Toasts — fixed, always visible regardless of view/mobile panel state */}
+      <div role="status" aria-live="polite" style={{ position:'fixed', bottom:20, right:20, zIndex:250, display:'flex', flexDirection:'column', gap:8, maxWidth:320 }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ animation:'toast-in .25s ease', background:'#0a0a14', border:`1px solid ${t.type==='success'?C:M}66`, borderRadius:10, padding:'10px 14px', fontSize:12, color:'#e8e8f0', boxShadow:'0 8px 24px rgba(0,0,0,.4)', display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ color: t.type==='success'?C:M, fontWeight:700 }}>{t.type==='success'?'✓':'✕'}</span>
+            {t.message}
+          </div>
+        ))}
+      </div>
 
       {/* Swap picker modal */}
       {swapModal && (
@@ -656,7 +737,7 @@ export default function AppPage() {
                         ) : (
                           <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
                             <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, letterSpacing:.5, color:C, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} className="sf-glow-c">{item.title}</div>
-                            <button className="sf-rename-btn" onClick={()=>{ setRenamingId(item.id); setRenameVal(item.title) }} title="Rename">✏</button>
+                            <button className="sf-rename-btn" onClick={()=>{ setRenamingId(item.id); setRenameVal(item.title) }} title="Rename" aria-label={`Rename "${item.title}"`}>✏</button>
                           </div>
                         )}
                         <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6 }}>
@@ -682,7 +763,7 @@ export default function AppPage() {
                               <button className="sf-del-btn" onClick={()=>setDeleteConf(null)}>NO</button>
                             </>
                           ) : (
-                            <button className="sf-del-btn" onClick={()=>{ setDeleteConf(item.id); setRenamingId(null) }}>✕</button>
+                            <button className="sf-del-btn" onClick={()=>{ setDeleteConf(item.id); setRenamingId(null) }} title="Delete" aria-label={`Delete "${item.title}"`}>✕</button>
                           )}
                         </div>
                       </div>
@@ -741,6 +822,20 @@ export default function AppPage() {
           {(loading||importLoading) && (
             <div style={{ position:'sticky', top:0, zIndex:10, height:3, background:'#0d0d1a', overflow:'hidden' }}>
               <div style={{ position:'absolute', top:0, left:0, height:'100%', width:'30%', background:`linear-gradient(90deg,transparent,${C},${M},transparent)`, animation:'scan 1.4s linear infinite' }} />
+            </div>
+          )}
+
+          {/* ── Generating skeleton ── */}
+          {!set && loading && (
+            <div style={{ padding:'40px 24px', display:'flex', flexDirection:'column', alignItems:'center' }}>
+              <div style={{ fontSize:13, color:C, fontWeight:700, letterSpacing:.5, marginBottom:24, animation:'pulse 1.6s ease-in-out infinite' }}>
+                {GENERATE_STAGES[loadingStage]}
+              </div>
+              <div style={{ width:'100%', maxWidth:520, display:'flex', flexDirection:'column', gap:8 }}>
+                {Array.from({ length:7 }, (_, i) => (
+                  <div key={i} style={{ height:52, borderRadius:10, background:'#0a0a14', border:'1px solid #16162a', opacity:1 - i*0.09, animation:'pulse 1.6s ease-in-out infinite', animationDelay:`${i*0.08}s` }} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -842,6 +937,8 @@ export default function AppPage() {
                       {/* drag handle */}
                       <div
                         draggable
+                        role="button"
+                        aria-label={`Drag to reorder track ${i + 1}`}
                         onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
                         onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
                         title="Drag to reorder"
@@ -870,16 +967,16 @@ export default function AppPage() {
                         <div>{t.key}</div>
                         <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
                       </div>
-                      <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
+                      <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} aria-label={locked.has(i)?`Unlock track ${i+1}`:`Lock track ${i+1}`} aria-pressed={locked.has(i)} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
                         {locked.has(i)?'🔒':'🔓'}
                       </button>
-                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" aria-label={`Swap track ${i+1}`} style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                         <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
                       </button>
-                      <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
+                      <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} aria-label={`Why track ${i+1} was chosen`} aria-expanded={openWhy.has(i)} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
                         {quota?.tier==='free' ? '🔒' : '?'}
                       </button>
-                      <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                      <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" aria-label={`Edit track ${i+1} details`} aria-expanded={editingIndex===i} style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
                         ✎
                       </button>
                     </div>
