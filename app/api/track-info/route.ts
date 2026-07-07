@@ -1,11 +1,18 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
+import { checkSubscription, recordUsage } from '@/lib/subscription'
 
 export async function POST(req: Request) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ bpm: null, key: null }, { status: 401 })
+
+    const sub = await checkSubscription(userId)
+    if (!sub.active) return NextResponse.json({ bpm: null, key: null }, { status: 403 })
+    if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
+      return NextResponse.json({ bpm: null, key: null }, { status: 429 })
+    }
 
     const { artist, title } = await req.json()
     if (!artist || !title) return NextResponse.json({ bpm: null, key: null })
@@ -31,6 +38,8 @@ Rules:
 
     const text = msg.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
     const data = JSON.parse(text)
+
+    await recordUsage(userId, 'generate')
     return NextResponse.json({
       bpm: typeof data.bpm === 'number' ? Math.round(data.bpm) : null,
       key: typeof data.key === 'string' && /^\d+[AB]$/i.test(data.key) ? data.key.toUpperCase() : null,

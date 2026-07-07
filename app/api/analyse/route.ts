@@ -5,6 +5,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { createClient } from '@supabase/supabase-js'
+import { checkSubscription, recordUsage } from '@/lib/subscription'
 
 function db() {
   return createClient(
@@ -52,6 +53,12 @@ export async function POST(req: Request) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const sub = await checkSubscription(userId)
+    if (!sub.active) return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
+    if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
+      return NextResponse.json({ error: 'Generation limit reached.', code: 'LIMIT_REACHED' }, { status: 429 })
+    }
 
     const { rawText, context } = await req.json()
 
@@ -170,6 +177,8 @@ IMPORTANT: Keep ALL text fields SHORT (1-2 sentences max). For trackNotes, only 
     if (!report.verdict)            report.verdict            = 'Keep practising!'
     if (!report.peakMoment)         report.peakMoment         = { trackN:1, artist:'', title:'', reason:'' }
     if (!report.weakestTransition)  report.weakestTransition  = { fromN:1, toN:2, fromTitle:'', toTitle:'', reason:'', fix:'' }
+
+    await recordUsage(userId, 'generate')
 
     // Save to track_history so it ties into the history feature
     if (tracks.length > 0) {

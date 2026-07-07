@@ -354,7 +354,7 @@ export async function POST(req: Request) {
       }
     }
 
-    recordUsage(userId, 'generate')
+    await recordUsage(userId, 'generate')
 
     const tracksArr = finalSet.tracks as (EnrichableTrack & { n: number; energy: number; transition?: string })[]
 

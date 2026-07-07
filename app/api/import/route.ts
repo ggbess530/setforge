@@ -310,7 +310,7 @@ export async function POST(req: Request) {
       }
     }
 
-    recordUsage(userId, 'generate')
+    await recordUsage(userId, 'generate')
 
     return NextResponse.json({
       set: finalSet,

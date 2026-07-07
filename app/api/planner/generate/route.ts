@@ -65,7 +65,7 @@ Respond ONLY with valid JSON:
     const raw = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const set = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    recordUsage(userId, 'generate')
+    await recordUsage(userId, 'generate')
     return NextResponse.json({ set, quota: { tier: sub.tier, remaining: sub.remainingGenerations === null ? 'unlimited' : sub.remainingGenerations - 1 } })
 
   } catch (err) {

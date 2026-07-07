@@ -1,10 +1,21 @@
 // ▸ Place at: app/api/mashup/route.ts
 
+import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
+import { checkSubscription, recordUsage } from '@/lib/subscription'
 
 export async function POST(req: Request) {
   try {
+    const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const sub = await checkSubscription(userId)
+    if (!sub.active) return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
+    if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
+      return NextResponse.json({ error: 'Generation limit reached.', code: 'LIMIT_REACHED' }, { status: 429 })
+    }
+
     const { artist, title, bpm, key, genres } = await req.json()
     if (!artist && !title) return NextResponse.json({ error: 'Track info required.' }, { status: 400 })
 
@@ -48,6 +59,7 @@ Return ONLY valid JSON, no markdown:
     const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
+    await recordUsage(userId, 'generate')
     return NextResponse.json(data)
   } catch (err) {
     console.error('[POST /api/mashup]', err)
