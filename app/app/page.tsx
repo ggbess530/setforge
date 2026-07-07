@@ -70,6 +70,8 @@ export default function AppPage() {
   const [whyData,   setWhyData]   = useState<Record<number, {why:string;inbound:string;outbound:string;tip:string;keyNote:string}>>({})
   const [loadingWhy, setLoadingWhy] = useState<Set<number>>(new Set())
   const [openWhy,   setOpenWhy]   = useState<Set<number>>(new Set())
+  const [editingIndex, setEditingIndex] = useState<number|null>(null)
+  const [editDraft,    setEditDraft]    = useState<{artist:string;title:string;bpm:string;key:string;energy:number;transition:string}|null>(null)
 
   // library
   const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
@@ -262,6 +264,36 @@ export default function AppPage() {
   // ── Utils ─────────────────────────────────────────────────
   function toggleLock(i: number) { setLocked(prev=>{ const n=new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n }) }
 
+  // ── Manual track edit ────────────────────────────────────────
+  function startEdit(i: number) {
+    if (!set) return
+    const t = set.tracks[i]
+    setEditDraft({ artist:t.artist, title:t.title, bpm:String(t.bpm), key:t.key, energy:t.energy, transition:t.transition||'' })
+    setEditingIndex(i)
+    setOpenWhy(prev => { if (!prev.has(i)) return prev; const n = new Set(prev); n.delete(i); return n })
+  }
+  function cancelEdit() { setEditingIndex(null); setEditDraft(null) }
+  function commitEdit() {
+    if (editingIndex === null || !editDraft) return
+    const bpmNum = parseFloat(editDraft.bpm)
+    setSet(s => {
+      if (!s) return s
+      const tracks = [...s.tracks]
+      const prevTrack = tracks[editingIndex]
+      tracks[editingIndex] = {
+        ...prevTrack,
+        artist:     editDraft.artist.trim()     || prevTrack.artist,
+        title:      editDraft.title.trim()      || prevTrack.title,
+        bpm:        Number.isFinite(bpmNum) && bpmNum > 0 ? bpmNum : prevTrack.bpm,
+        key:        editDraft.key.trim().toUpperCase() || prevTrack.key,
+        energy:     editDraft.energy,
+        transition: editDraft.transition,
+      }
+      return { ...s, tracks }
+    })
+    setEditingIndex(null); setEditDraft(null)
+  }
+
   function fetchWhy(i: number) {
     if (whyData[i] || loadingWhy.has(i) || !set) return
     setLoadingWhy(prev => { const n = new Set(prev); n.add(i); return n })
@@ -332,12 +364,13 @@ export default function AppPage() {
     const a=Object.assign(document.createElement('a'),{ href:URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/plain'})), download:`${set.title.replace(/\s+/g,'_')}.txt` }); a.click()
   }
 
-  function trackSearchUrl(t: Track, platform: 'beatport'|'spotify'|'youtube'|'soundcloud') {
+  function trackSearchUrl(t: Track, platform: 'beatport'|'spotify'|'youtube'|'soundcloud'|'tunebat') {
     const q = encodeURIComponent(`${t.artist} ${t.title}`)
     if (platform === 'beatport')   return `https://www.beatport.com/search?q=${q}`
     if (platform === 'spotify')    return `https://open.spotify.com/search/${q}`
     if (platform === 'youtube')    return `https://www.youtube.com/results?search_query=${q}`
     if (platform === 'soundcloud') return `https://soundcloud.com/search?q=${q}`
+    if (platform === 'tunebat')    return `https://tunebat.com/Search?q=${q}`
     return ''
   }
 
@@ -803,9 +836,9 @@ export default function AppPage() {
                       onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
                       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
                       onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
-                      style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
+                      style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
-                        borderRadius: openWhy.has(i) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
+                        borderRadius: (openWhy.has(i) || editingIndex===i) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
                       {/* drag handle */}
                       <div
                         draggable
@@ -828,6 +861,7 @@ export default function AppPage() {
                           <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
                           <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
                           <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
+                          <a href={trackSearchUrl(t,'tunebat')} target="_blank" rel="noopener noreferrer" title="Verify BPM & key on Tunebat" style={{ fontSize:8, color:C, textDecoration:'none', border:`1px solid ${C}33`, borderRadius:3, padding:'1px 5px' }}>TB</a>
                         </div>
                         {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
                       </div>
@@ -845,7 +879,49 @@ export default function AppPage() {
                       <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
                         {quota?.tier==='free' ? '🔒' : '?'}
                       </button>
+                      <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
+                        ✎
+                      </button>
                     </div>
+                    {editingIndex===i && editDraft && (
+                      <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding:'14px' }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                          <div>
+                            <SFLabel>ARTIST</SFLabel>
+                            <input className="sf-input" value={editDraft.artist} onChange={e=>setEditDraft(d=>d&&({...d,artist:e.target.value}))} />
+                          </div>
+                          <div>
+                            <SFLabel>TITLE</SFLabel>
+                            <input className="sf-input" value={editDraft.title} onChange={e=>setEditDraft(d=>d&&({...d,title:e.target.value}))} />
+                          </div>
+                        </div>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                          <div>
+                            <SFLabel>BPM</SFLabel>
+                            <input className="sf-input" type="number" value={editDraft.bpm} onChange={e=>setEditDraft(d=>d&&({...d,bpm:e.target.value}))} />
+                          </div>
+                          <div>
+                            <SFLabel>CAMELOT KEY</SFLabel>
+                            <input className="sf-input" style={{ fontFamily:"'JetBrains Mono',monospace" }} value={editDraft.key} onChange={e=>setEditDraft(d=>d&&({...d,key:e.target.value.toUpperCase()}))} />
+                          </div>
+                        </div>
+                        <div style={{ marginBottom:8 }}>
+                          <SFLabel>ENERGY: <span style={{ color:C }}>{editDraft.energy}/10</span></SFLabel>
+                          <input type="range" min={1} max={10} value={editDraft.energy} onChange={e=>setEditDraft(d=>d&&({...d,energy:+e.target.value}))} style={{ width:'100%', accentColor:C }} />
+                        </div>
+                        <div style={{ marginBottom:10 }}>
+                          <SFLabel>MIX NOTE <span style={{ color:'#4a4a66' }}>— optional</span></SFLabel>
+                          <input className="sf-input" value={editDraft.transition} onChange={e=>setEditDraft(d=>d&&({...d,transition:e.target.value}))} placeholder="how to mix this track in…" />
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <a href={`https://tunebat.com/Search?q=${encodeURIComponent(`${editDraft.artist} ${editDraft.title}`)}`} target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize:11, color:C, textDecoration:'underline' }}>🔍 Verify on Tunebat</a>
+                          <div style={{ flex:1 }} />
+                          <button onClick={cancelEdit} className="sf-btn-ghost" style={{ padding:'6px 14px', borderRadius:8, fontSize:11 }}>Cancel</button>
+                          <button onClick={commitEdit} className="sf-btn-primary" style={{ padding:'6px 16px', borderRadius:8, fontSize:11 }}>Save</button>
+                        </div>
+                      </div>
+                    )}
                     {openWhy.has(i) && (
                       <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding:'12px 14px' }}>
                         {quota?.tier==='free' ? (
