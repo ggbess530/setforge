@@ -41,7 +41,7 @@ Return ONLY valid JSON, no markdown:
 }`
 
     const msg = await anthropic.messages.create({
-      model: CLAUDE_MODEL, max_tokens: 1500,
+      model: CLAUDE_MODEL, max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     })
 
