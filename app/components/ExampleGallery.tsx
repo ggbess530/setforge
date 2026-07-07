@@ -155,7 +155,7 @@ export default function ExampleGallery() {
         {/* CTA */}
         <div style={{ textAlign:'center', marginTop:24, position:'relative' }}>
           <a href="#pricing" style={{ textDecoration:'none' }}>
-            <button className="btn-primary sf-mono" style={{ padding:'14px 32px', borderRadius:10, fontSize:13 }}>
+            <button className="btn-cta sf-mono" style={{ padding:'14px 32px', borderRadius:10, fontSize:13 }}>
               ⚡ FORGE YOUR OWN
             </button>
           </a>

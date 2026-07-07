@@ -54,6 +54,93 @@ function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
   return <span ref={ref}>{n}{suffix}</span>
 }
 
+// ── Tool card mini previews ────────────────────────────────────
+function ForgePreview() {
+  const rows = [
+    { n:1, title:'Losing It',           artist:'Fisher',     bpm:125, key:'7A' },
+    { n:2, title:'Turn Off The Lights', artist:'Chris Lake', bpm:125, key:'8A' },
+    { n:3, title:'San Frandisco',       artist:'Dom Dolla',  bpm:126, key:'8A' },
+  ]
+  return (
+    <div style={{ background:'#06060c', border:'1px solid #14142a', borderRadius:10, padding:'10px 12px', display:'flex', flexDirection:'column', gap:7, position:'relative', overflow:'hidden' }}>
+      {rows.map(r => (
+        <div key={r.n} style={{ display:'flex', alignItems:'center', gap:8, fontSize:11 }}>
+          <span className="sf-mono" style={{ color:M, width:14, flexShrink:0 }}>{String(r.n).padStart(2,'0')}</span>
+          <span style={{ color:'#c8c8e0', flex:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {r.title} <span style={{ color:'#5a5a78' }}>· {r.artist}</span>
+          </span>
+          <span className="sf-mono" style={{ color:C, fontSize:10, flexShrink:0 }}>{r.bpm}</span>
+          <span className="sf-mono" style={{ color:'#8a8aa8', fontSize:10, flexShrink:0 }}>{r.key}</span>
+        </div>
+      ))}
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, height:20, background:'linear-gradient(transparent,#06060c)', pointerEvents:'none' }} />
+    </div>
+  )
+}
+
+function AnalyserPreview() {
+  const subs = [{ l:'Energy', v:88 }, { l:'Harmony', v:95 }, { l:'BPM Flow', v:80 }]
+  return (
+    <div style={{ background:'#06060c', border:'1px solid #14142a', borderRadius:10, padding:'12px 14px', display:'flex', gap:14, alignItems:'center' }}>
+      <div style={{ textAlign:'center', flexShrink:0 }}>
+        <div className="sf-display" style={{ fontSize:32, color:'#4ade80', lineHeight:1 }}>A-</div>
+        <div className="sf-mono" style={{ fontSize:8, color:'#4a4a66', letterSpacing:1 }}>OVERALL</div>
+      </div>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:6, minWidth:0 }}>
+        {subs.map(s => (
+          <div key={s.l}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#6a6a8a', marginBottom:2 }}>
+              <span>{s.l}</span><span>{s.v}</span>
+            </div>
+            <div style={{ height:4, background:'#14142a', borderRadius:2 }}>
+              <div style={{ width:`${s.v}%`, height:'100%', borderRadius:2, background:`linear-gradient(90deg,${M},${C})` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MixLabPreview() {
+  const score = 87, r = 26, circ = 2 * Math.PI * r
+  return (
+    <div style={{ background:'#06060c', border:'1px solid #14142a', borderRadius:10, padding:'10px 14px', display:'flex', alignItems:'center', gap:14 }}>
+      <div style={{ position:'relative', width:60, height:60, flexShrink:0 }}>
+        <svg width={60} height={60} style={{ transform:'rotate(-90deg)' }}>
+          <circle cx={30} cy={30} r={r} fill="none" stroke="#1a1a2e" strokeWidth={6} />
+          <circle cx={30} cy={30} r={r} fill="none" stroke="#4ade80" strokeWidth={6}
+            strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)} strokeLinecap="round" />
+        </svg>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:'#4ade80' }}>{score}</div>
+      </div>
+      <div style={{ minWidth:0 }}>
+        <div className="sf-mono" style={{ fontSize:10, color:'#4ade80', fontWeight:700, letterSpacing:1 }}>SMOOTH BLEND</div>
+        <div style={{ fontSize:11, color:'#8a8aa8', marginTop:4 }}>7A → 8A · 125→126 BPM</div>
+      </div>
+    </div>
+  )
+}
+
+function PlannerPreview() {
+  const slots = [{ dj:'DJ A', color:M }, { dj:'DJ B', color:C }, { dj:'DJ C', color:'#a78bfa' }]
+  return (
+    <div style={{ background:'#06060c', border:'1px solid #14142a', borderRadius:10, padding:'12px 14px 10px' }}>
+      <div style={{ display:'flex', gap:6 }}>
+        {slots.map((s, i) => (
+          <div key={i} style={{ flex:1, textAlign:'center' }}>
+            <div style={{ height:8, borderRadius:4, background:`${s.color}33`, border:`1px solid ${s.color}66`, marginBottom:6 }} />
+            <div className="sf-mono" style={{ fontSize:9, color:s.color }}>{s.dj}</div>
+          </div>
+        ))}
+      </div>
+      <div className="sf-mono" style={{ display:'flex', justifyContent:'space-between', marginTop:8, fontSize:9, color:'#5a5a78' }}>
+        <span>9A · 122</span><span>→</span><span>9A · 124</span><span>→</span><span>10A · 126</span>
+      </div>
+    </div>
+  )
+}
+
 // ── Data ─────────────────────────────────────────────────────
 const TICKER_ITEMS = [
   '✦ No DJ experience needed',
@@ -81,6 +168,7 @@ const TOOLS = [
     plain: 'The main event — start here if you’re new.',
     desc: 'Pick a genre, crowd, and energy arc (or type your own in plain English) and SetForge builds a full tracklist: real songs, matched BPM, compatible musical keys, and notes on exactly how to mix each transition.',
     tag: 'No experience needed',
+    preview: ForgePreview,
   },
   {
     icon: '📊', name: 'Analyser', href: '/analyse',
@@ -88,6 +176,7 @@ const TOOLS = [
     plain: 'Already built a set yourself? See how it holds up.',
     desc: 'Paste a tracklist from anywhere — your own set, a festival lineup, a friend’s mix — and get a full breakdown: energy flow, harmonic mixing, BPM progression, the weakest transition (and how to fix it), plus an overall grade.',
     tag: 'Works with any format',
+    preview: AnalyserPreview,
   },
   {
     icon: '🎛️', name: 'Mix & Mashup Lab', href: '/mix',
@@ -95,6 +184,7 @@ const TOOLS = [
     plain: 'Wondering if two songs actually work together?',
     desc: 'The Mix Simulator checks whether two tracks blend cleanly before you ever play them live. The Mashup Finder takes one track and surfaces real candidates in compatible keys and BPMs, even across genres.',
     tag: 'Great for creative mixing',
+    preview: MixLabPreview,
   },
   {
     icon: '🗓️', name: 'Night Planner', href: '/planner',
@@ -102,6 +192,7 @@ const TOOLS = [
     plain: 'Running an event with more than one DJ on the bill?',
     desc: 'Lay out every slot on a timeline — genre, crowd, energy — and generate a set for each one. SetForge checks the handoff between back-to-back DJs so the key and BPM actually connect when one set ends and the next begins.',
     tag: 'Built for events, not just solo sets',
+    preview: PlannerPreview,
   },
 ]
 
@@ -432,7 +523,8 @@ export default function LandingPage() {
                   </div>
                   <div style={{ fontSize:15, fontWeight:700, color:'#e8e8f0', marginBottom:6, lineHeight:1.4 }}>{tool.title}</div>
                   <div style={{ fontSize:13, color:M, marginBottom:12, fontWeight:600 }}>{tool.plain}</div>
-                  <p style={{ fontSize:14, color:'#8a8aa6', lineHeight:1.75, marginBottom:22, flex:1 }}>{tool.desc}</p>
+                  <p style={{ fontSize:14, color:'#8a8aa6', lineHeight:1.75, marginBottom:18, flex:1 }}>{tool.desc}</p>
+                  <div style={{ marginBottom:18 }}><tool.preview /></div>
                   {isSignedIn ? (
                     <Link href={tool.href} style={{ textDecoration:'none' }}>
                       <button className="btn-ghost" style={{ width:'100%', padding:'11px 0', borderRadius:10, fontSize:14, fontWeight:700 }}>Try {tool.name} →</button>
