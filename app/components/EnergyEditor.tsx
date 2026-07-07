@@ -36,13 +36,36 @@ function smoothPath(pts: { x: number; y: number }[]) {
   return d
 }
 
+// ── Resampling ────────────────────────────────────────────────
+// Stretches/compresses any preset checkpoint array to exactly n points via
+// linear interpolation — same math the server uses (interpolateEnergy in
+// app/api/generate/route.ts) so a preset always fills the current curve
+// length, whatever the set's actual track count is.
+export function resampleEnergyPoints(points: number[], n: number): number[] {
+  if (n <= 1) return [points[Math.floor(points.length / 2)]]
+  return Array.from({ length: n }, (_, i) => {
+    const t   = i / (n - 1)
+    const seg = t * (points.length - 1)
+    const lo  = Math.floor(seg)
+    const hi  = Math.min(points.length - 1, lo + 1)
+    return Math.round(points[lo] + (points[hi] - points[lo]) * (seg - lo))
+  })
+}
+
 // ── Presets ───────────────────────────────────────────────────
+// Checkpoint shapes — always resampled to the curve's current point count
+// before use, so these arrays don't need to match track count themselves.
 export const ENERGY_PRESETS: Record<string, number[]> = {
-  'Slow build':  [3, 5, 6, 8, 9],
-  'Peak time':   [8, 9, 10, 9, 8],
-  'Cool down':   [8, 7, 5, 4, 3],
-  'Wave':        [5, 8, 5, 9, 6],
-  'Flat':        [6, 6, 6, 6, 6],
+  'Slow build':     [3, 4, 5, 6, 7, 8, 9, 10],
+  'Sunrise':        [2, 2, 3, 5, 7, 9, 10],
+  'Warm-up':        [2, 3, 4, 5, 6, 6, 6],
+  'Peak time':      [7, 9, 10, 10, 9, 10, 9],
+  'Rollercoaster':  [4, 9, 3, 10, 4, 9, 3],
+  'Double drop':    [4, 7, 10, 5, 7, 10, 4],
+  'Wave':           [5, 8, 5, 9, 5, 8, 5],
+  'Afterhours':     [8, 8, 9, 8, 7, 4, 2],
+  'Cool down':      [9, 8, 7, 6, 5, 4, 3],
+  'Flat':           [6, 6, 6, 6, 6],
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -103,7 +126,8 @@ export default function EnergyEditor({ points, onChange }: Props) {
 
   // ── Active preset detection ──────────────────────────────────
   function isActivePreset(vals: number[]) {
-    return vals.every((v, i) => v === points[i])
+    const resampled = resampleEnergyPoints(vals, N)
+    return resampled.every((v, i) => v === points[i])
   }
 
   return (
@@ -115,7 +139,7 @@ export default function EnergyEditor({ points, onChange }: Props) {
           return (
             <button
               key={name}
-              onClick={() => onChange([...vals])}
+              onClick={() => onChange(resampleEnergyPoints(vals, N))}
               style={{
                 background: active ? `linear-gradient(90deg,${M}22,${C}22)` : 'transparent',
                 border: `1px solid ${active ? C : '#23233a'}`,
@@ -164,15 +188,16 @@ export default function EnergyEditor({ points, onChange }: Props) {
             )
           })}
 
-          {/* X axis labels */}
-          {['Start', 'Quarter', 'Midpoint', 'Three-quarter', 'End'].map((label, i) => {
-            if (i === 1 || i === 3) return null // only show Start, Mid, End to avoid crowding
-            return (
-              <text key={i} x={iToX(i, N)} y={VH - 10} textAnchor="middle" fontSize={9} fill="#3a3a58" fontFamily="'JetBrains Mono',monospace">
-                {i === 0 ? 'START' : i === 2 ? 'MID' : 'END'}
-              </text>
-            )
-          })}
+          {/* X axis labels — just Start / Mid / End, regardless of point count */}
+          {[
+            { i: 0, label: 'START' },
+            { i: Math.floor((N - 1) / 2), label: 'MID' },
+            { i: N - 1, label: 'END' },
+          ].filter((pt, k, arr) => arr.findIndex(p => p.i === pt.i) === k).map(({ i, label }, k) => (
+            <text key={k} x={iToX(i, N)} y={VH - 10} textAnchor="middle" fontSize={9} fill="#3a3a58" fontFamily="'JetBrains Mono',monospace">
+              {label}
+            </text>
+          ))}
 
           {/* Fill */}
           <path d={fill} fill="url(#ef-grad)" />

@@ -234,7 +234,7 @@ export default function AnalysePage() {
           `${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`)
         .join('\n')
 
-      const ctx = [meta.genre, meta.crowd, meta.arc].filter(Boolean).join(' / ')
+      const ctx = [meta.genre, meta.crowd, meta.familiarity || meta.arc].filter(Boolean).join(' / ')
 
       setRawText(lines)
       setContext(ctx)

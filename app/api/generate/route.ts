@@ -36,9 +36,22 @@ function buildLockedSection(lockedTracks: { n:number; artist:string; title:strin
 // SINGLE-CHUNK PROMPT
 // Used for sets ≤ 13 tracks, or as each chunk in a large set
 // ══════════════════════════════════════════════════════════════
+// ── Familiarity → instruction text ─────────────────────────────
+function familiarityInstruction(familiarity?: string): string {
+  switch (familiarity) {
+    case 'Popular Hits':
+      return 'Favor widely recognizable, well-known tracks and festival/radio staples for this genre — the crowd should recognize most of the set.'
+    case 'Deep Cuts / Underground':
+      return 'Favor lesser-known, underground, or deep-cut tracks — avoid the most obvious/overplayed picks even where they would fit. Crate-digger selections.'
+    default:
+      return 'Mix well-known tracks with some lesser-known picks — a natural blend of familiar and fresh.'
+  }
+}
+
 async function generateChunk(params: {
   genre:        string
   crowd:        string
+  familiarity:  string
   vibe:         string
   refArtist:    string
   bpmLow:       number
@@ -59,7 +72,7 @@ async function generateChunk(params: {
 }): Promise<{ title: string; summary: string; tracks: unknown[] }> {
 
   const {
-    genre, crowd, vibe, refArtist,
+    genre, crowd, familiarity, vibe, refArtist,
     bpmLow, bpmHigh, keyMatch,
     targetCount, energyStart, energyEnd, energyCurve,
     position, includeMixingNotes = true, lockedTracks, prevTracks, setTitle, recentTracks = [],
@@ -117,6 +130,7 @@ async function generateChunk(params: {
 Parameters:
 - Genre: ${genre}
 - Crowd: ${crowd}${vibeLine}${refLine}
+- Track familiarity: ${familiarityInstruction(familiarity)}
 - BPM range: ${bpmLow}–${bpmHigh}
 - Harmonic key matching: ${keyMatch ? 'YES — adjacent Camelot keys must be compatible (same number, ±1, or A↔B)' : 'not required'}
 - Track count: ${targetCount} tracks
@@ -234,7 +248,7 @@ export async function POST(req: Request) {
 
     const body = await req.json()
     const {
-      genre, crowd, arc, vibe, refArtist,
+      genre, crowd, familiarity, vibe, refArtist,
       mode, minutes, count,
       bpmLow = 120, bpmHigh = 128,
       keyMatch = true,
@@ -259,17 +273,16 @@ export async function POST(req: Request) {
       MAX_TRACKS,
     )
 
-    // Energy curve
-    const defaultCurve = arc === 'Peak Time Energy'  ? [8,9,10,9,8]
-                       : arc === 'Cool Down'          ? [8,7,5,4,3]
-                       : arc === 'Wave (up & down)'   ? [5,8,5,9,6]
-                       :                               [3,5,6,8,9]  // Slow Build default
+    // Energy curve — the client always sends a real, hand-shaped curve (one point
+    // per track, via the interactive editor); this default only covers malformed
+    // or missing input, not a named "arc" — a gentle build works for any genre.
+    const DEFAULT_CURVE = [3, 5, 6, 8, 9]
     const energyCurve = interpolateEnergy(
-      energyPoints?.length === 5 ? energyPoints : defaultCurve,
+      Array.isArray(energyPoints) && energyPoints.length >= 2 ? energyPoints : DEFAULT_CURVE,
       targetTracks,
     )
 
-    const baseParams = { genre, crowd, vibe: vibe||'', refArtist: refArtist||'', bpmLow, bpmHigh, keyMatch }
+    const baseParams = { genre, crowd, familiarity: familiarity || 'Balanced Mix', vibe: vibe||'', refArtist: refArtist||'', bpmLow, bpmHigh, keyMatch }
 
     const trendingTracks = await getTrendingTracksForGenre(genre)
 

@@ -9,13 +9,13 @@ const C = '#00f0ff'
 const M = '#ff1e8a'
 
 export type WizardResult = {
-  genre:     string
-  crowd:     string
-  arc:       string
-  vibe:      string
-  refArtist: string
-  minutes:   number
-  mode:      'time'
+  genre:       string
+  crowd:       string
+  familiarity: string
+  vibe:        string
+  refArtist:   string
+  minutes:     number
+  mode:        'time'
 }
 
 interface Props {
@@ -35,11 +35,10 @@ const WIZARD_GENRES = [
   { value:'Open Format / Multi-Genre', emoji:'🎲', name:'Open Format', desc:'Mix of everything. No rules.' },
 ]
 
-const WIZARD_VIBES = [
-  { arc:'Slow Build',        emoji:'🌊', name:'Slow build',  desc:'Start mellow, peak hard. The classic DJ journey.' },
-  { arc:'Peak Time Energy',  emoji:'🔥', name:'Full power',  desc:'Maximum energy all the way through.' },
-  { arc:'Cool Down',         emoji:'🌙', name:'Chill out',   desc:'Smooth and easy. Perfect for a late-night wind-down.' },
-  { arc:'Wave (up & down)',  emoji:'〰️', name:'Wave',        desc:'Energy rises and falls. Keeps the crowd guessing.' },
+const WIZARD_FAMILIARITY = [
+  { value:'Popular Hits',              emoji:'⭐', name:'Popular hits',  desc:'Recognizable crowd-pleasers — the tracks everyone already knows.' },
+  { value:'Balanced Mix',              emoji:'⚖️', name:'Balanced mix',  desc:'A natural blend of familiar tracks and fresh finds.' },
+  { value:'Deep Cuts / Underground',   emoji:'🕳️', name:'Deep cuts',     desc:'Underground and lesser-known picks. For the crate-diggers.' },
 ]
 
 const WIZARD_CROWDS = [
@@ -52,10 +51,10 @@ const WIZARD_CROWDS = [
 ]
 
 export default function OnboardingWizard({ onComplete, onSkip }: Props) {
-  const [step,      setStep]      = useState(0)
-  const [genre,     setGenre]     = useState('')
-  const [arc,       setArc]       = useState('')
-  const [crowd,     setCrowd]     = useState('')
+  const [step,        setStep]        = useState(0)
+  const [genre,       setGenre]       = useState('')
+  const [familiarity, setFamiliarity] = useState('')
+  const [crowd,       setCrowd]       = useState('')
   const [minutes,   setMinutes]   = useState(60)
   const [refArtist, setRefArtist] = useState('')
 
@@ -67,13 +66,13 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
   function finish() {
     try { localStorage.setItem('sf_onboarded', 'true') } catch {}
     onComplete({
-      genre:     genre     || 'Tech House',
-      crowd:     crowd     || 'Club Peak Hour',
-      arc:       arc       || 'Slow Build',
-      vibe:      '',
-      refArtist: refArtist.trim(),
+      genre:       genre       || 'Tech House',
+      crowd:       crowd       || 'Club Peak Hour',
+      familiarity: familiarity || 'Balanced Mix',
+      vibe:        '',
+      refArtist:   refArtist.trim(),
       minutes,
-      mode:      'time',
+      mode:        'time',
     })
   }
 
@@ -160,21 +159,21 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
           </div>
         )}
 
-        {/* ── STEP 2: Energy / Vibe ── */}
+        {/* ── STEP 2: Track familiarity ── */}
         {step === 2 && (
           <div>
-            <h2 style={{ fontSize:22, fontWeight:700, margin:'0 0 6px', fontFamily:"'Inter',sans-serif" }}>How should the energy feel? ⚡</h2>
-            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 20px', lineHeight:1.5 }}>Think about the mood you want to create for your crowd.</p>
+            <h2 style={{ fontSize:22, fontWeight:700, margin:'0 0 6px', fontFamily:"'Inter',sans-serif" }}>How familiar should the tracks be? 🎯</h2>
+            <p style={{ fontSize:14, color:'#6a6a8a', margin:'0 0 20px', lineHeight:1.5 }}>You can always shape the energy curve yourself once the set is built.</p>
             <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
-              {WIZARD_VIBES.map(v => (
-                <div key={v.arc} className="wiz-card" onClick={() => { setArc(v.arc); setTimeout(next, 180) }}
-                  style={{ background: arc===v.arc ? `linear-gradient(135deg,${M}22,${C}22)` : '#0d0d18', border:`1px solid ${arc===v.arc ? C : '#1f1f38'}`, borderRadius:12, padding:'14px 18px', display:'flex', alignItems:'center', gap:14 }}>
+              {WIZARD_FAMILIARITY.map(v => (
+                <div key={v.value} className="wiz-card" onClick={() => { setFamiliarity(v.value); setTimeout(next, 180) }}
+                  style={{ background: familiarity===v.value ? `linear-gradient(135deg,${M}22,${C}22)` : '#0d0d18', border:`1px solid ${familiarity===v.value ? C : '#1f1f38'}`, borderRadius:12, padding:'14px 18px', display:'flex', alignItems:'center', gap:14 }}>
                   <div style={{ fontSize:28, flexShrink:0 }}>{v.emoji}</div>
                   <div>
                     <div style={{ fontSize:15, fontWeight:600, color:'#e8e8f0', marginBottom:2 }}>{v.name}</div>
                     <div style={{ fontSize:12, color:'#6a6a8a' }}>{v.desc}</div>
                   </div>
-                  {arc===v.arc && <div style={{ marginLeft:'auto', color:C, fontSize:18, flexShrink:0 }}>✓</div>}
+                  {familiarity===v.value && <div style={{ marginLeft:'auto', color:C, fontSize:18, flexShrink:0 }}>✓</div>}
                 </div>
               ))}
             </div>
@@ -256,7 +255,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: Props) {
             <div style={{ background:'#06060c', border:'1px solid #1a1a2e', borderRadius:12, padding:'14px 18px', marginBottom:20 }}>
               <div style={{ fontSize:11, color:'#4a4a66', letterSpacing:1, marginBottom:10, fontFamily:'JetBrains Mono,monospace' }}>YOUR SET</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                {[genre, arc, crowd, `${minutes} min`].map(tag => (
+                {[genre, familiarity, crowd, `${minutes} min`].map(tag => (
                   <span key={tag} style={{ fontSize:12, color:'#9a9ab8', background:'#0d0d18', border:'1px solid #1f1f38', borderRadius:999, padding:'3px 10px' }}>{tag}</span>
                 ))}
               </div>

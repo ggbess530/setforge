@@ -166,7 +166,7 @@ const TOOLS = [
     icon: '⚡', name: 'Forge', href: '/app',
     title: 'Generate a complete DJ set from a description',
     plain: 'The main event — start here if you’re new.',
-    desc: 'Pick a genre, crowd, and energy arc (or type your own in plain English) and SetForge builds a full tracklist: real songs, matched BPM, compatible musical keys, and notes on exactly how to mix each transition.',
+    desc: 'Pick a genre and crowd, shape the energy curve yourself (or type your own vibe in plain English) and SetForge builds a full tracklist: real songs, matched BPM, compatible musical keys, and notes on exactly how to mix each transition.',
     tag: 'No experience needed',
     preview: ForgePreview,
   },
@@ -219,7 +219,7 @@ const FAQS = [
   { q:'What is harmonic mixing? Do I need to understand it?', a:"Harmonic mixing means choosing songs in compatible musical keys. Pro DJs spend years learning this. SetForge does it instantly for every track, so you get pro transitions without knowing any music theory." },
   { q:'Do I need DJ equipment or software?', a:"No. SetForge works in any browser on any device. If you have Rekordbox or Serato, you can export directly, or import your existing library so sets are built from music you already own. But you can also just use SetForge to plan and discover music." },
   { q:'Will the AI suggest real songs I can find?', a:"Yes. SetForge picks real, well-known tracks on Beatport, Spotify, and major platforms. Every track has direct search links so you can preview and buy instantly." },
-  { q:'What is an energy arc and which should I pick?', a:'"Energy arc" is how your set builds over time. Slow Build starts mellow and peaks hard — great for warming up a crowd. Peak Time keeps energy high throughout. Cool Down works for the end of a night. When in doubt, Slow Build is the most crowd-pleasing.' },
+  { q:'What is the energy curve and how do I use it?', a:'The energy curve is an interactive graph you drag to shape how your set builds over time — one point per track. Built-in presets cover common shapes (Slow Build, Peak Time, Cool Down, Rollercoaster, and more), or draw your own from scratch. When in doubt, Slow Build is the most crowd-pleasing.' },
   { q:'How is this different from a Spotify playlist?', a:"A Spotify playlist is just songs in a row. SetForge creates a DJ set — every track chosen for BPM, musical key, energy level, and how it flows into the next one. You also get transition notes telling you exactly how to mix. It's the difference between a list and a performance." },
   { q:'Is there a free plan?', a:"Yes — 5 set generations every month, forever. No credit card, no expiry. You also get a 7-day Pro trial on signup to try unlimited generations before deciding." },
 ]

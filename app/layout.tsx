@@ -5,7 +5,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 
 export const metadata: Metadata = {
   title:       'SetForge — AI DJ Set Creation',
-  description: 'AI-powered DJ set curation. BPM matching, harmonic key sequencing, energy arc shaping.',
+  description: 'AI-powered DJ set curation. BPM matching, harmonic key sequencing, interactive energy curve shaping.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -94,7 +94,7 @@ function SharedSetContent() {
                 {set.set_data.summary}
               </p>
               <div style={{ display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
-                {[set.meta?.genre, set.meta?.crowd, set.meta?.arc].map(tag => tag && (
+                {[set.meta?.genre, set.meta?.crowd, set.meta?.familiarity || set.meta?.arc].map(tag => tag && (
                   <span key={String(tag)} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'3px 10px' }}>{String(tag)}</span>
                 ))}
               </div>

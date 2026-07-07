@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
-import EnergyEditor, { ENERGY_PRESETS } from '../components/EnergyEditor'
+import EnergyEditor, { ENERGY_PRESETS, resampleEnergyPoints } from '../components/EnergyEditor'
 import TagScanner from '../components/TagScanner'
 import { toRekordboxXML, toSeratoM3U, toTraktorNML, downloadFile } from '@/lib/export-utils'
 import MixSimulator from '../components/MixSimulator'
@@ -23,8 +23,9 @@ const GENRE_GROUPS: Record<string, string[]> = {
   'Open Format':    ['Open Format / Multi-Genre','Top 40 / Pop','Latin','Reggae / Dub'],
 }
 const CROWDS  = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
-const ARCS    = ['Slow Build','Peak Time Energy','Cool Down','Wave (up & down)']
+const FAMILIARITY_OPTIONS = ['Popular Hits','Balanced Mix','Deep Cuts / Underground']
 const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
+const MIN_CURVE_POINTS = 3
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
@@ -40,7 +41,7 @@ export default function AppPage() {
   // form
   const [genre,        setGenre]        = useState('House')
   const [crowd,        setCrowd]        = useState('House Party')
-  const [arc,          setArc]          = useState('Wave (up & down)')
+  const [familiarity,  setFamiliarity]  = useState('Balanced Mix')
   const [vibe,         setVibe]         = useState('')
   const [refArtist,    setRefArtist]    = useState('')
   const [mode,         setMode]         = useState<'time'|'count'>('time')
@@ -50,7 +51,7 @@ export default function AppPage() {
   const [bpmHigh,      setBpmHigh]      = useState(125)
   const [keyMatch,           setKeyMatch]           = useState(true)
   const [includeMixingNotes, setIncludeMixingNotes] = useState(true)
-  const [energyPoints, setEnergyPoints] = useState<number[]>([...ENERGY_PRESETS['Wave']])
+  const [energyPoints, setEnergyPoints] = useState<number[]>(() => resampleEnergyPoints(ENERGY_PRESETS['Wave'], Math.round(minutes / 4.5)))
   const [customGenre,  setCustomGenre]  = useState('')
   const effectiveGenre = genre === '__custom__' ? customGenre.trim() : genre
 
@@ -106,6 +107,17 @@ export default function AppPage() {
   useEffect(() => {
     fetch('/api/quota').then(r => r.json()).then(d => { if (!d.error) setQuota(d) }).catch(() => {})
   }, [])
+  // Curve point count should reflect how many tracks the set will actually have —
+  // resample (not reset) so the drawn shape survives a length change instead of
+  // reverting to a preset. Adjusted during render (React's sanctioned pattern for
+  // "derive state from a changed value"), not in an effect, so it can't lag a frame.
+  const maxTracks = quota?.tier === 'free' ? 15 : 50
+  const targetTrackCount = Math.max(MIN_CURVE_POINTS, Math.min(maxTracks, mode === 'count' ? count : Math.round(minutes / 4.5)))
+  const [resampledForCount, setResampledForCount] = useState(targetTrackCount)
+  if (targetTrackCount !== resampledForCount) {
+    setResampledForCount(targetTrackCount)
+    setEnergyPoints(prev => resampleEnergyPoints(prev, targetTrackCount))
+  }
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'library') {
       window.history.replaceState({}, '', '/app')
@@ -127,14 +139,14 @@ export default function AppPage() {
     setSet(null); setWhyData({}); setOpenWhy(new Set())
     try {
       const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-          genre: effectiveGenre, crowd, arc, vibe, refArtist,
+          genre: effectiveGenre, crowd, familiarity, vibe, refArtist,
           mode, minutes, count, bpmLow, bpmHigh, keyMatch,
           lockedTracks, energyPoints, includeMixingNotes,
           recentTracks: trackHistory,
         }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Generation failed.'); return }
-      setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, arc, vibe, refArtist } })
+      setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, familiarity, vibe, refArtist } })
       if (isMobile) setMobileShowResults(true)
       if (data.quota) setQuota(data.quota)
       if (keepLocks && lockedTracks.length > 0) {
@@ -150,10 +162,10 @@ export default function AppPage() {
   }
 
   function tryExample() {
-    setGenre('Tech House'); setCrowd('Club Peak Hour'); setArc('Slow Build')
+    setGenre('Tech House'); setCrowd('Club Peak Hour'); setFamiliarity('Balanced Mix')
     setVibe('dark and hypnotic, late night warehouse'); setRefArtist('Fisher, Chris Lake')
     setMode('time'); setMinutes(60); setBpmLow(122); setBpmHigh(128); setKeyMatch(true)
-    setEnergyPoints([...ENERGY_PRESETS['Slow build']])
+    setEnergyPoints(resampleEnergyPoints(ENERGY_PRESETS['Slow build'], Math.round(60 / 4.5)))
     setTimeout(() => generate(false), 80)
   }
 
@@ -163,7 +175,7 @@ export default function AppPage() {
     setSwapping(index); setError(null)
     const target = set.tracks[index]
     try {
-      const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
+      const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, familiarity, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Swap failed.'); return }
       setSwapModal({ index, suggestions: (data.suggestions||[]).map((s: Suggestion) => ({ ...s, n: target.n })) })
@@ -183,7 +195,7 @@ export default function AppPage() {
   async function saveSet() {
     if (!set||saving) return; setSaving(true)
     try {
-      const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, arc:set._meta?.arc||arc, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() } }) })
+      const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, familiarity:set._meta?.familiarity||familiarity, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() } }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error||'Save failed.'); return }
       setLibrary(prev => [data.set,...prev]); setSavedFlash(true); setTimeout(()=>setSavedFlash(false),2000)
@@ -203,7 +215,7 @@ export default function AppPage() {
       const res=await fetch(`/api/library/item?id=${id}`); const data=await res.json()
       if (!res.ok) { setError(data.error||'Load failed.'); return }
       const saved: SetData = data.set.set_data; setSet(saved)
-      if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setArc(saved._meta.arc||arc); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
+      if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setFamiliarity(saved._meta.familiarity||'Balanced Mix'); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
       if (isMobile) { setView('forge'); setMobileShowResults(true) }
     } catch { setError('Network error.') }
     finally   { setLibLoading(false) }
@@ -240,7 +252,7 @@ export default function AppPage() {
     try {
       const res=await fetch('/api/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tracks,bpmLow,bpmHigh,keyMatch}) }); const data=await res.json()
       if (!res.ok) { setError(data.error||'Import failed.'); return }
-      setSet({...data.set,_meta:{genre:'Imported',crowd:'',arc:'',vibe:'',refArtist:''}})
+      setSet({...data.set,_meta:{genre:'Imported',crowd:'',familiarity:'',vibe:'',refArtist:''}})
       if (isMobile) setMobileShowResults(true)
       if (data.quota) setQuota(data.quota)
     } catch { setError('Network error.') }
@@ -256,7 +268,7 @@ export default function AppPage() {
     const t = set.tracks[i]
     fetch('/api/why', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
       track: t, prevTrack: set.tracks[i-1]||null, nextTrack: set.tracks[i+1]||null,
-      genre: effectiveGenre, crowd, arc, setLength: set.tracks.length,
+      genre: effectiveGenre, crowd, familiarity, setLength: set.tracks.length,
     }) })
       .then(r => r.json())
       .then(d => { if (d.why) setWhyData(prev => ({ ...prev, [i]: d })) })
@@ -331,9 +343,8 @@ export default function AppPage() {
 
   // ── Wizard ────────────────────────────────────────────────
   function handleWizardComplete(result: WizardResult) {
-    setGenre(result.genre); setCrowd(result.crowd); setArc(result.arc); setVibe(result.vibe); setRefArtist(result.refArtist); setMinutes(result.minutes); setMode('time')
-    const presetName = Object.entries(ENERGY_PRESETS).find(([name]) => name.toLowerCase().includes(result.arc.toLowerCase().split(' ')[0]))
-    if (presetName) setEnergyPoints([...presetName[1]])
+    setGenre(result.genre); setCrowd(result.crowd); setFamiliarity(result.familiarity); setVibe(result.vibe); setRefArtist(result.refArtist); setMinutes(result.minutes); setMode('time')
+    setEnergyPoints(resampleEnergyPoints(ENERGY_PRESETS['Wave'], Math.round(result.minutes / 4.5)))
     setShowWizard(false); setFirstSetCelebration(true); setTimeout(()=>generate(false),80)
   }
   function handleWizardSkip() { try { localStorage.setItem('sf_onboarded','true') } catch {}; setShowWizard(false) }
@@ -499,9 +510,9 @@ export default function AppPage() {
                     </select>
                   </div>
                   <div>
-                    <SFLabel>ARC</SFLabel>
-                    <select className="sf-input sf-select" value={arc} onChange={e=>setArc(e.target.value)}>
-                      {ARCS.map(a=><option key={a}>{a}</option>)}
+                    <SFLabel>FAMILIARITY</SFLabel>
+                    <select className="sf-input sf-select" value={familiarity} onChange={e=>setFamiliarity(e.target.value)}>
+                      {FAMILIARITY_OPTIONS.map(f=><option key={f}>{f}</option>)}
                     </select>
                   </div>
                 </div>
@@ -740,7 +751,7 @@ export default function AppPage() {
                 <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:36, margin:'0 0 4px', letterSpacing:1, color:C }} className="sf-glow-c">{set.title}</h2>
                 <div style={{ fontSize:13, color:'#9a9ab8', lineHeight:1.5, marginBottom:10 }}>{set.summary}</div>
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
-                  {[set._meta?.genre||genre, set._meta?.crowd||crowd, set._meta?.arc||arc].map(tag=>tag&&(
+                  {[set._meta?.genre||genre, set._meta?.crowd||crowd, set._meta?.familiarity||set._meta?.arc||familiarity].map(tag=>tag&&(
                     <span key={tag} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'2px 8px' }}>{tag}</span>
                   ))}
                 </div>

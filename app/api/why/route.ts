@@ -9,7 +9,7 @@ import { logError } from '@/lib/log-error'
 
 // ── POST /api/why ─────────────────────────────────────────────
 // Returns plain-English reasoning for a specific track choice
-// Body: { track, prevTrack, nextTrack, genre, crowd, arc, position }
+// Body: { track, prevTrack, nextTrack, genre, crowd, familiarity, position }
 export async function POST(req: Request) {
   try {
     const { userId } = await auth()
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '"Why this track?" is a Pro feature.', code: 'PRO_REQUIRED' }, { status: 403 })
     }
 
-    const { track, prevTrack, nextTrack, genre, crowd, arc, setLength } = await req.json()
+    const { track, prevTrack, nextTrack, genre, crowd, familiarity, setLength } = await req.json()
 
     if (!track) return NextResponse.json({ error: 'No track provided.' }, { status: 400 })
 
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 A DJ set is being built with these parameters:
 - Genre: ${genre || 'not specified'}
 - Crowd: ${crowd || 'not specified'}
-- Energy arc: ${arc || 'not specified'}
+- Track familiarity: ${familiarity || 'not specified'}
 - Set length: ~${setLength || '?'} tracks
 
 The track being explained:

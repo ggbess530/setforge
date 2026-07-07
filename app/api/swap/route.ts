@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
     const {
       target, prev, next, existing,
-      genre, crowd, arc, vibe, refArtist, bpmLow, bpmHigh, keyMatch,
+      genre, crowd, familiarity, vibe, refArtist, bpmLow, bpmHigh, keyMatch,
     } = await req.json()
 
     if (!target) return NextResponse.json({ error: 'Missing target track' }, { status: 400 })
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const prompt = `You are a world-class DJ. Suggest FOUR replacement tracks for a single slot in an existing set.
 
 Set context:
-- Genre: ${genre} | Crowd: ${crowd} | Arc: ${arc}${vibe ? ` | Vibe: ${vibe}` : ''}${refArtist ? ` | Ref: ${refArtist}` : ''}
+- Genre: ${genre} | Crowd: ${crowd} | Track familiarity: ${familiarity || 'Balanced Mix'}${vibe ? ` | Vibe: ${vibe}` : ''}${refArtist ? ` | Ref: ${refArtist}` : ''}
 - BPM range: ${bpmLow}–${bpmHigh} | Harmonic key matching: ${keyMatch ? 'yes' : 'no'}
 
 Replace track ${target.n}: "${target.artist} — ${target.title}" (${target.bpm} BPM, ${target.key}, energy ${target.energy}/10)
