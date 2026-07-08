@@ -47,6 +47,7 @@ export async function enrichTracks(tracks: EnrichableTrack[]): Promise<void> {
     if (cached) {
       tracks[i].bpm = cached.bpm
       if (cached.key) tracks[i].key = cached.key
+      if (cached.spotifyId) tracks[i].spotifyId = cached.spotifyId
       tracks[i].verified = true
     } else {
       misses.push(i)
@@ -100,7 +101,7 @@ export async function enrichTracks(tracks: EnrichableTrack[]): Promise<void> {
     tracks[trackIndex].bpm = features.bpm
     if (features.key) tracks[trackIndex].key = features.key
     // Warm our own cache so this exact track never needs an external call again.
-    upsertCachedMetadata(tracks[trackIndex].artist, tracks[trackIndex].title, features.bpm, features.key, 'reccobeats')
+    upsertCachedMetadata(tracks[trackIndex].artist, tracks[trackIndex].title, features.bpm, features.key, 'reccobeats', spotifyId)
       .catch(() => {})
   })
 }

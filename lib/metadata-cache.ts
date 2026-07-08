@@ -14,12 +14,16 @@
 //   normalized_title  text NOT NULL,
 //   bpm               numeric,
 //   key               text,
+//   spotify_id        text,             -- populated when a 'reccobeats'/'trending_scan' write resolved one; NULL for DJ-software imports
 //   sample_count      integer NOT NULL DEFAULT 1,
-//   source            text,             -- 'rekordbox' | 'serato' | 'traktor' | 'manual'
+//   source            text,             -- 'rekordbox' | 'serato' | 'traktor' | 'manual' | 'reccobeats' | 'trending_scan'
 //   updated_at        timestamptz DEFAULT now(),
 //   UNIQUE (normalized_artist, normalized_title)
 // );
 // CREATE INDEX track_metadata_cache_lookup_idx ON track_metadata_cache (normalized_artist, normalized_title);
+//
+// Existing table? Run this once instead of recreating it:
+// ALTER TABLE track_metadata_cache ADD COLUMN IF NOT EXISTS spotify_id text;
 
 import { createAdminClient } from './supabase'
 import { normalizeTitle, normalizeArtists } from './track-match'
@@ -31,7 +35,7 @@ function cacheKey(artist: string, title: string): { normalized_artist: string; n
   return { normalized_artist, normalized_title }
 }
 
-export type CachedMetadata = { bpm: number; key: string | null }
+export type CachedMetadata = { bpm: number; key: string | null; spotifyId?: string | null }
 
 export async function lookupCachedMetadata(artist: string, title: string): Promise<CachedMetadata | null> {
   const key = cacheKey(artist, title)
@@ -41,13 +45,13 @@ export async function lookupCachedMetadata(artist: string, title: string): Promi
     const supabase = createAdminClient()
     const { data } = await supabase
       .from('track_metadata_cache')
-      .select('bpm, key')
+      .select('bpm, key, spotify_id')
       .eq('normalized_artist', key.normalized_artist)
       .eq('normalized_title', key.normalized_title)
       .maybeSingle()
 
     if (!data || data.bpm == null) return null
-    return { bpm: Math.round(data.bpm), key: data.key ?? null }
+    return { bpm: Math.round(data.bpm), key: data.key ?? null, spotifyId: data.spotify_id ?? null }
   } catch (err) {
     console.warn('[metadata-cache] lookup failed', err)
     return null
@@ -57,8 +61,11 @@ export async function lookupCachedMetadata(artist: string, title: string): Promi
 // Fire-and-forget — callers should never await this on a user-facing request path.
 // First-write-wins on conflict (keeps the earliest real value, just tracks sample_count),
 // so one bad one-off import can't clobber an already-established correct entry.
+// spotifyId is the exception to first-write-wins: DJ-software imports never have
+// one, so if a later Spotify-backed write discovers an ID for an existing
+// entry, backfill it rather than leaving the preview link permanently missing.
 export async function upsertCachedMetadata(
-  artist: string, title: string, bpm: number, key: string | null, source: string,
+  artist: string, title: string, bpm: number, key: string | null, source: string, spotifyId?: string | null,
 ): Promise<void> {
   const cacheKeyResult = cacheKey(artist, title)
   if (!cacheKeyResult || !bpm) return
@@ -67,7 +74,7 @@ export async function upsertCachedMetadata(
     const supabase = createAdminClient()
     const { data: existing } = await supabase
       .from('track_metadata_cache')
-      .select('id, sample_count')
+      .select('id, sample_count, spotify_id')
       .eq('normalized_artist', cacheKeyResult.normalized_artist)
       .eq('normalized_title', cacheKeyResult.normalized_title)
       .maybeSingle()
@@ -75,12 +82,15 @@ export async function upsertCachedMetadata(
     if (existing) {
       await supabase
         .from('track_metadata_cache')
-        .update({ sample_count: (existing.sample_count || 1) + 1 })
+        .update({
+          sample_count: (existing.sample_count || 1) + 1,
+          ...(spotifyId && !existing.spotify_id ? { spotify_id: spotifyId } : {}),
+        })
         .eq('id', existing.id)
     } else {
       await supabase
         .from('track_metadata_cache')
-        .insert({ ...cacheKeyResult, bpm, key, source, sample_count: 1 })
+        .insert({ ...cacheKeyResult, bpm, key, source, sample_count: 1, spotify_id: spotifyId ?? null })
     }
   } catch (err) {
     console.warn('[metadata-cache] upsert failed', err)

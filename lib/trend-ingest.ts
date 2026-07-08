@@ -117,7 +117,7 @@ export async function refreshTrendingTracks(): Promise<{
           source: 'spotify_playlist', sourceRef: playlistId, rank: t.rank,
         })
         if (resolved?.bpm) {
-          await upsertCachedMetadata(t.artist, t.title, resolved.bpm, resolved.key, 'trending_scan')
+          await upsertCachedMetadata(t.artist, t.title, resolved.bpm, resolved.key, 'trending_scan', t.spotifyId)
         }
         tracksUpserted++
       })
