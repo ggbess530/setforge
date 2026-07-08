@@ -124,6 +124,12 @@ export default function AppPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
   }
 
+  // Let the user know their unsaved set came back after a refresh — otherwise
+  // a restored draft looks like a stale bug, not the recovery it actually is.
+  useEffect(() => {
+    if (draft.set) pushToast('success', 'Restored your last session.')
+  }, [draft.set])
+
   // library
   const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
   const [library,     setLibrary]     = useState<LibItem[]>([])
@@ -522,7 +528,7 @@ export default function AppPage() {
       {showWizard && <OnboardingWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />}
 
       {/* Toasts — fixed, always visible regardless of view/mobile panel state */}
-      <div role="status" aria-live="polite" style={{ position:'fixed', bottom:20, right:20, zIndex:250, display:'flex', flexDirection:'column', gap:8, maxWidth:320 }}>
+      <div role="status" aria-live="polite" style={{ position:'fixed', bottom:'calc(20px + env(safe-area-inset-bottom, 0px))', right:20, zIndex:250, display:'flex', flexDirection:'column', gap:8, maxWidth:320, pointerEvents: toasts.length ? 'auto' : 'none' }}>
         {toasts.map(t => (
           <div key={t.id} style={{ animation:'toast-in .25s ease', background:'#0a0a14', border:`1px solid ${t.type==='success'?C:M}66`, borderRadius:10, padding:'10px 14px', fontSize:12, color:'#e8e8f0', boxShadow:'0 8px 24px rgba(0,0,0,.4)', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ color: t.type==='success'?C:M, fontWeight:700 }}>{t.type==='success'?'✓':'✕'}</span>
@@ -947,21 +953,37 @@ export default function AppPage() {
                   <div key={`${t.n}-${t.title}`} className="sf-row" style={{ animationDelay:`${i*0.025}s`, display:'flex', flexDirection:'column' }}>
                     <div
                       className="sf-track"
+                      data-track-index={i}
                       onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
                       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
                       onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
                       style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
-                      {/* drag handle */}
+                      {/* drag handle — HTML5 DnD for desktop, manual touch tracking for mobile
+                          (touch events never fire the HTML5 drag API at all) */}
                       <div
                         draggable
                         role="button"
                         aria-label={`Drag to reorder track ${i + 1}`}
                         onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
                         onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+                        onTouchStart={() => setDragIndex(i)}
+                        onTouchMove={e => {
+                          if (dragIndex === null) return
+                          e.preventDefault()
+                          const touch = e.touches[0]
+                          const el = document.elementFromPoint(touch.clientX, touch.clientY)
+                          const rowEl = el?.closest('[data-track-index]')
+                          const idx = rowEl ? parseInt(rowEl.getAttribute('data-track-index') || '', 10) : NaN
+                          if (!Number.isNaN(idx)) setDragOverIndex(idx)
+                        }}
+                        onTouchEnd={() => {
+                          if (dragIndex !== null && dragOverIndex !== null && dragOverIndex !== dragIndex) reorderTracks(dragIndex, dragOverIndex)
+                          setDragIndex(null); setDragOverIndex(null)
+                        }}
                         title="Drag to reorder"
-                        style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px' }}
+                        style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px', touchAction:'none' }}
                       >⠿</div>
                       <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
                       <div>
