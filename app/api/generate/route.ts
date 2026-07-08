@@ -160,19 +160,48 @@ Rules:
   1. Adjacent step (most common — this is what builds the wide directional spread above): (N-1)X↔NX↔(N+1)X, 12 wraps to 1 (e.g. ${exKey}→${exUpNum}${exLetter} or ${exKey}→${exDownNum}${exLetter})
   2. Relative switch (occasional, for a mood shift): same number, A↔B (e.g. ${exKey}↔${exRelKey})
   3. Energy-boost jump (rare — a genuine peak moment only): same letter, +7 positions (e.g. ${exKey}→${exBoostNum}${exLetter})
-  Anything else — any other same-letter jump, or an A/B change combined with a number change — is a key clash. A single clash makes the whole set unacceptable, so before finalizing your answer, walk your own track list pair by pair (1→2, 2→3, 3→4, ...) and confirm each one is genuinely one of the 3 relationships above. If a pair doesn't fit, swap that track for a different real one that does — do not submit a clash and hope it's close enough.
+  Anything else — any other same-letter jump, or an A/B change combined with a number change — is a key clash. A single clash makes the whole set unacceptable, so before finalizing your answer, walk your own track list pair by pair (1→2, 2→3, 3→4, ...) and confirm each one is genuinely one of the 3 relationships above. If a pair doesn't fit, swap that track for a different real one that does — do not submit a clash and hope it's close enough. Do this check silently — your response must still be ONLY the final JSON object, with no reasoning, notes, or verification steps written out before or after it.
   BPM difference between adjacent tracks should be ≤5 BPM for a clean blend. Up to 10 BPM is only acceptable with a genuine half-time/double-time relationship (e.g. 125→62 or 125→250) — anything wider than that is a bad transition, not just one that "requires skill."` : 'Key matching off — focus on BPM and energy flow'}
 ${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")' : '- Do NOT include a "transition" field — omit it entirely for faster, tracklist-only output'}
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
 
   const msg = await anthropic.messages.create({
     model:      CLAUDE_MODEL,
-    max_tokens: 3000,
+    max_tokens: 4000,
     messages:   [{ role: 'user', content: prompt }],
   })
 
   const raw = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-  return JSON.parse(raw.replace(/```json|```/g, '').trim())
+  return parseJsonWithRecovery<{ title: string; summary: string; tracks: unknown[] }>(raw)
+}
+
+// Robust JSON extraction — handles a stray reasoning preamble before the JSON
+// (models sometimes narrate self-checks despite being told not to) and
+// truncation if the response was cut off near the token limit.
+function parseJsonWithRecovery<T>(raw: string): T {
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const start = cleaned.indexOf('{')
+    let candidate = start >= 0 ? cleaned.slice(start) : cleaned
+
+    if (candidate.lastIndexOf('}') < candidate.length - 20) {
+      const opens  = (candidate.match(/\{/g) || []).length
+      const closes = (candidate.match(/\}/g) || []).length
+      const missing = opens - closes
+      if (missing > 0 && missing < 5) {
+        candidate = candidate.trimEnd().replace(/,\s*$/, '') + '}'.repeat(missing)
+      }
+    }
+
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      logError('[generate] Raw response that failed to parse:', raw.slice(0, 500))
+      throw new SyntaxError('AI response could not be parsed')
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -222,13 +251,13 @@ Respond ONLY with valid JSON, no markdown:
   })
 
   const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-  const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+  const data = parseJsonWithRecovery<{ artist?: string; title?: string; bpm?: number; key?: string; energy?: number; transition?: string }>(raw)
   if (!data?.artist || !data?.title) return null
 
   return {
     artist:     data.artist,
     title:      data.title,
-    bpm:        Math.round(data.bpm) || target.bpm,
+    bpm:        data.bpm ? Math.round(data.bpm) : target.bpm,
     key:        data.key || target.key,
     energy:     data.energy ?? target.energy,
     ...(includeMixingNotes ? { transition: data.transition } : {}),
