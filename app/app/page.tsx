@@ -37,7 +37,7 @@ const C = '#00f0ff'
 const M = '#ff1e8a'
 
 // ── Types ─────────────────────────────────────────────────────
-type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean }
+type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean; spotifyId?:string }
 type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 type Suggestion = Track & { label:string }
@@ -111,6 +111,7 @@ export default function AppPage() {
   const [openWhy,   setOpenWhy]   = useState<Set<number>>(new Set())
   const [editingIndex, setEditingIndex] = useState<number|null>(null)
   const [editDraft,    setEditDraft]    = useState<{artist:string;title:string;bpm:string;key:string;energy:number;transition:string}|null>(null)
+  const [previewOpen,  setPreviewOpen]  = useState<Set<number>>(new Set())
 
   // toasts — surfaces feedback for actions taken from the results panel (swap,
   // save, share, edit…), which the old single `error` banner couldn't reach on
@@ -340,6 +341,7 @@ export default function AppPage() {
     setEditDraft({ artist:t.artist, title:t.title, bpm:String(t.bpm), key:t.key, energy:t.energy, transition:t.transition||'' })
     setEditingIndex(i)
     setOpenWhy(prev => { if (!prev.has(i)) return prev; const n = new Set(prev); n.delete(i); return n })
+    setPreviewOpen(prev => { if (!prev.has(i)) return prev; const n = new Set(prev); n.delete(i); return n })
   }
   function cancelEdit() { setEditingIndex(null); setEditDraft(null) }
   function commitEdit() {
@@ -349,14 +351,20 @@ export default function AppPage() {
       if (!s) return s
       const tracks = [...s.tracks]
       const prevTrack = tracks[editingIndex]
+      const newArtist = editDraft.artist.trim() || prevTrack.artist
+      const newTitle  = editDraft.title.trim()  || prevTrack.title
+      const identityChanged = newArtist !== prevTrack.artist || newTitle !== prevTrack.title
       tracks[editingIndex] = {
         ...prevTrack,
-        artist:     editDraft.artist.trim()     || prevTrack.artist,
-        title:      editDraft.title.trim()      || prevTrack.title,
+        artist:     newArtist,
+        title:      newTitle,
         bpm:        Number.isFinite(bpmNum) && bpmNum > 0 ? bpmNum : prevTrack.bpm,
         key:        editDraft.key.trim().toUpperCase() || prevTrack.key,
         energy:     editDraft.energy,
         transition: editDraft.transition,
+        // A changed artist/title makes the old Spotify match untrustworthy —
+        // clear it rather than showing a preview for the wrong track.
+        spotifyId:  identityChanged ? undefined : prevTrack.spotifyId,
       }
       return { ...s, tracks }
     })
@@ -383,6 +391,17 @@ export default function AppPage() {
       const n = new Set(prev); if (n.has(i)) { n.delete(i); return n }
       n.add(i); if (quota?.tier !== 'free') fetchWhy(i); return n
     })
+    setPreviewOpen(prev => { if (!prev.has(i)) return prev; const n = new Set(prev); n.delete(i); return n })
+    if (editingIndex === i) cancelEdit()
+  }
+
+  function togglePreview(i: number) {
+    setPreviewOpen(prev => {
+      const n = new Set(prev); if (n.has(i)) { n.delete(i); return n }
+      n.add(i); return n
+    })
+    setOpenWhy(prev => { if (!prev.has(i)) return prev; const n = new Set(prev); n.delete(i); return n })
+    if (editingIndex === i) cancelEdit()
   }
 
   function reorderTracks(from: number, to: number) {
@@ -933,7 +952,7 @@ export default function AppPage() {
                       onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
                       style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
-                        borderRadius: (openWhy.has(i) || editingIndex===i) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
+                        borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
                       {/* drag handle */}
                       <div
                         draggable
@@ -959,6 +978,10 @@ export default function AppPage() {
                           <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
                           <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
                           <a href={trackSearchUrl(t,'tunebat')} target="_blank" rel="noopener noreferrer" title="Verify BPM & key on Tunebat" style={{ fontSize:8, color:C, textDecoration:'none', border:`1px solid ${C}33`, borderRadius:3, padding:'1px 5px' }}>TB</a>
+                          <button onClick={()=>togglePreview(i)} title={t.spotifyId?'Preview on Spotify':'No verified Spotify match to preview'} aria-expanded={previewOpen.has(i)}
+                            style={{ fontSize:8, color:previewOpen.has(i)?'#1DB954':'#5a5a78', background:'transparent', textDecoration:'none', border:`1px solid ${previewOpen.has(i)?'#1DB95466':'#23233a'}`, borderRadius:3, padding:'1px 5px', cursor:'pointer', fontFamily:'inherit' }}>
+                            ▶ PREVIEW
+                          </button>
                         </div>
                         {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
                       </div>
@@ -1036,6 +1059,23 @@ export default function AppPage() {
                           </div>
                         ) : (
                           <div style={{ fontSize:11, color:'#4a4a66' }}>Couldn&apos;t load — try again.</div>
+                        )}
+                      </div>
+                    )}
+                    {previewOpen.has(i) && (
+                      <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding: t.spotifyId ? '10px' : '12px 14px' }}>
+                        {t.spotifyId ? (
+                          <iframe
+                            title={`Spotify preview — ${t.artist} — ${t.title}`}
+                            src={`https://open.spotify.com/embed/track/${t.spotifyId}?utm_source=generator`}
+                            width="100%" height="80" style={{ border:'none', borderRadius:8, display:'block' }}
+                            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div style={{ fontSize:11, color:'#4a4a66', lineHeight:1.6 }}>
+                            No verified Spotify match to embed a preview for — try the search links above instead.
+                          </div>
                         )}
                       </div>
                     )}

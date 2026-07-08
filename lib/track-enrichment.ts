@@ -19,7 +19,7 @@ import { getSpotifyToken, findSpotifyTrack } from './track-match'
 import { getBpmKeyForSpotifyIds } from './reccobeats'
 import { lookupCachedMetadata, upsertCachedMetadata } from './metadata-cache'
 
-export type EnrichableTrack = { artist: string; title: string; bpm: number; key: string; verified?: boolean }
+export type EnrichableTrack = { artist: string; title: string; bpm: number; key: string; verified?: boolean; spotifyId?: string }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
@@ -79,6 +79,7 @@ export async function enrichTracks(tracks: EnrichableTrack[]): Promise<void> {
     const trackIndex = misses[m]
     if (check.status === 'found') {
       tracks[trackIndex].verified = true
+      tracks[trackIndex].spotifyId = check.spotifyId
       trackIndexBySpotifyId.set(check.spotifyId, trackIndex)
     } else if (check.status === 'notfound') {
       tracks[trackIndex].verified = false
