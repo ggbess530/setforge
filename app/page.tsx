@@ -54,6 +54,46 @@ function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
   return <span ref={ref}>{n}{suffix}</span>
 }
 
+// ── Typewriter genre cycler ───────────────────────────────────
+const HERO_GENRES = ['Tech House', 'Techno', 'Afro House', 'Drum & Bass', 'Trance', 'Hip Hop', 'Disco / Funk']
+
+function TypewriterGenre() {
+  const [genreIndex, setGenreIndex] = useState(0)
+  const [text, setText] = useState('')
+  const [phase, setPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
+
+  useEffect(() => {
+    const current = HERO_GENRES[genreIndex]
+    let timeout: ReturnType<typeof setTimeout>
+
+    if (phase === 'typing') {
+      if (text.length < current.length) {
+        timeout = setTimeout(() => setText(current.slice(0, text.length + 1)), 65)
+      } else {
+        timeout = setTimeout(() => setPhase('pausing'), 1400)
+      }
+    } else if (phase === 'pausing') {
+      timeout = setTimeout(() => setPhase('deleting'), 100)
+    } else {
+      if (text.length > 0) {
+        timeout = setTimeout(() => setText(text.slice(0, -1)), 30)
+      } else {
+        timeout = setTimeout(() => {
+          setGenreIndex(i => (i + 1) % HERO_GENRES.length)
+          setPhase('typing')
+        }, 0)
+      }
+    }
+    return () => clearTimeout(timeout)
+  }, [text, phase, genreIndex])
+
+  return (
+    <span style={{ color: C, fontWeight: 700 }}>
+      {text}<span className="typewriter-cursor">|</span>
+    </span>
+  )
+}
+
 // ── Tool card mini previews ────────────────────────────────────
 function ForgePreview() {
   const rows = [
@@ -316,6 +356,14 @@ export default function LandingPage() {
         @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
         .float { animation:float 4s ease-in-out infinite; }
 
+        /* ── Hero entrance — staggered via inline animationDelay per element ── */
+        @keyframes hero-enter { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:none} }
+        .hero-item { animation:hero-enter .8s cubic-bezier(.16,1,.3,1) backwards; }
+
+        /* ── Typewriter cursor ── */
+        @keyframes cursor-blink { 0%,45%{opacity:1} 50%,95%{opacity:0} 100%{opacity:1} }
+        .typewriter-cursor { animation:cursor-blink 1s step-end infinite; color:${C}; font-weight:400; }
+
         /* ── Feature cards ── */
         .feature-card { transition:transform .25s,box-shadow .25s,border-color .25s; cursor:default; }
         .feature-card:hover { transform:translateY(-6px); box-shadow:0 16px 60px rgba(0,240,255,.08); border-color:#2a2a42!important; }
@@ -412,28 +460,28 @@ export default function LandingPage() {
         {/* ── HERO ── */}
         <section style={{ textAlign:'center', padding: isMobile ? '56px 18px 56px' : '100px 24px 80px', maxWidth:820, margin:'0 auto' }}>
           {/* Floating 🎧 */}
-          <div className="float" style={{ fontSize:60, marginBottom:20, lineHeight:1, display:'inline-block' }}>🎧</div>
+          <div className="float hero-item" style={{ fontSize:60, marginBottom:20, lineHeight:1, display:'inline-block', animationDelay:'0ms' }}>🎧</div>
 
           {/* Badge */}
-          <div style={{ display:'flex', justifyContent:'center', marginBottom:28 }}>
+          <div className="hero-item" style={{ display:'flex', justifyContent:'center', marginBottom:28, animationDelay:'80ms' }}>
             <div className="beginners-badge sf-mono" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'7px 18px', fontSize:12, color:C }}>
               ✦ No DJ experience needed — seriously
             </div>
           </div>
 
-          <h1 style={{ fontSize:'clamp(40px,7vw,80px)', fontWeight:800, lineHeight:1.1, margin:'0 0 24px', letterSpacing:'-0.03em' }}>
-            Build a professional<br />DJ set
-            <span className="hero-grad"> in about 60 seconds.</span>
+          <h1 className="sf-display hero-item" style={{ fontSize:'clamp(52px,10vw,120px)', lineHeight:0.92, margin:'0 0 22px', letterSpacing:1, animationDelay:'160ms' }}>
+            <span style={{ color:'#e8e8f0' }}>FORGE</span><br />
+            <span className="hero-grad">PROFESSIONAL SETS</span>
           </h1>
 
-          <p style={{ fontSize:20, color:'#9a9ab8', maxWidth:560, margin:'0 auto 18px', lineHeight:1.75 }}>
-            Tell SetForge your vibe — genre, mood, crowd — and the AI builds you a complete, professionally structured tracklist. No music theory. No equipment. No experience.
+          <p className="hero-item" style={{ fontSize:20, color:'#9a9ab8', maxWidth:560, margin:'0 auto 18px', lineHeight:1.75, animationDelay:'260ms' }}>
+            AI-curated <TypewriterGenre /> sets — real tracks, matched BPM, perfect harmonic mixing, built in about 60 seconds. No music theory. No equipment. No experience.
           </p>
-          <p style={{ fontSize:15, color:'#5a5a7a', maxWidth:520, margin:'0 auto 30px', lineHeight:1.6 }}>
+          <p className="hero-item" style={{ fontSize:15, color:'#5a5a7a', maxWidth:520, margin:'0 auto 30px', lineHeight:1.6, animationDelay:'340ms' }}>
             Perfect for beginners, producers planning sets, and anyone who loves music.
           </p>
 
-          <div style={{ display:'flex', justifyContent:'center', marginBottom:18 }}>
+          <div className="hero-item" style={{ display:'flex', justifyContent:'center', marginBottom:18, animationDelay:'420ms' }}>
             <a href="#tools" style={{ textDecoration:'none', display:'inline-flex', alignItems:'center', gap:8, fontSize:13, color:'#6a6a8a', border:'1px solid #1a1a2e', borderRadius:999, padding:'8px 16px', transition:'border-color .2s,color .2s' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor=C; (e.currentTarget as HTMLElement).style.color=C }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#1a1a2e'; (e.currentTarget as HTMLElement).style.color='#6a6a8a' }}>
@@ -441,7 +489,7 @@ export default function LandingPage() {
             </a>
           </div>
 
-          <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
+          <div className="hero-item" style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap', animationDelay:'500ms' }}>
             {isSignedIn ? (
               <Link href="/app"><button className="btn-cta" style={{ padding:'17px 40px', borderRadius:12, fontSize:17, fontWeight:700 }}>Open SetForge →</button></Link>
             ) : (
@@ -451,7 +499,7 @@ export default function LandingPage() {
               <button className="btn-ghost" style={{ padding:'17px 34px', borderRadius:12, fontSize:16 }}>See how it works</button>
             </a>
           </div>
-          <p style={{ marginTop:22, fontSize:13, color:'#3a3a58' }}>Free plan available · 7-day Pro trial · Cancel anytime</p>
+          <p className="hero-item" style={{ marginTop:22, fontSize:13, color:'#3a3a58', animationDelay:'580ms' }}>Free plan available · 7-day Pro trial · Cancel anytime</p>
         </section>
 
         {/* ── STATS ── */}

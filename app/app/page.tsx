@@ -621,10 +621,20 @@ export default function AppPage() {
 
       {/* ── NAV ── */}
       <nav style={{ height:52, flexShrink:0, borderBottom:'1px solid #1a1a2e', display:'flex', alignItems:'center', justifyContent:'space-between', padding: isMobile ? '0 10px' : '0 20px', backdropFilter:'blur(12px)', background:'#06060cee', zIndex:40, overflowX:'auto' }}>
-        <Link href="/" style={{ textDecoration:'none', flexShrink:0 }}>
+        <Link href="/" style={{ textDecoration:'none', flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
           <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize: isMobile ? 20 : 24, letterSpacing:2 }}>
             <span style={{ color:C }} className="sf-glow-c">SET</span><span style={{ color:M }} className="sf-glow-m">FORGE</span>
           </div>
+          {quota?.tier && (
+            <span className="sf-mono" style={{
+              fontSize:9, letterSpacing:1, fontWeight:700, padding:'2px 7px', borderRadius:999,
+              color: quota.tier==='team' ? C : quota.tier==='pro' ? M : '#9a9ab8',
+              border: `1px solid ${(quota.tier==='team' ? C : quota.tier==='pro' ? M : '#9a9ab8')}55`,
+              background: `${quota.tier==='team' ? C : quota.tier==='pro' ? M : '#9a9ab8'}14`,
+            }}>
+              {quota.tier.toUpperCase()}
+            </span>
+          )}
         </Link>
         <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 6 : 14, flexShrink:0 }}>
           {quota?.trial?.active && !isMobile && (
