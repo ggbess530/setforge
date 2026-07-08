@@ -10,6 +10,7 @@ import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
 import { getTrendingTracksForGenre, type TrendingTrack } from '@/lib/trending'
 import { logError } from '@/lib/log-error'
+import { camelotCompatibility } from '@/lib/mix-utils'
 
 // ── Energy interpolation ──────────────────────────────────────
 function interpolateEnergy(points: number[], n: number): number[] {
@@ -159,7 +160,7 @@ Rules:
   1. Adjacent step (most common — this is what builds the wide directional spread above): (N-1)X↔NX↔(N+1)X, 12 wraps to 1 (e.g. ${exKey}→${exUpNum}${exLetter} or ${exKey}→${exDownNum}${exLetter})
   2. Relative switch (occasional, for a mood shift): same number, A↔B (e.g. ${exKey}↔${exRelKey})
   3. Energy-boost jump (rare — a genuine peak moment only): same letter, +7 positions (e.g. ${exKey}→${exBoostNum}${exLetter})
-  Anything else — any other same-letter jump, or an A/B change combined with a number change — is a key clash. Do not use it.
+  Anything else — any other same-letter jump, or an A/B change combined with a number change — is a key clash. A single clash makes the whole set unacceptable, so before finalizing your answer, walk your own track list pair by pair (1→2, 2→3, 3→4, ...) and confirm each one is genuinely one of the 3 relationships above. If a pair doesn't fit, swap that track for a different real one that does — do not submit a clash and hope it's close enough.
   BPM difference between adjacent tracks should be ≤5 BPM for a clean blend. Up to 10 BPM is only acceptable with a genuine half-time/double-time relationship (e.g. 125→62 or 125→250) — anything wider than that is a bad transition, not just one that "requires skill."` : 'Key matching off — focus on BPM and energy flow'}
 ${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")' : '- Do NOT include a "transition" field — omit it entirely for faster, tracklist-only output'}
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
@@ -189,10 +190,15 @@ async function regenerateTrack(params: {
   nextTrack?: { artist: string; title: string; bpm: number; key: string } | null
   avoidList: string[]
   includeMixingNotes: boolean
+  reason: 'unverified' | 'clash'
 }): Promise<ReplaceableTrack | null> {
-  const { genre, crowd, vibe, refArtist, bpmLow, bpmHigh, keyMatch, target, prevTrack, nextTrack, avoidList, includeMixingNotes } = params
+  const { genre, crowd, vibe, refArtist, bpmLow, bpmHigh, keyMatch, target, prevTrack, nextTrack, avoidList, includeMixingNotes, reason } = params
 
-  const prompt = `You are a world-class DJ. A track suggested for a DJ set could not be confirmed as a real, existing release and must be replaced with exactly ONE different real track.
+  const reasonLine = reason === 'clash'
+    ? `This is critical: the previous suggestion's key (${target.key}) clashed with the previous track above — it broke harmonic mixing, which is the whole point of this set. The new track's Camelot key MUST be compatible with the previous track: same number (A/B relative switch), one position away on the Camelot wheel (same letter), or exactly 7 positions away on the same letter (energy-boost jump). No other relationship is acceptable — pick a real track that actually satisfies this, not just one that's close. Where realistically possible, also keep it reasonably compatible with the next track.`
+    : `This is critical: the previous suggestion failed because it couldn't be found on Spotify or Beatport. Pick something you are highly confident is a real, well-known, commercially released track.`
+
+  const prompt = `You are a world-class DJ. A track in a DJ set needs to be replaced with exactly ONE different real track.
 
 Set context:
 - Genre: ${genre} | Crowd: ${crowd}${vibe ? ` | Vibe: ${vibe}` : ''}${refArtist ? ` | Ref: ${refArtist}` : ''}
@@ -204,7 +210,7 @@ ${nextTrack ? `Next track: "${nextTrack.artist} — ${nextTrack.title}" (${nextT
 
 DO NOT suggest any of these (already in the set): ${avoidList.join(', ')}
 
-This is critical: the previous suggestion failed because it couldn't be found on Spotify or Beatport. Pick something you are highly confident is a real, well-known, commercially released track.
+${reasonLine}
 
 Respond ONLY with valid JSON, no markdown:
 { "artist": "...", "title": "...", "bpm": <integer within ${bpmLow}-${bpmHigh}>, "key": "Camelot key e.g. 8A", "energy": ${target.energy}${includeMixingNotes ? ', "transition": "short mix note into next track"' : ''} }`
@@ -394,7 +400,7 @@ export async function POST(req: Request) {
           const replacement = await regenerateTrack({
             genre, crowd, vibe: vibe || '', refArtist: refArtist || '', bpmLow, bpmHigh, keyMatch,
             target, prevTrack: tracksArr[i - 1] ?? null, nextTrack: tracksArr[i + 1] ?? null,
-            avoidList, includeMixingNotes,
+            avoidList, includeMixingNotes, reason: 'unverified',
           })
           if (!replacement) return // tracksArr[i].verified is already false
 
@@ -408,6 +414,44 @@ export async function POST(req: Request) {
           console.warn('[generate] replacement attempt failed for unverified track', err)
         }
       }))
+    }
+
+    // The prompt heavily discourages key clashes, but the model doesn't always
+    // comply — this is a deterministic backstop. Check every adjacent pair
+    // against the same rubric the Mix Simulator itself scores against, and
+    // try one real replacement for the later track of each clashing pair.
+    if (keyMatch) {
+      const clashAnchors = tracksArr
+        .map((_, i) => i)
+        .filter(i => i < tracksArr.length - 1 && camelotCompatibility(tracksArr[i].key, tracksArr[i + 1].key).type === 'clash')
+
+      if (clashAnchors.length) {
+        const avoidList = tracksArr.map(t => `"${t.artist} — ${t.title}"`)
+        await Promise.all(clashAnchors.map(async (i) => {
+          const fixIndex = i + 1
+          const target = tracksArr[fixIndex]
+          try {
+            const replacement = await regenerateTrack({
+              genre, crowd, vibe: vibe || '', refArtist: refArtist || '', bpmLow, bpmHigh, keyMatch,
+              target, prevTrack: tracksArr[fixIndex - 1] ?? null, nextTrack: tracksArr[fixIndex + 1] ?? null,
+              avoidList, includeMixingNotes, reason: 'clash',
+            })
+            if (!replacement) return
+
+            const replacementArr: EnrichableTrack[] = [{ ...replacement }]
+            await enrichTracks(replacementArr)
+
+            // Only accept the fix if it actually resolves the clash — otherwise
+            // keep the original rather than swap in an equally-bad substitute.
+            const resolved = camelotCompatibility(tracksArr[fixIndex - 1].key, replacementArr[0].key).type !== 'clash'
+            if (resolved) {
+              tracksArr[fixIndex] = { ...target, ...replacementArr[0], n: target.n }
+            }
+          } catch (err) {
+            console.warn('[generate] replacement attempt failed for clashing track', err)
+          }
+        }))
+      }
     }
 
     return NextResponse.json({

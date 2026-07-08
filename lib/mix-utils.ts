@@ -46,8 +46,10 @@ export function camelotCompatibility(k1: string, k2: string): {
   )
   if (diff === 1 && t1 === t2) return { type: 'adjacent', note: 'Adjacent key — natural energy lift or drop' }
 
-  // Energy boost (+7 semitones = same letter, +5 positions)
-  if (diff === 7 && t1 === t2) return { type: 'energyshift', note: 'Energy boost jump — dramatic but effective' }
+  // Energy boost: +7 positions one way around the wheel is the same relationship
+  // as +5 the other way (they sum to 12) — since `diff` above is already reduced
+  // to the shorter path, that relationship always shows up as diff===5, never 7.
+  if (diff === 5 && t1 === t2) return { type: 'energyshift', note: 'Energy boost jump — dramatic but effective' }
 
   return { type: 'clash', note: `Key clash (${k1}→${k2}) — crowd may notice` }
 }
