@@ -1006,85 +1006,138 @@ export default function AppPage() {
                       onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
                       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
                       onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
-                      style={{ display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
+                      style={isMobile ? { display:'flex', flexDirection:'column', gap:8, background:'#0a0a14',
+                        border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
+                        borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'12px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }
+                        : { display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
-                      {/* drag handle — HTML5 DnD for desktop, manual touch tracking for mobile
-                          (touch events never fire the HTML5 drag API at all) */}
-                      <div
-                        draggable
-                        role="button"
-                        aria-label={`Drag to reorder track ${i + 1}`}
-                        onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
-                        onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
-                        onTouchStart={e => { setDragIndex(i); touchYRef.current = e.touches[0].clientY; startAutoScroll() }}
-                        onTouchMove={e => {
-                          if (dragIndex === null) return
-                          e.preventDefault()
-                          const touch = e.touches[0]
-                          touchYRef.current = touch.clientY
-                          const el = document.elementFromPoint(touch.clientX, touch.clientY)
-                          const rowEl = el?.closest('[data-track-index]')
-                          const idx = rowEl ? parseInt(rowEl.getAttribute('data-track-index') || '', 10) : NaN
-                          if (!Number.isNaN(idx)) setDragOverIndex(idx)
-                        }}
-                        onTouchEnd={() => {
-                          stopAutoScroll()
-                          if (dragIndex !== null && dragOverIndex !== null && dragOverIndex !== dragIndex) reorderTracks(dragIndex, dragOverIndex)
-                          setDragIndex(null); setDragOverIndex(null)
-                        }}
-                        title="Drag to reorder"
-                        style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px', touchAction:'none' }}
-                      >⠿</div>
-                      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
-                      <div style={{ minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
-                          {t.title}
+                      {/* ── Header: drag handle + number + title (+ BPM/key/energy on mobile) ── */}
+                      <div style={isMobile ? { display:'flex', alignItems:'center', gap:10, minWidth:0 } : { display:'contents' }}>
+                        {/* drag handle — HTML5 DnD for desktop, manual touch tracking for mobile
+                            (touch events never fire the HTML5 drag API at all) */}
+                        <div
+                          draggable
+                          role="button"
+                          aria-label={`Drag to reorder track ${i + 1}`}
+                          onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
+                          onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+                          onTouchStart={e => { setDragIndex(i); touchYRef.current = e.touches[0].clientY; startAutoScroll() }}
+                          onTouchMove={e => {
+                            if (dragIndex === null) return
+                            e.preventDefault()
+                            const touch = e.touches[0]
+                            touchYRef.current = touch.clientY
+                            const el = document.elementFromPoint(touch.clientX, touch.clientY)
+                            const rowEl = el?.closest('[data-track-index]')
+                            const idx = rowEl ? parseInt(rowEl.getAttribute('data-track-index') || '', 10) : NaN
+                            if (!Number.isNaN(idx)) setDragOverIndex(idx)
+                          }}
+                          onTouchEnd={() => {
+                            stopAutoScroll()
+                            if (dragIndex !== null && dragOverIndex !== null && dragOverIndex !== dragIndex) reorderTracks(dragIndex, dragOverIndex)
+                            setDragIndex(null); setDragOverIndex(null)
+                          }}
+                          title="Drag to reorder"
+                          style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px', touchAction:'none', flexShrink:0 }}
+                        >⠿</div>
+                        <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M, flexShrink:0 }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
+                        {isMobile ? (
+                          <>
+                            <div style={{ fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6, minWidth:0, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                              {t.title}
+                            </div>
+                            <div className="sf-mono" style={{ fontSize:10, color:'#8a8aa8', flexShrink:0, whiteSpace:'nowrap' }}>
+                              <span style={{ color:C }}>{t.bpm}</span> · {t.key} · E{t.energy}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+                              {t.title}
+                              {t.verified===false && (
+                                <span title="Couldn't confirm this track exists on Spotify — double-check it, or hit swap." style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b55', borderRadius:999, padding:'1px 6px', fontWeight:700, letterSpacing:.5 }}>⚠ UNVERIFIED</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
+                              <span>{t.artist}</span>
+                              <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
+                              <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
+                              <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
+                              <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
+                              <a href={trackSearchUrl(t,'tunebat')} target="_blank" rel="noopener noreferrer" title="Verify BPM & key on Tunebat" style={{ fontSize:8, color:C, textDecoration:'none', border:`1px solid ${C}33`, borderRadius:3, padding:'1px 5px' }}>TB</a>
+                              <button onClick={()=>togglePreview(i)} title={t.spotifyId?'Preview on Spotify':'No verified Spotify match to preview'} aria-expanded={previewOpen.has(i)}
+                                style={{ fontSize:8, color:previewOpen.has(i)?'#1DB954':'#5a5a78', background:'transparent', textDecoration:'none', border:`1px solid ${previewOpen.has(i)?'#1DB95466':'#23233a'}`, borderRadius:3, padding:'1px 5px', cursor:'pointer', fontFamily:'inherit' }}>
+                                ▶ PREVIEW
+                              </button>
+                            </div>
+                            {t.transition && (
+                              <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Mobile-only: artist + verified badge, own row ── */}
+                      {isMobile && (
+                        <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.artist}</span>
                           {t.verified===false && (
-                            <span title="Couldn't confirm this track exists on Spotify — double-check it, or hit swap." style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b55', borderRadius:999, padding:'1px 6px', fontWeight:700, letterSpacing:.5 }}>⚠ UNVERIFIED</span>
+                            <span title="Couldn't confirm this track exists on Spotify — double-check it, or hit swap." style={{ fontSize:9, color:'#f59e0b', border:'1px solid #f59e0b55', borderRadius:999, padding:'1px 6px', fontWeight:700, letterSpacing:.5, flexShrink:0 }}>⚠ UNVERIFIED</span>
                           )}
                         </div>
-                        <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', alignItems:'center', gap:7 }}>
-                          <span>{t.artist}</span>
-                          <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:3, padding:'1px 5px' }}>BP</a>
-                          <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:3, padding:'1px 5px' }}>SP</a>
-                          <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:3, padding:'1px 5px' }}>YT</a>
-                          <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:8, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:3, padding:'1px 5px' }}>SC</a>
-                          <a href={trackSearchUrl(t,'tunebat')} target="_blank" rel="noopener noreferrer" title="Verify BPM & key on Tunebat" style={{ fontSize:8, color:C, textDecoration:'none', border:`1px solid ${C}33`, borderRadius:3, padding:'1px 5px' }}>TB</a>
+                      )}
+
+                      {/* ── Mobile-only: link chips, own row ── */}
+                      {isMobile && (
+                        <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                          <a href={trackSearchUrl(t,'beatport')}   target="_blank" rel="noopener noreferrer" style={{ fontSize:9, color:'#01FF95', textDecoration:'none', border:'1px solid #01FF9533', borderRadius:4, padding:'3px 7px' }}>BP</a>
+                          <a href={trackSearchUrl(t,'spotify')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:9, color:'#1DB954', textDecoration:'none', border:'1px solid #1DB95433', borderRadius:4, padding:'3px 7px' }}>SP</a>
+                          <a href={trackSearchUrl(t,'youtube')}    target="_blank" rel="noopener noreferrer" style={{ fontSize:9, color:'#FF0000', textDecoration:'none', border:'1px solid #FF000033', borderRadius:4, padding:'3px 7px' }}>YT</a>
+                          <a href={trackSearchUrl(t,'soundcloud')} target="_blank" rel="noopener noreferrer" style={{ fontSize:9, color:'#FF5500', textDecoration:'none', border:'1px solid #FF550033', borderRadius:4, padding:'3px 7px' }}>SC</a>
+                          <a href={trackSearchUrl(t,'tunebat')} target="_blank" rel="noopener noreferrer" title="Verify BPM & key on Tunebat" style={{ fontSize:9, color:C, textDecoration:'none', border:`1px solid ${C}33`, borderRadius:4, padding:'3px 7px' }}>TB</a>
                           <button onClick={()=>togglePreview(i)} title={t.spotifyId?'Preview on Spotify':'No verified Spotify match to preview'} aria-expanded={previewOpen.has(i)}
-                            style={{ fontSize:8, color:previewOpen.has(i)?'#1DB954':'#5a5a78', background:'transparent', textDecoration:'none', border:`1px solid ${previewOpen.has(i)?'#1DB95466':'#23233a'}`, borderRadius:3, padding:'1px 5px', cursor:'pointer', fontFamily:'inherit' }}>
+                            style={{ fontSize:9, color:previewOpen.has(i)?'#1DB954':'#5a5a78', background:'transparent', textDecoration:'none', border:`1px solid ${previewOpen.has(i)?'#1DB95466':'#23233a'}`, borderRadius:4, padding:'3px 7px', cursor:'pointer', fontFamily:'inherit' }}>
                             ▶ PREVIEW
                           </button>
                         </div>
-                        {t.transition && (
-                          <div
-                            onClick={isMobile ? () => setExpandedNotes(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n }) : undefined}
-                            style={{
-                              fontSize:10, color:'#5a5a78', marginTop:2, cursor: isMobile ? 'pointer' : 'default',
-                              ...(isMobile && !expandedNotes.has(i)
-                                ? { whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }
-                                : {}),
-                            }}
-                          >↳ {t.transition}</div>
-                        )}
+                      )}
+
+                      {/* ── Mobile-only: mix note, own row (desktop's version rendered inline above) ── */}
+                      {isMobile && t.transition && (
+                        <div
+                          onClick={() => setExpandedNotes(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n })}
+                          style={{
+                            fontSize:11, color:'#5a5a78', cursor:'pointer',
+                            ...(!expandedNotes.has(i) ? { whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' } : {}),
+                          }}
+                        >↳ {t.transition}</div>
+                      )}
+
+                      {/* ── Desktop-only: BPM/key/energy column ── */}
+                      {!isMobile && (
+                        <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
+                          <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
+                          <div>{t.key}</div>
+                          <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
+                        </div>
+                      )}
+
+                      {/* ── Action buttons — own full-width row on mobile, inline columns on desktop ── */}
+                      <div style={isMobile ? { display:'flex', gap:8 } : { display:'contents' }}>
+                        <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} aria-label={locked.has(i)?`Unlock track ${i+1}`:`Lock track ${i+1}`} aria-pressed={locked.has(i)} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none', ...(isMobile?{flex:1}:{}) }}>
+                          {locked.has(i)?'🔒':'🔓'}
+                        </button>
+                        <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" aria-label={`Swap track ${i+1}`} style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
+                          <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
+                        </button>
+                        <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} aria-label={`Why track ${i+1} was chosen`} aria-expanded={openWhy.has(i)} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace", ...(isMobile?{flex:1}:{}) }}>
+                          {quota?.tier==='free' ? '🔒' : '?'}
+                        </button>
+                        <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" aria-label={`Edit track ${i+1} details`} aria-expanded={editingIndex===i} style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
+                          ✎
+                        </button>
                       </div>
-                      <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
-                        <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
-                        <div>{t.key}</div>
-                        <div style={{ color:'#5a5a78' }}>E{t.energy}</div>
-                      </div>
-                      <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} aria-label={locked.has(i)?`Unlock track ${i+1}`:`Lock track ${i+1}`} aria-pressed={locked.has(i)} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none' }}>
-                        {locked.has(i)?'🔒':'🔓'}
-                      </button>
-                      <button className="sf-swap" onClick={()=>swapTrack(i)} disabled={swapping!==null} title="Swap track" aria-label={`Swap track ${i+1}`} style={{ background:'transparent', border:'1px solid #23233a', color:swapping===i?M:'#8a8aa8', width:32, height:32, borderRadius:8, cursor:swapping!==null?'default':'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
-                        <span style={swapping===i?{animation:'spin .8s linear infinite',display:'inline-block'}:{}}>⟳</span>
-                      </button>
-                      <button onClick={()=>toggleWhy(i)} title={quota?.tier==='free'?'Why this track? (Pro feature)':'Why this track?'} aria-label={`Why track ${i+1} was chosen`} aria-expanded={openWhy.has(i)} style={{ background:'transparent', border:`1px solid ${openWhy.has(i)?C:'#23233a'}`, color:openWhy.has(i)?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, fontFamily:"'JetBrains Mono',monospace" }}>
-                        {quota?.tier==='free' ? '🔒' : '?'}
-                      </button>
-                      <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" aria-label={`Edit track ${i+1} details`} aria-expanded={editingIndex===i} style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0 }}>
-                        ✎
-                      </button>
                     </div>
                     {editingIndex===i && editDraft && (
                       <div style={{ background:'#08080f', border:'1px solid #16162a', borderTop:'none', borderRadius:'0 0 10px 10px', padding:'14px' }}>
