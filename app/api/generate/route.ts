@@ -121,8 +121,9 @@ async function generateChunk(params: {
   const exLetter = Math.random() < 0.5 ? 'A' : 'B'
   const exKey    = `${exNum}${exLetter}`
   const exRelKey = `${exNum}${exLetter === 'A' ? 'B' : 'A'}`
-  const exDownNum = exNum === 1 ? 12 : exNum - 1
-  const exUpNum   = exNum === 12 ? 1 : exNum + 1
+  const exDownNum  = exNum === 1 ? 12 : exNum - 1
+  const exUpNum    = exNum === 12 ? 1 : exNum + 1
+  const exBoostNum = ((exNum - 1 + 7) % 12) + 1
   const exBpm     = Math.round(bpmLow + Math.random() * Math.max(0, bpmHigh - bpmLow))
 
   const prompt = `You are a world-class DJ set curator. Build a ${position === 'full' ? 'complete' : position} DJ set section.
@@ -153,13 +154,13 @@ Rules:
 - NEVER suggest: unreleased tracks, dubplates, SoundCloud-only tracks, bootlegs, unofficial edits, or tracks you are uncertain about
 - If you cannot fill the track count with verified streaming tracks, use fewer tracks rather than inventing or guessing
 - Match each track's energy to the per-position value above
-- Use the FULL range of Camelot key numbers (1–12) and BPM values across the set based on what genuinely fits each real track — do NOT default to any one key or gravitate toward the same 2–3 keys out of habit; a set that never leaves one or two key numbers is a bug, not a feature
-- ${keyMatch ? `Harmonic key mixing REQUIRED. Camelot wheel rules (strict, using N as a generic position 1–12):
-  · Each position NA (minor) pairs with NB (major): same number is always compatible (e.g. ${exKey}↔${exRelKey})
-  · Adjacent on same ring: (N-1)X↔NX↔(N+1)X where 12 wraps to 1 (12A↔1A, 12B↔1B)
-  · Compatible moves FROM ${exKey}: → ${exRelKey} (relative), → ${exDownNum}${exLetter} (down), → ${exUpNum}${exLetter} (up). Nothing else.
-  · DO NOT skip positions — jumping more than one position on the wheel is a key clash, not harmonic
-  · BPM difference between adjacent tracks must be ≤ 6 BPM for smooth mixing` : 'Key matching off — focus on BPM and energy flow'}
+- Plan the Camelot sequence as a deliberate journey around the wheel, not just a chain of individually-legal pairs: mostly step ONE position at a time in a consistent direction (e.g. steadily climbing ${exKey}→${exUpNum}${exLetter}→...) so the set covers a WIDE spread of the 1–12 range by the end, based on what genuinely fits each real track. Do NOT oscillate back and forth between the same 2–3 numbers — that's technically "compatible" every step but produces a narrow, static-feeling set, which is exactly what to avoid. Use a relative switch (same number, A↔B) for a deliberate mood shift, and at most once or twice — at a genuine energy peak — the +7 "energy boost" jump described below.
+- ${keyMatch ? `Harmonic key mixing REQUIRED. Every adjacent pair must be one of, in order of how often to use them:
+  1. Adjacent step (most common — this is what builds the wide directional spread above): (N-1)X↔NX↔(N+1)X, 12 wraps to 1 (e.g. ${exKey}→${exUpNum}${exLetter} or ${exKey}→${exDownNum}${exLetter})
+  2. Relative switch (occasional, for a mood shift): same number, A↔B (e.g. ${exKey}↔${exRelKey})
+  3. Energy-boost jump (rare — a genuine peak moment only): same letter, +7 positions (e.g. ${exKey}→${exBoostNum}${exLetter})
+  Anything else — any other same-letter jump, or an A/B change combined with a number change — is a key clash. Do not use it.
+  BPM difference between adjacent tracks should be ≤5 BPM for a clean blend. Up to 10 BPM is only acceptable with a genuine half-time/double-time relationship (e.g. 125→62 or 125→250) — anything wider than that is a bad transition, not just one that "requires skill."` : 'Key matching off — focus on BPM and energy flow'}
 ${includeMixingNotes ? '- Transition notes should be specific (e.g. "filter sweep on the breakdown, swap kicks at the drop")' : '- Do NOT include a "transition" field — omit it entirely for faster, tracklist-only output'}
 - If locked tracks are specified, reproduce them EXACTLY at their positions`
 

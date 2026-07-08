@@ -59,6 +59,18 @@ function readDraft(): Draft {
   } catch { return {} }
 }
 
+// If a Clerk session expires, the middleware silently redirects protected API
+// calls to the sign-in page instead of returning 401 — fetch follows that
+// redirect and hands back a 200 response, so `res.ok` alone can't tell it
+// apart from a real success. The redirected response is HTML, not JSON, so
+// checking content-type first is what actually catches it.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- matches the untyped res.json() this replaces everywhere it's used
+async function parseJsonResponse(res: Response): Promise<any> {
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) throw new Error('SESSION_EXPIRED')
+  return res.json()
+}
+
 // ── Main component ────────────────────────────────────────────
 export default function AppPage() {
   const [draft] = useState<Draft>(() => readDraft())
@@ -112,6 +124,7 @@ export default function AppPage() {
   const [editingIndex, setEditingIndex] = useState<number|null>(null)
   const [editDraft,    setEditDraft]    = useState<{artist:string;title:string;bpm:string;key:string;energy:number;transition:string}|null>(null)
   const [previewOpen,  setPreviewOpen]  = useState<Set<number>>(new Set())
+  const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set())
 
   // toasts — surfaces feedback for actions taken from the results panel (swap,
   // save, share, edit…), which the old single `error` banner couldn't reach on
@@ -154,6 +167,29 @@ export default function AppPage() {
   const [mobileShowResults,setMobileShowResults] = useState(false)
 
   const renameRef = useRef<HTMLInputElement>(null)
+
+  // Auto-scroll the results panel while touch-dragging a track near its top/
+  // bottom edge — plain touchmove events stop firing once the finger holds
+  // still, so a running interval is what keeps the scroll going continuously.
+  const resultsPanelRef = useRef<HTMLDivElement>(null)
+  const touchYRef = useRef<number | null>(null)
+  const autoScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  function startAutoScroll() {
+    if (autoScrollIntervalRef.current) return
+    autoScrollIntervalRef.current = setInterval(() => {
+      const container = resultsPanelRef.current
+      const y = touchYRef.current
+      if (!container || y === null) return
+      const rect = container.getBoundingClientRect()
+      const EDGE = 60, SPEED = 12
+      if (y < rect.top + EDGE) container.scrollTop -= SPEED
+      else if (y > rect.bottom - EDGE) container.scrollTop += SPEED
+    }, 16)
+  }
+  function stopAutoScroll() {
+    if (autoScrollIntervalRef.current) { clearInterval(autoScrollIntervalRef.current); autoScrollIntervalRef.current = null }
+    touchYRef.current = null
+  }
 
   // Mirror the current session to localStorage so a refresh/tab-close doesn't
   // lose an unsaved generated set. Plain sync-to-external-storage effect, not
@@ -206,6 +242,10 @@ export default function AppPage() {
   // ── Generate ──────────────────────────────────────────────
   async function generate(keepLocks = false) {
     setLoading(true); setError(null)
+    // Switch mobile to the results view immediately so the loading skeleton is
+    // visible during the wait — previously this only flipped on success, so
+    // mobile just sat on the form with "FORGING…" the whole time.
+    if (isMobile) setMobileShowResults(true)
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
     if (!keepLocks) setLocked(new Set())
     setSet(null); setWhyData({}); setOpenWhy(new Set())
@@ -216,10 +256,9 @@ export default function AppPage() {
           lockedTracks, energyPoints, includeMixingNotes,
           recentTracks: trackHistory,
         }) })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Generation failed.'); return }
+      const data = await parseJsonResponse(res)
+      if (!res.ok) { setError(data.error || 'Generation failed.'); if (isMobile) setMobileShowResults(false); return }
       setSet({ ...data.set, _meta:{ genre:effectiveGenre, crowd, familiarity, vibe, refArtist } })
-      if (isMobile) setMobileShowResults(true)
       if (data.quota) setQuota(data.quota)
       if (keepLocks && lockedTracks.length > 0) {
         const newLocked = new Set<number>()
@@ -229,7 +268,10 @@ export default function AppPage() {
       const newEntries = (data.set.tracks as Track[]).map((t: Track) => `"${t.artist} — ${t.title}"`)
       setTrackHistory(prev => [...new Set([...newEntries, ...prev])].slice(0, 200))
       fetch('/api/track-history', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tracks: data.set.tracks, context: `${effectiveGenre} / ${crowd}` }) }).catch(() => {})
-    } catch { setError('Network error. Please try again.') }
+    } catch (err) {
+      setError(err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error. Please try again.')
+      if (isMobile) setMobileShowResults(false)
+    }
     finally   { setLoading(false) }
   }
 
@@ -248,10 +290,10 @@ export default function AppPage() {
     const target = set.tracks[index]
     try {
       const res  = await fetch('/api/swap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target, prev:set.tracks[index-1]??null, next:set.tracks[index+1]??null, existing:set.tracks, genre:effectiveGenre, crowd, familiarity, vibe, refArtist, bpmLow, bpmHigh, keyMatch }) })
-      const data = await res.json()
+      const data = await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error || 'Swap failed.'); return }
       setSwapModal({ index, suggestions: (data.suggestions||[]).map((s: Suggestion) => ({ ...s, n: target.n })) })
-    } catch { pushToast('error', 'Network error.') }
+    } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setSwapping(null) }
   }
 
@@ -268,10 +310,10 @@ export default function AppPage() {
     if (!set||saving) return; setSaving(true)
     try {
       const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, familiarity:set._meta?.familiarity||familiarity, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() } }) })
-      const data = await res.json()
+      const data = await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error||'Save failed.'); return }
       setLibrary(prev => [data.set,...prev]); setSavedFlash(true); setTimeout(()=>setSavedFlash(false),2000)
-    } catch { pushToast('error', 'Network error.') }
+    } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setSaving(false) }
   }
 
@@ -284,18 +326,20 @@ export default function AppPage() {
   async function loadSet(id: string) {
     setLibLoading(true)
     try {
-      const res=await fetch(`/api/library/item?id=${id}`); const data=await res.json()
+      const res=await fetch(`/api/library/item?id=${id}`); const data=await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error||'Load failed.'); return }
       const saved: SetData = data.set.set_data; setSet(saved)
       if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setFamiliarity(saved._meta.familiarity||'Balanced Mix'); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
       if (isMobile) { setView('forge'); setMobileShowResults(true) }
-    } catch { pushToast('error', 'Network error.') }
+    } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setLibLoading(false) }
   }
 
   async function deleteSet(id: string) {
     try {
       const res = await fetch(`/api/library/item?id=${id}`, { method:'DELETE' })
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) { pushToast('error', 'Your session expired — please sign in again.'); return }
       if (!res.ok) { pushToast('error', 'Delete failed.'); return }
       setLibrary(prev=>prev.filter(s=>s.id!==id))
       pushToast('success', 'Set deleted.')
@@ -306,11 +350,11 @@ export default function AppPage() {
   async function shareSet(setId: string) {
     setSharingId(setId)
     try {
-      const res=await fetch('/api/share',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({setId}) }); const data=await res.json()
+      const res=await fetch('/api/share',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({setId}) }); const data=await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error||'Share failed.'); return }
       await navigator.clipboard.writeText(`${window.location.origin}/s?id=${data.shareId}`)
       setCopiedId(setId); setTimeout(()=>setCopiedId(null),2500)
-    } catch { pushToast('error', 'Share failed.') }
+    } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Share failed.') }
     finally   { setSharingId(null) }
   }
 
@@ -318,7 +362,9 @@ export default function AppPage() {
     const trimmed = renameVal.trim(); if (!trimmed) { setRenamingId(null); setRenameVal(''); return }
     try {
       const res=await fetch(`/api/library/item?id=${id}`,{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:trimmed}) })
-      if (res.ok) { setLibrary(prev=>prev.map(s=>s.id===id?{...s,title:trimmed}:s)); if (set?.title&&renamingId===id) setSet(s=>s?{...s,title:trimmed}:s) }
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) { pushToast('error', 'Your session expired — please sign in again.') }
+      else if (res.ok) { setLibrary(prev=>prev.map(s=>s.id===id?{...s,title:trimmed}:s)); if (set?.title&&renamingId===id) setSet(s=>s?{...s,title:trimmed}:s) }
       else { pushToast('error', 'Rename failed.') }
     } catch { pushToast('error', 'Network error.') }
     finally { setRenamingId(null); setRenameVal('') }
@@ -327,13 +373,16 @@ export default function AppPage() {
   // ── Import ────────────────────────────────────────────────
   async function handleImport(tracks: ImportedTrack[]) {
     setImportLoading(true); setError(null); setSet(null)
+    if (isMobile) setMobileShowResults(true)
     try {
-      const res=await fetch('/api/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tracks,bpmLow,bpmHigh,keyMatch}) }); const data=await res.json()
-      if (!res.ok) { setError(data.error||'Import failed.'); return }
+      const res=await fetch('/api/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tracks,bpmLow,bpmHigh,keyMatch}) }); const data=await parseJsonResponse(res)
+      if (!res.ok) { setError(data.error||'Import failed.'); if (isMobile) setMobileShowResults(false); return }
       setSet({...data.set,_meta:{genre:'Imported',crowd:'',familiarity:'',vibe:'',refArtist:''}})
-      if (isMobile) setMobileShowResults(true)
       if (data.quota) setQuota(data.quota)
-    } catch { setError('Network error.') }
+    } catch (err) {
+      setError(err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.')
+      if (isMobile) setMobileShowResults(false)
+    }
     finally   { setImportLoading(false) }
   }
 
@@ -832,7 +881,7 @@ export default function AppPage() {
         </div>
 
         {/* ════ RIGHT PANEL ════ */}
-        <div style={{ flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, display: isMobile && !mobileShowResults ? 'none' : 'block', overflowY:'auto', background:'#07070e', position:'relative' }}>
+        <div ref={resultsPanelRef} style={{ flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, display: isMobile && !mobileShowResults ? 'none' : 'block', overflowY:'auto', background:'#07070e', position:'relative' }}>
 
           {/* ── Mobile back bar ── */}
           {isMobile && (
@@ -850,11 +899,11 @@ export default function AppPage() {
             </div>
           )}
 
-          {/* ── Generating skeleton ── */}
-          {!set && loading && (
+          {/* ── Generating/importing skeleton ── */}
+          {!set && (loading || importLoading) && (
             <div style={{ padding:'40px 24px', display:'flex', flexDirection:'column', alignItems:'center' }}>
               <div style={{ fontSize:13, color:C, fontWeight:700, letterSpacing:.5, marginBottom:24, animation:'pulse 1.6s ease-in-out infinite' }}>
-                {GENERATE_STAGES[loadingStage]}
+                {loading ? GENERATE_STAGES[loadingStage] : 'Ordering your tracks…'}
               </div>
               <div style={{ width:'100%', maxWidth:520, display:'flex', flexDirection:'column', gap:8 }}>
                 {Array.from({ length:7 }, (_, i) => (
@@ -968,17 +1017,19 @@ export default function AppPage() {
                         aria-label={`Drag to reorder track ${i + 1}`}
                         onDragStart={e => { e.stopPropagation(); setDragIndex(i) }}
                         onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
-                        onTouchStart={() => setDragIndex(i)}
+                        onTouchStart={e => { setDragIndex(i); touchYRef.current = e.touches[0].clientY; startAutoScroll() }}
                         onTouchMove={e => {
                           if (dragIndex === null) return
                           e.preventDefault()
                           const touch = e.touches[0]
+                          touchYRef.current = touch.clientY
                           const el = document.elementFromPoint(touch.clientX, touch.clientY)
                           const rowEl = el?.closest('[data-track-index]')
                           const idx = rowEl ? parseInt(rowEl.getAttribute('data-track-index') || '', 10) : NaN
                           if (!Number.isNaN(idx)) setDragOverIndex(idx)
                         }}
                         onTouchEnd={() => {
+                          stopAutoScroll()
                           if (dragIndex !== null && dragOverIndex !== null && dragOverIndex !== dragIndex) reorderTracks(dragIndex, dragOverIndex)
                           setDragIndex(null); setDragOverIndex(null)
                         }}
@@ -986,7 +1037,7 @@ export default function AppPage() {
                         style={{ cursor:'grab', color: dragIndex===i ? C : '#2a2a48', fontSize:14, textAlign:'center', userSelect:'none', padding:'2px', touchAction:'none' }}
                       >⠿</div>
                       <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:M }} className="sf-glow-m">{String(t.n).padStart(2,'0')}</div>
-                      <div>
+                      <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                           {t.title}
                           {t.verified===false && (
@@ -1005,7 +1056,17 @@ export default function AppPage() {
                             ▶ PREVIEW
                           </button>
                         </div>
-                        {t.transition && <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>}
+                        {t.transition && (
+                          <div
+                            onClick={isMobile ? () => setExpandedNotes(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n }) : undefined}
+                            style={{
+                              fontSize:10, color:'#5a5a78', marginTop:2, cursor: isMobile ? 'pointer' : 'default',
+                              ...(isMobile && !expandedNotes.has(i)
+                                ? { whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }
+                                : {}),
+                            }}
+                          >↳ {t.transition}</div>
+                        )}
                       </div>
                       <div style={{ textAlign:'right', fontSize:11, lineHeight:1.7 }}>
                         <div style={{ color:C }}>{t.bpm}<span style={{ color:'#4a4a66' }}> BPM</span></div>
