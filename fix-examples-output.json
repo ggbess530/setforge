@@ -1,0 +1,102 @@
+{
+  "midnight-circuit": {
+    "fills": [
+      {
+        "n": 1,
+        "artist": "Chris Lake",
+        "title": "Turn Off the Lights",
+        "bpm": 124,
+        "key": "10A",
+        "transition": "Beatmatch at 124 BPM, both tracks share 10A so blend smoothly; ride the hi-hats of 'Turn Off the Lights' out, drop the kick of 'Losing It' in on the 32-bar loop for a clean key-locked handoff."
+      },
+      {
+        "n": 2,
+        "artist": "MK",
+        "title": "17",
+        "bpm": 125,
+        "key": "11A",
+        "transition": "Lock BPM at 125, moving from 10A to 11A is a +1 adjacent step; bring '17' in under the breakdown of 'Turn Off the Lights', swap kicks on the drop, then ride into 'Losing It' by letting both basslines breathe together before cutting MK out cleanly."
+      },
+      {
+        "n": 6,
+        "artist": "Carl Cox",
+        "title": "I Want You (Forever)",
+        "bpm": 128,
+        "key": "12A",
+        "transition": "Nudge BPM up 1 to 128, staying in 12A matching 'Tribesmen'; use EQ to roll off the low-end of 'Tribesmen' over 16 bars while layering in the iconic vocal hook of 'I Want You (Forever)', then full bass swap on the next 8 for a euphoric peak-hour climax."
+      }
+    ]
+  },
+  "golden-hour": {
+    "fills": [
+      {
+        "n": 1,
+        "artist": "Âme",
+        "title": "Rej",
+        "bpm": 121,
+        "key": "6A",
+        "transition": "Open with Rej's hypnotic bassline at low volume, gradually introduce the groove — its 6A key locks perfectly into position 3's 6A, allowing a smooth blend as energy lifts from 4 to 7"
+      },
+      {
+        "n": 2,
+        "artist": "Black Coffee",
+        "title": "Drive",
+        "bpm": 122,
+        "key": "5A",
+        "transition": "Mix Drive's percussive shuffle under Rej's outro, 5A sits one step below 6A for a natural tension build; filter swap at the drop to hand off cleanly into 10 Missed Calls at matching 122 BPM"
+      },
+      {
+        "n": 4,
+        "artist": "Hyenah",
+        "title": "Back to the Wild (feat. Jaryd Harms)",
+        "bpm": 121,
+        "key": "9A",
+        "transition": "Bring Back to the Wild in underneath 10 Missed Calls' fading vocal, both tracks at 9A — dial the bass in slowly, let the organic percussion carry the mix forward as energy steps down from 7 to 6"
+      },
+      {
+        "n": 5,
+        "artist": "Solomun",
+        "title": "Kater",
+        "bpm": 120,
+        "key": "9A",
+        "transition": "Layer Kater's rolling bassline over Back to the Wild's breakdown at matched 9A and 120 BPM, swap the low-end on the four, riding the energy up to 7 before blending into We Dance Again's mellow 9A groove"
+      }
+    ]
+  },
+  "voltage-spike": {
+    "fills": [
+      {
+        "n": 1,
+        "artist": "Alignment",
+        "title": "Spectrum",
+        "bpm": 137,
+        "key": "3A",
+        "transition": "Long low-pass filter sweep out of Spectrum's breakdown; nudge pitch +1 BPM to 138 and drop Charlotte de Witte - Doppler cold on the downbeat, 3A into 3B is a parallel-minor lift"
+      },
+      {
+        "n": 3,
+        "artist": "SPFDJ",
+        "title": "Chaos",
+        "bpm": 139,
+        "key": "3B",
+        "transition": "Doppler's tail loops into a 32-bar FX build; blend SPFDJ Chaos underneath via high-pass, release the filter on the drop — 3B into 3B, tempo nudge 138→139 is seamless"
+      },
+      {
+        "n": 4,
+        "artist": "Reinier Zonneveld",
+        "title": "Turbo",
+        "bpm": 140,
+        "key": "4B",
+        "transition": "Hard cut at peak stab of Chaos into Turbo's opener — 3B to 4B is a one-step Camelot climb, +1 BPM adds momentum toward the peak"
+      },
+      {
+        "n": 5,
+        "artist": "Alignment",
+        "title": "Mamba",
+        "bpm": 141,
+        "key": "7B",
+        "transition": "Ride Turbo's kick outro into a 16-bar drum loop of Mamba; release full mix on Mamba's main theme — 4B to 7B is the +7 energy-boost jump, matching Astral Projection's 7B key for a locked harmonic handoff"
+      }
+    ]
+  }
+}

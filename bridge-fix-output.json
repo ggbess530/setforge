@@ -1,0 +1,23 @@
+{
+  "g2n4": {
+    "artist": "Black Coffee",
+    "title": "We Dance Again (feat. Nakhane Toure)",
+    "bpm": 121,
+    "key": "7A",
+    "transition": "Let the percussive tail of We Dance Again ride out, then gently nudge the pitch up half a step and blend the kick patterns together as you bring in the next track, using a low-pass filter sweep to smooth the key shift from 7A into 8A over 16 bars"
+  },
+  "g2n5": {
+    "artist": "Black Coffee",
+    "title": "Drive",
+    "bpm": 121,
+    "key": "8A",
+    "transition": "Let the hypnotic bassline of Drive ride out for 16 bars, then gradually introduce the melodic vocal chops of We Dance Again with a slow filter sweep over 8 bars, matching the groove before the full drop at 120 BPM"
+  },
+  "g3n4": {
+    "artist": "Alignment",
+    "title": "Cell Division",
+    "bpm": 140,
+    "key": "8B",
+    "transition": "Blend the tail of Cell Division's driving kick pattern into Mamba's intro over 16 bars, using a high-pass filter sweep on Mamba to gradually open up the top end while nudging pitch +0.7% to lock the 140→141 BPM step; the shared E major energy between 8B and 7B creates a smooth tonal descent that lands Mamba's drop with maximum impact"
+  }
+}

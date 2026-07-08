@@ -1,0 +1,191 @@
+[
+  {
+    "id": "midnight-circuit",
+    "genre": "Tech House",
+    "crowd": "Club Peak Hour",
+    "title": "Concrete Heat Rising",
+    "summary": "A slow-burning groove ignites into a sweat-drenched peak-hour assault, moving from hypnotic low-energy loops through driving basslines into full-throttle tech house euphoria.",
+    "tracks": [
+      {
+        "n": 1,
+        "artist": "Chris Liebing",
+        "title": "Stalker",
+        "bpm": 123,
+        "key": "8A",
+        "energy": 4,
+        "transition": "ride the looped hi-hat tail for 16 bars, bring in track 2 with a slow high-pass filter open over the breakdown, swap kicks on the downbeat"
+      },
+      {
+        "n": 2,
+        "artist": "Skream",
+        "title": "The Morning After",
+        "bpm": 124,
+        "key": "9A",
+        "energy": 5,
+        "transition": "let the rolling bassline breathe for 8 bars together, cut track 2 low-end with EQ and blend into track 3 bass on the 32-bar phrase end"
+      },
+      {
+        "n": 3,
+        "artist": "Fisher",
+        "title": "Losing It",
+        "bpm": 125,
+        "key": "10A",
+        "energy": 6,
+        "transition": "use the crowd-building vocal chop as a cue, apply a rising filter sweep on both decks through the breakdown, drop track 4 kicks hard on the chorus hit"
+      },
+      {
+        "n": 4,
+        "artist": "Hot Since 82",
+        "title": "Buggin",
+        "bpm": 126,
+        "key": "11A",
+        "energy": 7,
+        "transition": "layer both tracks on the groove for 16 bars, isolate track 4 mids and sidechain duck, then slam in track 5 full mix on the drop with reverb tail cut"
+      },
+      {
+        "n": 5,
+        "artist": "Solardo",
+        "title": "Tribesmen",
+        "bpm": 127,
+        "key": "12A",
+        "energy": 8,
+        "transition": "ride the tribal percussion loop in a 32-bar extended mix, strip back to kick and hi-hat only, then open track 6 full frequency on the phrase turn"
+      },
+      {
+        "n": 6,
+        "artist": "Cristian Varela",
+        "title": "Artefact",
+        "bpm": 128,
+        "key": "1A",
+        "energy": 9,
+        "transition": null
+      }
+    ]
+  },
+  {
+    "id": "golden-hour",
+    "genre": "Afro House",
+    "crowd": "Rooftop / Lounge",
+    "title": "Sundowners Over Lagos",
+    "summary": "A warm, hypnotic Afro House journey that eases into golden-hour groove, lifts through two peak moments of tribal percussion and vocal euphoria, then settles back into a soulful, swaying close.",
+    "tracks": [
+      {
+        "n": 1,
+        "artist": "Black Coffee",
+        "title": "Drive (feat. David Guetta & Delilah Montagu)",
+        "bpm": 120,
+        "key": "4A",
+        "energy": 4,
+        "transition": "let the vocal breathe into the breakdown, then slowly high-pass the bass and ride the ambient tail before dropping the kick of track 2 underneath at bar 64"
+      },
+      {
+        "n": 2,
+        "artist": "Enoo Napa",
+        "title": "Flute of the Ancestors",
+        "bpm": 121,
+        "key": "5A",
+        "energy": 5,
+        "transition": "blend the flute motif against the departing vocal chop; use a long low-pass sweep over 16 bars to hand off the rhythmic energy cleanly into the rising percussion of track 3"
+      },
+      {
+        "n": 3,
+        "artist": "Black Coffee & Pharrell Williams",
+        "title": "10 Missed Calls (feat. Jozzy)",
+        "bpm": 122,
+        "key": "6A",
+        "energy": 7,
+        "transition": "keep the groove locked in the loop, drop the bass on track 3's chorus and punch in the full mix; exit on the breakdown and use a filter sweep downward to soften into track 4"
+      },
+      {
+        "n": 4,
+        "artist": "Themba",
+        "title": "Spiritual (feat. Ami Faku)",
+        "bpm": 121,
+        "key": "7A",
+        "energy": 6,
+        "transition": "ride the gospel vocal outro of track 4 against the incoming pad of track 5; swap kick drums at bar 32 and let the two atmospheres overlap for a full 8 bars before pulling track 4 out"
+      },
+      {
+        "n": 5,
+        "artist": "Hyenah & Caiiro",
+        "title": "Far Away",
+        "bpm": 122,
+        "key": "8A",
+        "energy": 7,
+        "transition": "peak the energy on the main drop, then slowly roll off the high-end with a resonant filter as the track moves into its percussive breakdown; nudge EQ mids up on track 6 before bringing in its full mix"
+      },
+      {
+        "n": 6,
+        "artist": "Black Coffee",
+        "title": "We Dance Again (feat. Nakhane Toure)",
+        "bpm": 120,
+        "key": "9A",
+        "energy": 5,
+        "transition": "final track — let the warm bass and iconic vocal carry the rooftop to a natural close; no hard mix out, ride the outro and fade gracefully over the last 32 bars"
+      }
+    ]
+  },
+  {
+    "id": "voltage-spike",
+    "genre": "Peak Time Techno",
+    "crowd": "Festival Main Stage",
+    "title": "Iron Sky Ascension",
+    "summary": "A relentless climb from driving industrial groove through euphoric peak-time fury, finishing with a controlled but devastating hammer blow.",
+    "tracks": [
+      {
+        "n": 1,
+        "artist": "Adam Beyer",
+        "title": "Your Mind Is a Box (Let Us Fill It with Wonder)",
+        "bpm": 136,
+        "key": "2B",
+        "energy": 7,
+        "transition": "ride the long outro groove, low-pass filter down to 2 kHz, blend kicks at bar 32, lift filter on incoming track's first breakdown"
+      },
+      {
+        "n": 2,
+        "artist": "Charlotte de Witte",
+        "title": "Doppler",
+        "bpm": 138,
+        "key": "3B",
+        "energy": 8,
+        "transition": "match the hypnotic mid-range loop, cut bass on outgoing track at the drop, let Doppler's bass punch through clean, quick EQ swap on the kick"
+      },
+      {
+        "n": 3,
+        "artist": "Alignment",
+        "title": "Exhale",
+        "bpm": 139,
+        "key": "4B",
+        "energy": 9,
+        "transition": "use Exhale's rising tension breakdown to layer over Doppler's outro, swap on the snare roll, push high-pass filter out fully as the main lead hits"
+      },
+      {
+        "n": 4,
+        "artist": "SPFDJ",
+        "title": "Anything",
+        "bpm": 140,
+        "key": "5B",
+        "energy": 10,
+        "transition": "blend over 16 bars using the shared industrial kick texture, slam the bass cut on Exhale at the drop, let SPFDJ's distorted lead tear through with no EQ cushion"
+      },
+      {
+        "n": 5,
+        "artist": "Reinier Zonneveld",
+        "title": "Machines of Loving Grace",
+        "bpm": 140,
+        "key": "6B",
+        "energy": 10,
+        "transition": "hold both kicks for 8 bars in a dirty double-deck layered drop, strip Anything's top end with a high-pass sweep and let Machines' arpeggio melody dominate, no volume drop"
+      },
+      {
+        "n": 6,
+        "artist": "Enrico Sangiuliano",
+        "title": "Astral Projection",
+        "bpm": 141,
+        "key": "7B",
+        "energy": 9,
+        "transition": null
+      }
+    ]
+  }
+]
