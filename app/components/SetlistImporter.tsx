@@ -5,7 +5,7 @@ import { useState, useRef, useCallback } from 'react'
 const C = '#00f0ff'
 const M = '#ff1e8a'
 
-export type ImportedTrack = { artist: string; title: string; bpm?: number; key?: string }
+export type ImportedTrack = { artist: string; title: string; bpm?: number; key?: string; path?: string }
 type Tab = 'rekordbox' | 'traktor' | 'serato' | 'text'
 interface Crate { name: string; indices: Set<number> }
 
@@ -83,13 +83,14 @@ function parseRekordbox(xml: string): { tracks: ImportedTrack[]; crates: Crate[]
   const byId: Record<string, number> = {}
   doc.querySelectorAll('COLLECTION > TRACK').forEach(el => {
     const id = el.getAttribute('TrackID') || ''
-    const bpmStr = el.getAttribute('BPM')
+    const bpmStr = el.getAttribute('AverageBpm')
     byId[id] = tracks.length
     tracks.push({
       artist: el.getAttribute('Artist') || 'Unknown',
       title:  el.getAttribute('Name')   || 'Unknown',
       bpm:    bpmStr ? Math.round(parseFloat(bpmStr)) : undefined,
       key:    toCam(el.getAttribute('Tonality') || undefined),
+      path:   el.getAttribute('Location') || undefined,
     })
   })
   const crates: Crate[] = []
@@ -129,6 +130,7 @@ function parseTraktor(xml: string): { tracks: ImportedTrack[]; crates: Crate[] }
       artist: artist||'Unknown', title: title||'Unknown',
       bpm:    bpmStr ? Math.round(parseFloat(bpmStr)) : undefined,
       key:    kv!=null ? TK_CAM[parseInt(kv)] : undefined,
+      path:   dir && file ? path : undefined,
     })
   })
   const crates: Crate[] = []
@@ -209,7 +211,7 @@ async function parseSerato(files: File[]): Promise<{ tracks: ImportedTrack[]; cr
     const artist=m?.artist||(di>0?nm.slice(0,di).trim():'Unknown')
     const title =m?.title ||(di>0?nm.slice(di+3).trim():nm)
     pathToIdx[np]=tracks.length
-    tracks.push({ artist, title, bpm:m?.bpm, key:m?.key })
+    tracks.push({ artist, title, bpm:m?.bpm, key:m?.key, path:raw })
   })
 
   const crates: Crate[] = []

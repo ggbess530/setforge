@@ -37,7 +37,7 @@ const C = '#00f0ff'
 const M = '#ff1e8a'
 
 // ── Types ─────────────────────────────────────────────────────
-type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean; spotifyId?:string }
+type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean; spotifyId?:string; path?:string }
 type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 type Suggestion = Track & { label:string }
@@ -417,9 +417,10 @@ export default function AppPage() {
         key:        editDraft.key.trim().toUpperCase() || prevTrack.key,
         energy:     editDraft.energy,
         transition: editDraft.transition,
-        // A changed artist/title makes the old Spotify match untrustworthy —
-        // clear it rather than showing a preview for the wrong track.
+        // A changed artist/title makes the old Spotify match / file path
+        // untrustworthy — clear both rather than pointing at the wrong track.
         spotifyId:  identityChanged ? undefined : prevTrack.spotifyId,
+        path:       identityChanged ? undefined : prevTrack.path,
       }
       return { ...s, tracks }
     })

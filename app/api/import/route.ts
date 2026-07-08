@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { logError } from '@/lib/log-error'
+import { normalizeArtists, normalizeTitle, similarity } from '@/lib/track-match'
 
 // ── Types ─────────────────────────────────────────────────────
 interface RawTrack {
@@ -189,6 +190,36 @@ function interpolateEnergy(points: number[], n: number): number[] {
 }
 
 // ══════════════════════════════════════════════════════════════
+// RE-ATTACH FILE PATHS
+// The AI only ever sees artist/title/bpm/key text, so it never echoes
+// back the Location/DIR+FILE path the user's DJ software export carried.
+// Match the AI's chosen tracks back to the original import list to
+// restore it — exact normalized match first, fuzzy fallback for any
+// punctuation/casing the model reformatted.
+// ══════════════════════════════════════════════════════════════
+function attachPaths(tracks: RawTrack[], source: RawTrack[]): RawTrack[] {
+  const byKey = new Map<string, RawTrack>()
+  source.forEach(t => byKey.set(`${t.artist.toLowerCase().trim()}::${t.title.toLowerCase().trim()}`, t))
+
+  return tracks.map(t => {
+    const exact = byKey.get(`${t.artist.toLowerCase().trim()}::${t.title.toLowerCase().trim()}`)
+    if (exact?.path) return { ...t, path: exact.path }
+
+    const qTitle  = normalizeTitle(t.title)
+    const qArtist = normalizeArtists(t.artist)
+    let best: { path: string; score: number } | null = null
+    for (const s of source) {
+      if (!s.path) continue
+      const titleSim  = similarity(normalizeTitle(s.title), qTitle)
+      const artistSim = Math.max(0, ...normalizeArtists(s.artist).flatMap(a => qArtist.map(q => similarity(a, q))))
+      const score = titleSim * 0.6 + artistSim * 0.4
+      if (score > 0.82 && (!best || score > best.score)) best = { path: s.path, score }
+    }
+    return best ? { ...t, path: best.path } : t
+  })
+}
+
+// ══════════════════════════════════════════════════════════════
 // MAIN ROUTE
 // ══════════════════════════════════════════════════════════════
 export async function POST(req: Request) {
@@ -310,6 +341,8 @@ export async function POST(req: Request) {
         tracks:  [...(chunk1Result.tracks || []), ...chunk2Tracks],
       }
     }
+
+    finalSet.tracks = attachPaths(finalSet.tracks, rawTracks)
 
     await recordUsage(userId, 'generate')
 
