@@ -14,7 +14,7 @@ const M = '#ff1e8a'
 const CAM_HUES = [0,30,60,90,120,150,180,210,240,270,300,330]
 
 type Track   = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string }
-type SetData = { title:string; summary:string; tracks:Track[] }
+type SetData = { title:string; summary:string; tracks:Track[]; meta?:{ genre?:string; crowd?:string } }
 
 function keyHue(key: string): number {
   const m = (key || '').match(/^(\d+)([AB])$/)
@@ -51,7 +51,7 @@ function LiveSetContent() {
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (!ok) { setError(data.error || 'Set not found.'); return }
-        setSetData(data.set.set_data)
+        setSetData({ ...data.set.set_data, meta: data.set.meta })
       })
       .catch(() => setError('Failed to load set. Are you signed in?'))
       .finally(() => setLoading(false))
@@ -60,6 +60,44 @@ function LiveSetContent() {
   const tracks  = setData?.tracks ?? []
   const current = tracks[index]
   const upNext  = tracks[index + 1]
+
+  const [bangerLoading, setBangerLoading] = useState(false)
+  const [bangerError,   setBangerError]   = useState<string | null>(null)
+
+  async function fireBanger() {
+    if (!current || bangerLoading) return
+    setBangerLoading(true); setBangerError(null)
+    try {
+      const res  = await fetch('/api/banger', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+        current:  { artist:current.artist, title:current.title, bpm:current.bpm, key:current.key },
+        existing: tracks.map(t => ({ artist:t.artist, title:t.title })),
+        genre:    setData?.meta?.genre,
+        crowd:    setData?.meta?.crowd,
+      }) })
+      const data = await res.json()
+      if (!res.ok) { setBangerError(data.error || 'Failed to find a banger.'); return }
+
+      setSetData(s => {
+        if (!s) return s
+        const insertAt = index + 1
+        const newTracks = [...s.tracks]
+        newTracks.splice(insertAt, 0, {
+          n:          0,
+          artist:     data.track.artist,
+          title:      data.track.title,
+          bpm:        data.track.bpm,
+          key:        data.track.key,
+          energy:     data.track.energy ?? 10,
+          transition: data.track.transition ?? '',
+        })
+        return { ...s, tracks: newTracks.map((t, i) => ({ ...t, n: i + 1 })) }
+      })
+    } catch {
+      setBangerError('Network error.')
+    } finally {
+      setBangerLoading(false)
+    }
+  }
 
   const goNext = useCallback(() => setIndex(i => Math.min(i + 1, tracks.length - 1)), [tracks.length])
   const goPrev = useCallback(() => setIndex(i => Math.max(i - 1, 0)), [])
@@ -133,6 +171,7 @@ function LiveSetContent() {
         .live-nav   { background:linear-gradient(110deg,${M},${C}); color:#06060c; font-weight:800; border:none; cursor:pointer; font-family:'Inter',sans-serif; transition:transform .1s,box-shadow .2s; }
         .live-nav:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 30px ${C}44; }
         .live-nav:disabled { opacity:.25; cursor:default; transform:none; box-shadow:none; }
+        .live-banger:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 30px #ff5e1a44; }
         * { box-sizing:border-box; }
       `}</style>
 
@@ -239,6 +278,17 @@ function LiveSetContent() {
                 <div style={{ fontSize:15, color:'#c8c8e0' }}>Final track — bring it home.</div>
               </div>
             )}
+          </div>
+
+          {/* banger */}
+          <div style={{ padding:'0 22px 14px', flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <button className="live-banger" onClick={fireBanger} disabled={bangerLoading}
+              style={{ width:'100%', maxWidth:640, padding:'16px 0', borderRadius:14, fontSize:15, fontWeight:800, letterSpacing:1,
+                background:'linear-gradient(110deg,#ff5e1a,#ffb020)', color:'#1a0800', border:'none', cursor:bangerLoading?'default':'pointer',
+                opacity:bangerLoading?.7:1, transition:'transform .1s,box-shadow .2s' }}>
+              {bangerLoading ? '🔥 FINDING A BANGER…' : '🔥 BANGER — insert a hype track next'}
+            </button>
+            {bangerError && <div style={{ fontSize:11, color:M, textAlign:'center' }}>{bangerError}</div>}
           </div>
 
           {/* progress dots */}
