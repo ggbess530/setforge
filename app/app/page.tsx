@@ -41,6 +41,11 @@ type Track      = { n:number; artist:string; title:string; bpm:number; key:strin
 type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
 type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
 type Suggestion = Track & { label:string }
+type LikedTrack = { id:string; artist:string; title:string; bpm?:number; key?:string; energy?:number; genre?:string }
+
+function trackKey(artist: string, title: string): string {
+  return `${artist.toLowerCase().trim()}::${title.toLowerCase().trim()}`
+}
 
 // ── Draft persistence ─────────────────────────────────────────
 // Recovers an in-progress, unsaved session (form inputs + generated set) after
@@ -50,7 +55,7 @@ type Draft = {
   genre?: string; customGenre?: string; crowd?: string; familiarity?: string
   vibe?: string; refArtist?: string; mode?: 'time'|'count'; minutes?: number; count?: number
   bpmLow?: number; bpmHigh?: number; keyMatch?: boolean; includeMixingNotes?: boolean
-  energyPoints?: number[]; set?: SetData | null; locked?: number[]
+  energyPoints?: number[]; set?: SetData | null; locked?: number[]; useLikedPool?: boolean
 }
 function readDraft(): Draft {
   try {
@@ -88,6 +93,7 @@ export default function AppPage() {
   const [bpmHigh,      setBpmHigh]      = useState(() => draft.bpmHigh ?? 125)
   const [keyMatch,           setKeyMatch]           = useState(() => draft.keyMatch ?? true)
   const [includeMixingNotes, setIncludeMixingNotes] = useState(() => draft.includeMixingNotes ?? true)
+  const [useLikedPool,       setUseLikedPool]       = useState(() => draft.useLikedPool ?? false)
   const [energyPoints, setEnergyPoints] = useState<number[]>(() =>
     Array.isArray(draft.energyPoints) && draft.energyPoints.length >= MIN_CURVE_POINTS
       ? draft.energyPoints
@@ -116,6 +122,7 @@ export default function AppPage() {
   const [copied,       setCopied]       = useState(false)
   const [dragIndex,    setDragIndex]    = useState<number|null>(null)
   const [dragOverIndex,setDragOverIndex]= useState<number|null>(null)
+  const [draggedLiked, setDraggedLiked] = useState<LikedTrack|null>(null)
   const [quota,    setQuota]    = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
   const [trackHistory, setTrackHistory] = useState<string[]>([])
   const [whyData,   setWhyData]   = useState<Record<number, {why:string;inbound:string;outbound:string;tip:string;keyNote:string}>>({})
@@ -147,6 +154,10 @@ export default function AppPage() {
   const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
   const [library,     setLibrary]     = useState<LibItem[]>([])
   const [libLoaded,   setLibLoaded]   = useState(false)
+  const [libSubTab,   setLibSubTab]   = useState<'sets'|'liked'>('sets')
+  const [likedTracks, setLikedTracks] = useState<LikedTrack[]>([])
+  const [likedLoaded, setLikedLoaded] = useState(false)
+  const likedKeys = new Set(likedTracks.map(t => trackKey(t.artist, t.title)))
   const [saving,      setSaving]      = useState(false)
   const [savedFlash,  setSavedFlash]  = useState(false)
   const [libLoading,  setLibLoading]  = useState(false)
@@ -198,11 +209,11 @@ export default function AppPage() {
     try {
       localStorage.setItem('sf_draft', JSON.stringify({
         genre, customGenre, crowd, familiarity, vibe, refArtist, mode, minutes, count,
-        bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints,
+        bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints, useLikedPool,
         set, locked: [...locked],
       } satisfies Draft))
     } catch {}
-  }, [genre, customGenre, crowd, familiarity, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints, set, locked])
+  }, [genre, customGenre, crowd, familiarity, vibe, refArtist, mode, minutes, count, bpmLow, bpmHigh, keyMatch, includeMixingNotes, energyPoints, useLikedPool, set, locked])
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
@@ -212,6 +223,7 @@ export default function AppPage() {
     return () => mq.removeEventListener('change', update)
   }, [])
   useEffect(() => { loadLibrary() }, [])
+  useEffect(() => { loadLikedTracks() }, [])
   useEffect(() => {
     fetch('/api/quota').then(r => r.json()).then(d => { if (!d.error) setQuota(d) }).catch(() => {})
   }, [])
@@ -255,6 +267,7 @@ export default function AppPage() {
           mode, minutes, count, bpmLow, bpmHigh, keyMatch,
           lockedTracks, energyPoints, includeMixingNotes,
           recentTracks: trackHistory,
+          libraryTracks: useLikedPool ? likedTracks.map(t => ({ artist:t.artist, title:t.title, bpm:t.bpm, key:t.key })) : [],
         }) })
       const data = await parseJsonResponse(res)
       if (!res.ok) { setError(data.error || 'Generation failed.'); if (isMobile) setMobileShowResults(false); return }
@@ -321,6 +334,52 @@ export default function AppPage() {
   async function loadLibrary() {
     try { const res=await fetch('/api/library'); const data=await res.json(); if (res.ok) setLibrary(data.sets||[]) } catch {}
     finally { setLibLoaded(true) }
+  }
+
+  async function loadLikedTracks() {
+    try { const res=await fetch('/api/liked-tracks'); const data=await res.json(); if (res.ok) setLikedTracks(data.tracks||[]) } catch {}
+    finally { setLikedLoaded(true) }
+  }
+
+  async function toggleLike(t: Track) {
+    const key      = trackKey(t.artist, t.title)
+    const existing = likedTracks.find(lt => trackKey(lt.artist, lt.title) === key)
+
+    if (existing) {
+      setLikedTracks(prev => prev.filter(lt => lt.id !== existing.id))
+      try {
+        const res = await fetch(`/api/liked-tracks?id=${existing.id}`, { method:'DELETE' })
+        if (!res.ok) throw new Error()
+      } catch {
+        setLikedTracks(prev => [existing, ...prev])
+        pushToast('error', 'Failed to unlike track.')
+      }
+      return
+    }
+
+    const temp: LikedTrack = { id:`temp-${Date.now()}`, artist:t.artist, title:t.title, bpm:t.bpm, key:t.key, energy:t.energy }
+    setLikedTracks(prev => [temp, ...prev])
+    try {
+      const res  = await fetch('/api/liked-tracks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ artist:t.artist, title:t.title, bpm:t.bpm, key:t.key, energy:t.energy }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error()
+      setLikedTracks(prev => prev.map(lt => lt.id===temp.id ? data.track : lt))
+    } catch {
+      setLikedTracks(prev => prev.filter(lt => lt.id !== temp.id))
+      pushToast('error', 'Failed to like track.')
+    }
+  }
+
+  async function unlikeById(id: string) {
+    const existing = likedTracks.find(lt => lt.id === id)
+    setLikedTracks(prev => prev.filter(lt => lt.id !== id))
+    try {
+      const res = await fetch(`/api/liked-tracks?id=${id}`, { method:'DELETE' })
+      if (!res.ok) throw new Error()
+    } catch {
+      if (existing) setLikedTracks(prev => [existing, ...prev])
+      pushToast('error', 'Failed to unlike track.')
+    }
   }
 
   async function loadSet(id: string) {
@@ -481,6 +540,30 @@ export default function AppPage() {
     })
   }
 
+  // Drag-and-drop insert from the Liked Songs panel — atIndex is where the
+  // new track lands; everything at/after it shifts down one, same as reorderTracks.
+  function insertLikedTrack(liked: LikedTrack, atIndex: number) {
+    if (!set) return
+    const neighbor = set.tracks[atIndex] ?? set.tracks[atIndex - 1]
+    const newTrack: Track = {
+      n:          0,
+      artist:     liked.artist,
+      title:      liked.title,
+      bpm:        liked.bpm    ?? neighbor?.bpm    ?? bpmLow,
+      key:        liked.key    ?? neighbor?.key    ?? '8A',
+      energy:     liked.energy ?? neighbor?.energy ?? 5,
+      transition: '',
+    }
+    setSet(s => {
+      if (!s) return s
+      const tracks = [...s.tracks]
+      tracks.splice(atIndex, 0, newTrack)
+      return { ...s, tracks: tracks.map((t, i) => ({ ...t, n: i + 1 })) }
+    })
+    setLocked(prev => new Set([...prev].map(idx => idx >= atIndex ? idx + 1 : idx)))
+    pushToast('success', `Added "${liked.title}" to your set.`)
+  }
+
   async function copyTracklist() {
     if (!set) return
     const text = set.tracks.map(t=>`${String(t.n).padStart(2,'0')}. ${t.artist} — ${t.title} [${t.bpm} BPM · ${t.key}]`).join('\n')
@@ -563,6 +646,10 @@ export default function AppPage() {
         .sf-slider { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:999px; background:linear-gradient(90deg,${M}33,${C}33); border:1px solid #23233a; outline:none; cursor:pointer; }
         .sf-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,${M},${C}); border:2px solid #06060c; box-shadow:0 0 10px ${C}66; cursor:grab; }
         .sf-slider::-webkit-slider-thumb:active { cursor:grabbing; }
+        @keyframes blob1 { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(40px,-50px) scale(1.08)} 66%{transform:translate(-30px,40px) scale(.94)} }
+        @keyframes blob2 { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(-40px,30px) scale(.96)} 66%{transform:translate(30px,-40px) scale(1.06)} }
+        .empty-blob1 { animation:blob1 18s ease-in-out infinite; }
+        .empty-blob2 { animation:blob2 22s ease-in-out infinite; }
         @keyframes rise  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
         @keyframes spin  { from{transform:rotate(0)} to{transform:rotate(360deg)} }
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
@@ -772,6 +859,11 @@ export default function AppPage() {
                 <div className={`sf-chip ${includeMixingNotes?'on':''}`} onClick={()=>setIncludeMixingNotes(!includeMixingNotes)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }} title="Off = faster, tracklist only">
                   ↳ Mix notes {includeMixingNotes?'ON':'OFF'}
                 </div>
+                {likedTracks.length > 0 && (
+                  <div className={`sf-chip ${useLikedPool?'on':''}`} onClick={()=>setUseLikedPool(!useLikedPool)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }} title="Prioritize tracks you've liked where they fit — still fills remaining slots with other real tracks">
+                    ♥ Liked songs pool ({likedTracks.length}) {useLikedPool?'ON':'OFF'}
+                  </div>
+                )}
 
                 <button className="sf-btn-primary" onClick={()=>generate(false)} disabled={loading||(genre==='__custom__'&&!customGenre.trim())} style={{ padding:'13px 0', borderRadius:10, fontSize:14, letterSpacing:2, width:'100%', marginTop:4 }}>
                   {loading?'FORGING…':'⚡ FORGE SET'}
@@ -802,7 +894,56 @@ export default function AppPage() {
             {/* ══ LIBRARY ══ */}
             {view==='library' && (
               <div>
-                {!libLoaded ? (
+                <div style={{ display:'flex', border:'1px solid #1f1f33', borderRadius:8, overflow:'hidden', marginBottom:14 }}>
+                  {(['sets','liked'] as const).map(t => (
+                    <button key={t} onClick={()=>setLibSubTab(t)}
+                      style={{ flex:1, padding:'7px 0', border:'none', cursor:'pointer', fontSize:9.5,
+                        fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5, fontWeight:700, transition:'.15s',
+                        background: libSubTab===t ? `linear-gradient(100deg,${M}22,${C}22)` : '#0d0d18',
+                        color:      libSubTab===t ? C : '#6a6a8a',
+                        borderBottom: `2px solid ${libSubTab===t?C:'transparent'}` }}>
+                      {t==='sets' ? '◈ SAVED SETS' : `♥ LIKED SONGS${likedTracks.length>0?` (${likedTracks.length})`:''}`}
+                    </button>
+                  ))}
+                </div>
+
+                {libSubTab==='liked' ? (
+                  !likedLoaded ? (
+                    <div style={{ textAlign:'center', padding:40, color:'#6a6a8a', fontSize:11, animation:'pulse 1.2s infinite' }}>LOADING LIKED SONGS…</div>
+                  ) : likedTracks.length===0 ? (
+                    <div style={{ textAlign:'center', padding:40 }}>
+                      <div style={{ fontSize:28, opacity:.3, marginBottom:8 }}>♡</div>
+                      <div style={{ fontSize:12, color:'#6a6a8a' }}>No liked songs yet.</div>
+                      <div style={{ fontSize:11, color:'#4a4a66', marginTop:4 }}>Hit ♡ on any track in a generated set.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {set && !isMobile && (
+                        <div style={{ background:`${C}0a`, border:`1px solid ${C}28`, borderRadius:7, padding:'6px 10px', fontSize:10, color:C, display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:12 }}>⠿</span> Drag any liked song into your set →
+                        </div>
+                      )}
+                      {likedTracks.map((t,i)=>(
+                        <div key={t.id} className="sf-row lib-card"
+                          draggable={!!set}
+                          onDragStart={()=>setDraggedLiked(t)}
+                          onDragEnd={()=>setDraggedLiked(null)}
+                          style={{ animationDelay:`${i*0.04}s`, background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:12, display:'flex', alignItems:'center', gap:10, cursor: set ? 'grab' : 'default' }}>
+                          {set && <div style={{ fontSize:12, color:'#2a2a48', flexShrink:0 }}>⠿</div>}
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:'#e8e8f0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
+                            <div style={{ fontSize:11, color:'#8a8aa8', display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.artist}</span>
+                              {t.bpm && <span style={{ color:C, flexShrink:0 }}>{t.bpm} BPM</span>}
+                              {t.key && <span style={{ flexShrink:0 }}>{t.key}</span>}
+                            </div>
+                          </div>
+                          <button onClick={()=>unlikeById(t.id)} className="sf-del-btn" title="Unlike" aria-label={`Unlike ${t.artist} — ${t.title}`}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : !libLoaded ? (
                   <div style={{ textAlign:'center', padding:40, color:'#6a6a8a', fontSize:11, animation:'pulse 1.2s infinite' }}>LOADING LIBRARY…</div>
                 ) : library.length===0 ? (
                   <div style={{ textAlign:'center', padding:40 }}>
@@ -927,6 +1068,10 @@ export default function AppPage() {
           {/* ── Empty state ── */}
           {!set && !loading && !importLoading && (
             <div style={{ height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
+              <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none' }}>
+                <div className="empty-blob1" style={{ position:'absolute', top:'10%', left:'20%', width:420, height:420, background:`radial-gradient(circle,${M}12,transparent 65%)`, filter:'blur(70px)' }} />
+                <div className="empty-blob2" style={{ position:'absolute', bottom:'5%', right:'15%', width:380, height:380, background:`radial-gradient(circle,${C}10,transparent 65%)`, filter:'blur(70px)' }} />
+              </div>
               <div style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${C}04 1px,transparent 1px),linear-gradient(90deg,${C}04 1px,transparent 1px)`, backgroundSize:'44px 44px', maskImage:'radial-gradient(ellipse at 50% 50%,black,transparent 70%)', pointerEvents:'none' }} />
               <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:120, color:`${C}06`, letterSpacing:4, lineHeight:1, userSelect:'none', marginBottom:-20 }}>SET</div>
               <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:120, color:`${M}06`, letterSpacing:4, lineHeight:1, userSelect:'none', marginBottom:32 }}>FORGE</div>
@@ -1016,7 +1161,11 @@ export default function AppPage() {
                       data-track-index={i}
                       onDragOver={e => { e.preventDefault(); setDragOverIndex(i) }}
                       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverIndex(null) }}
-                      onDrop={() => { if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i); setDragIndex(null); setDragOverIndex(null) }}
+                      onDrop={() => {
+                        if (draggedLiked) { insertLikedTrack(draggedLiked, i); setDraggedLiked(null) }
+                        else if (dragIndex !== null && dragIndex !== i) reorderTracks(dragIndex, i)
+                        setDragIndex(null); setDragOverIndex(null)
+                      }}
                       style={isMobile ? { display:'flex', flexDirection:'column', gap:8, background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'12px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }
@@ -1136,6 +1285,9 @@ export default function AppPage() {
 
                       {/* ── Action buttons — own full-width row on mobile, inline columns on desktop ── */}
                       <div style={isMobile ? { display:'flex', gap:8 } : { display:'contents' }}>
+                        <button onClick={()=>toggleLike(t)} title={likedKeys.has(trackKey(t.artist,t.title))?'Unlike':'Like'} aria-label={likedKeys.has(trackKey(t.artist,t.title))?`Unlike track ${i+1}`:`Like track ${i+1}`} aria-pressed={likedKeys.has(trackKey(t.artist,t.title))} style={{ background:'transparent', border:`1px solid ${likedKeys.has(trackKey(t.artist,t.title))?M:'#23233a'}`, color:likedKeys.has(trackKey(t.artist,t.title))?M:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:likedKeys.has(trackKey(t.artist,t.title))?`0 0 8px ${M}44`:'none', ...(isMobile?{flex:1}:{}) }}>
+                          {likedKeys.has(trackKey(t.artist,t.title))?'♥':'♡'}
+                        </button>
                         <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} aria-label={locked.has(i)?`Unlock track ${i+1}`:`Lock track ${i+1}`} aria-pressed={locked.has(i)} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none', ...(isMobile?{flex:1}:{}) }}>
                           {locked.has(i)?'🔒':'🔓'}
                         </button>
@@ -1228,6 +1380,15 @@ export default function AppPage() {
                     )}
                   </div>
                 ))}
+                {draggedLiked && (
+                  <div
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => { insertLikedTrack(draggedLiked, set.tracks.length); setDraggedLiked(null) }}
+                    style={{ border:`1px dashed ${C}`, borderRadius:10, padding:'10px 14px', textAlign:'center', fontSize:11, color:C, background:`${C}08` }}
+                  >
+                    ⠿ Drop here to add to the end
+                  </div>
+                )}
               </div>
 
               <div style={{ marginTop:14, fontSize:10, color:'#3a3a58', textAlign:'center' }}>
