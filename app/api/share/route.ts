@@ -77,7 +77,20 @@ export async function GET(req: Request) {
 
     if (error || !set) return NextResponse.json({ error: 'Set not found or no longer shared.' }, { status: 404 })
 
-    return NextResponse.json({ set })
+    // Local file paths (captured from Rekordbox/Traktor/Serato imports) reveal
+    // the owner's OS username and folder structure — never expose them to
+    // anonymous viewers. The owner's own authenticated reads (/api/library/item)
+    // are untouched, so exporting a reloaded set to DJ software still works.
+    const tracks = Array.isArray(set.set_data?.tracks)
+      ? set.set_data.tracks.map((t: Record<string, unknown>) => {
+          const { path: _path, ...rest } = t
+          return rest
+        })
+      : set.set_data?.tracks
+
+    const sanitized = { ...set, set_data: { ...set.set_data, tracks } }
+
+    return NextResponse.json({ set: sanitized })
 
   } catch (err) {
     logError('[GET /api/share]', err)

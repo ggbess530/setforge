@@ -22,6 +22,9 @@ export async function POST(req: Request) {
 
     const sub = await checkSubscription(userId)
     if (!sub.active) return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
+    if (sub.tier === 'free') {
+      return NextResponse.json({ error: 'The Banger button is a Pro feature.', code: 'PRO_REQUIRED' }, { status: 403 })
+    }
     if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
       return NextResponse.json({ error: 'Generation limit reached.', code: 'LIMIT_REACHED' }, { status: 429 })
     }

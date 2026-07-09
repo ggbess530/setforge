@@ -41,9 +41,14 @@ function LiveSetContent() {
   const [started, setStarted] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [quota, setQuota] = useState<{ tier:string } | null>(null)
 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const startRef    = useRef<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/quota').then(r => r.json()).then(d => { if (!d.error) setQuota(d) }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -66,6 +71,7 @@ function LiveSetContent() {
 
   async function fireBanger() {
     if (!current || bangerLoading) return
+    if (quota?.tier === 'free') { setBangerError('The Banger button is a Pro feature.'); return }
     setBangerLoading(true); setBangerError(null)
     try {
       const res  = await fetch('/api/banger', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
@@ -282,12 +288,20 @@ function LiveSetContent() {
 
           {/* banger */}
           <div style={{ padding:'0 22px 14px', flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-            <button className="live-banger" onClick={fireBanger} disabled={bangerLoading}
-              style={{ width:'100%', maxWidth:640, padding:'16px 0', borderRadius:14, fontSize:15, fontWeight:800, letterSpacing:1,
-                background:'linear-gradient(110deg,#ff5e1a,#ffb020)', color:'#1a0800', border:'none', cursor:bangerLoading?'default':'pointer',
-                opacity:bangerLoading?.7:1, transition:'transform .1s,box-shadow .2s' }}>
-              {bangerLoading ? '🔥 FINDING A BANGER…' : '🔥 BANGER — insert a hype track next'}
-            </button>
+            {quota?.tier === 'free' ? (
+              <Link href="/#pricing" style={{ textDecoration:'none', width:'100%', maxWidth:640 }}>
+                <button className="live-btn" style={{ width:'100%', padding:'16px 0', borderRadius:14, fontSize:15, fontWeight:700, letterSpacing:1 }}>
+                  🔒 BANGER — Pro feature, upgrade to unlock
+                </button>
+              </Link>
+            ) : (
+              <button className="live-banger" onClick={fireBanger} disabled={bangerLoading}
+                style={{ width:'100%', maxWidth:640, padding:'16px 0', borderRadius:14, fontSize:15, fontWeight:800, letterSpacing:1,
+                  background:'linear-gradient(110deg,#ff5e1a,#ffb020)', color:'#1a0800', border:'none', cursor:bangerLoading?'default':'pointer',
+                  opacity:bangerLoading?.7:1, transition:'transform .1s,box-shadow .2s' }}>
+                {bangerLoading ? '🔥 FINDING A BANGER…' : '🔥 BANGER — insert a hype track next'}
+              </button>
+            )}
             {bangerError && <div style={{ fontSize:11, color:M, textAlign:'center' }}>{bangerError}</div>}
           </div>
 

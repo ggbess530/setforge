@@ -4,7 +4,7 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
-import { checkSubscription } from '@/lib/subscription'
+import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { logError } from '@/lib/log-error'
 
 // ── POST /api/transition-note ───────────────────────────────────
@@ -20,6 +20,9 @@ export async function POST(req: Request) {
 
     const sub = await checkSubscription(userId)
     if (!sub.active) return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
+    if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
+      return NextResponse.json({ error: 'Generation limit reached.', code: 'LIMIT_REACHED' }, { status: 429 })
+    }
 
     const { track, prevTrack, nextTrack, genre, crowd } = await req.json()
     if (!track?.artist || !track?.title) {
@@ -45,6 +48,7 @@ Respond ONLY with valid JSON, no markdown:
     const raw  = message.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
+    await recordUsage(userId, 'generate')
     return NextResponse.json({ transition: data.transition || '' })
 
   } catch (err: unknown) {
