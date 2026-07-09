@@ -123,6 +123,7 @@ export default function AppPage() {
   const [dragIndex,    setDragIndex]    = useState<number|null>(null)
   const [dragOverIndex,setDragOverIndex]= useState<number|null>(null)
   const [draggedLiked, setDraggedLiked] = useState<LikedTrack|null>(null)
+  const [pendingTransitionKeys, setPendingTransitionKeys] = useState<Set<string>>(new Set())
   const [quota,    setQuota]    = useState<{ tier:string; remaining:string|number; trial?:{ active:boolean; daysLeft:number }|null; isFree?:boolean }|null>(null)
   const [trackHistory, setTrackHistory] = useState<string[]>([])
   const [whyData,   setWhyData]   = useState<Record<number, {why:string;inbound:string;outbound:string;tip:string;keyNote:string}>>({})
@@ -544,7 +545,9 @@ export default function AppPage() {
   // new track lands; everything at/after it shifts down one, same as reorderTracks.
   function insertLikedTrack(liked: LikedTrack, atIndex: number) {
     if (!set) return
-    const neighbor = set.tracks[atIndex] ?? set.tracks[atIndex - 1]
+    const neighbor  = set.tracks[atIndex] ?? set.tracks[atIndex - 1]
+    const prevTrack = set.tracks[atIndex - 1]
+    const nextTrack = set.tracks[atIndex]   // shifts to atIndex+1 once inserted, but is still "the next track" for context
     const newTrack: Track = {
       n:          0,
       artist:     liked.artist,
@@ -562,6 +565,51 @@ export default function AppPage() {
     })
     setLocked(prev => new Set([...prev].map(idx => idx >= atIndex ? idx + 1 : idx)))
     pushToast('success', `Added "${liked.title}" to your set.`)
+    fetchTransitionNote(newTrack, prevTrack, nextTrack)
+  }
+
+  // Manually-inserted tracks (drag from Liked Songs) skip the normal generation
+  // prompt entirely, so they'd otherwise sit with an empty mix note forever.
+  async function fetchTransitionNote(track: Track, prevTrack?: Track, nextTrack?: Track) {
+    const key = trackKey(track.artist, track.title)
+    setPendingTransitionKeys(prev => new Set(prev).add(key))
+    try {
+      const res  = await fetch('/api/transition-note', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+        track:     { artist:track.artist, title:track.title, bpm:track.bpm, key:track.key, energy:track.energy },
+        prevTrack: prevTrack ? { artist:prevTrack.artist, title:prevTrack.title, bpm:prevTrack.bpm, key:prevTrack.key } : null,
+        nextTrack: nextTrack ? { artist:nextTrack.artist, title:nextTrack.title, bpm:nextTrack.bpm, key:nextTrack.key } : null,
+        genre: effectiveGenre, crowd,
+      }) })
+      const data = await res.json()
+      if (!res.ok || !data.transition) return
+      setSet(s => {
+        if (!s) return s
+        const idx = s.tracks.findIndex(t => !t.transition && trackKey(t.artist, t.title) === key)
+        if (idx === -1) return s
+        const tracks = [...s.tracks]
+        tracks[idx] = { ...tracks[idx], transition: data.transition }
+        return { ...s, tracks }
+      })
+    } catch {}
+    finally {
+      setPendingTransitionKeys(prev => { const next = new Set(prev); next.delete(key); return next })
+    }
+  }
+
+  function deleteTrack(i: number) {
+    if (!set) return
+    const removed = set.tracks[i]
+    setSet(s => {
+      if (!s) return s
+      const tracks = s.tracks.filter((_, idx) => idx !== i)
+      return { ...s, tracks: tracks.map((t, idx) => ({ ...t, n: idx + 1 })) }
+    })
+    setLocked(prev => {
+      const next = new Set<number>()
+      prev.forEach(idx => { if (idx !== i) next.add(idx > i ? idx - 1 : idx) })
+      return next
+    })
+    if (removed) pushToast('success', `Removed "${removed.title}" from your set.`)
   }
 
   async function copyTracklist() {
@@ -638,6 +686,7 @@ export default function AppPage() {
         .sf-tab:hover:not(.on) { color:#9a9ab8; }
         .sf-track:hover { border-color:#23233a!important; }
         .sf-swap:hover:enabled { border-color:${C}!important; color:${C}!important; }
+        .sf-delete-track:hover { border-color:${M}!important; color:${M}!important; }
         .sf-del-btn { background:transparent; border:1px solid #23233a; color:#5a5a78; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:10px; padding:4px 8px; border-radius:5px; transition:.18s; }
         .sf-del-btn:hover { border-color:${M}; color:${M}; }
         .sf-rename-btn { background:transparent; border:none; color:#4a4a66; cursor:pointer; font-size:12px; padding:2px 5px; border-radius:4px; transition:.15s; }
@@ -1231,8 +1280,10 @@ export default function AppPage() {
                                 ▶ PREVIEW
                               </button>
                             </div>
-                            {t.transition && (
+                            {t.transition ? (
                               <div style={{ fontSize:10, color:'#5a5a78', marginTop:2 }}>↳ {t.transition}</div>
+                            ) : pendingTransitionKeys.has(trackKey(t.artist,t.title)) && (
+                              <div style={{ fontSize:10, color:C, marginTop:2, animation:'pulse 1.2s infinite' }}>↳ Generating mix note…</div>
                             )}
                           </div>
                         )}
@@ -1264,7 +1315,7 @@ export default function AppPage() {
                       )}
 
                       {/* ── Mobile-only: mix note, own row (desktop's version rendered inline above) ── */}
-                      {isMobile && t.transition && (
+                      {isMobile && (t.transition ? (
                         <div
                           onClick={() => setExpandedNotes(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n })}
                           style={{
@@ -1272,7 +1323,9 @@ export default function AppPage() {
                             ...(!expandedNotes.has(i) ? { whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' } : {}),
                           }}
                         >↳ {t.transition}</div>
-                      )}
+                      ) : pendingTransitionKeys.has(trackKey(t.artist,t.title)) && (
+                        <div style={{ fontSize:11, color:C, animation:'pulse 1.2s infinite' }}>↳ Generating mix note…</div>
+                      ))}
 
                       {/* ── Desktop-only: BPM/key/energy column ── */}
                       {!isMobile && (
@@ -1299,6 +1352,9 @@ export default function AppPage() {
                         </button>
                         <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" aria-label={`Edit track ${i+1} details`} aria-expanded={editingIndex===i} style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
                           ✎
+                        </button>
+                        <button className="sf-delete-track" onClick={()=>deleteTrack(i)} title="Remove track" aria-label={`Remove track ${i+1} from set`} style={{ background:'transparent', border:'1px solid #23233a', color:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
+                          🗑
                         </button>
                       </div>
                     </div>
