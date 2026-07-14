@@ -118,6 +118,46 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
   return { active: true, tier: 'free', remainingGenerations: remaining, isFree: true }
 }
 
+// ── Community mix-upload quota ──────────────────────────────────
+// Storage accumulates over time (unlike a stateless generate call), so free
+// tier gets a small lifetime cap instead of a monthly one — otherwise a free
+// user could re-fill their quota every month forever with no cost ceiling.
+interface MixUploadLimit {
+  count:          number
+  period:         'lifetime' | 'month'
+  maxFileBytes:   number
+  maxDurationSec: number
+}
+const MIX_UPLOAD_LIMITS: Record<Tier, MixUploadLimit> = {
+  free: { count: 3,  period: 'lifetime', maxFileBytes: 8  * 1024 * 1024, maxDurationSec: 360 },
+  pro:  { count: 20, period: 'month',    maxFileBytes: 15 * 1024 * 1024, maxDurationSec: 600 },
+  team: { count: 20, period: 'month',    maxFileBytes: 15 * 1024 * 1024, maxDurationSec: 600 },
+}
+
+export interface MixUploadQuota {
+  allowed:        boolean
+  remaining:      number
+  maxFileBytes:   number
+  maxDurationSec: number
+}
+
+export async function checkMixUploadQuota(userId: string): Promise<MixUploadQuota> {
+  const limits = isAdmin(userId) ? MIX_UPLOAD_LIMITS.pro : MIX_UPLOAD_LIMITS[(await checkSubscription(userId)).tier]
+  if (isAdmin(userId)) return { allowed: true, remaining: limits.count, maxFileBytes: limits.maxFileBytes, maxDurationSec: limits.maxDurationSec }
+
+  const db = createAdminClient()
+  let query = db.from('community_posts').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('type', 'mix')
+  if (limits.period === 'month') {
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    query = query.gte('created_at', startOfMonth.toISOString())
+  }
+  const { count } = await query
+  const remaining = Math.max(0, limits.count - (count ?? 0))
+  return { allowed: remaining > 0, remaining, maxFileBytes: limits.maxFileBytes, maxDurationSec: limits.maxDurationSec }
+}
+
 // ── Usage recorder ────────────────────────────────────────────
 export async function recordUsage(userId: string, action: 'generate' | 'swap') {
   if (isAdmin(userId)) return

@@ -141,6 +141,21 @@ CREATE TABLE set_analyses (
   id uuid PK, user_id text, track_count integer, grade text,
   scores jsonb, raw_input text, report jsonb, context text, created_at timestamptz
 );
+
+-- Community: blog posts + 2-track mix/blend uploads (supabase/community-schema.sql)
+CREATE TABLE community_posts (
+  id uuid PK, user_id text, author_name text, author_image text,
+  type text CHECK (type in ('blog','mix')), title text, body text,
+  track1_artist text, track1_title text, track1_bpm numeric, track1_key text,
+  track2_artist text, track2_title text, track2_bpm numeric, track2_key text,
+  audio_path text, audio_duration_sec integer, audio_size_bytes bigint,
+  like_count integer DEFAULT 0, status text DEFAULT 'published',
+  created_at timestamptz, updated_at timestamptz
+);
+CREATE TABLE community_likes (
+  id uuid PK, post_id uuid REFERENCES community_posts, user_id text,
+  UNIQUE(post_id, user_id), created_at timestamptz
+);
 ```
 
 ## Pricing Model
