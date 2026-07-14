@@ -169,8 +169,8 @@ export default function AppPage() {
   const [teamSets,    setTeamSets]    = useState<TeamSetItem[]>([])
   const [teamSetsLoaded, setTeamSetsLoaded] = useState(false)
   const [sharingTeamId, setSharingTeamId] = useState<string|null>(null)
-  const [spotifyConnected, setSpotifyConnected] = useState<boolean|null>(null)
-  const [spotifyExporting, setSpotifyExporting] = useState(false)
+  const [activeSetId, setActiveSetId] = useState<string|null>(null)
+  const [feedback,    setFeedback]    = useState<Record<number,'hit'|'miss'>>({})
   const [importLoading,  setImportLoading]  = useState(false)
   const [importSubTab,   setImportSubTab]   = useState<'library'|'scanner'>('library')
   const [deleteConf,  setDeleteConf]  = useState<string|null>(null)
@@ -240,31 +240,6 @@ export default function AppPage() {
   useEffect(() => {
     fetch('/api/team').then(r => r.json()).then(d => { if (!d.error) setMyTeamId(d.team?.id ?? null) }).catch(() => {})
   }, [])
-  useEffect(() => {
-    fetch('/api/spotify/status').then(r => r.json()).then(d => { if (!d.error) setSpotifyConnected(d.connected) }).catch(() => {})
-
-    const params = new URLSearchParams(window.location.search)
-    const spotifyParam = params.get('spotify')
-    if (spotifyParam) {
-      if (spotifyParam === 'connected') {
-        const pending = sessionStorage.getItem('sf_pending_spotify_export')
-        if (pending) {
-          sessionStorage.removeItem('sf_pending_spotify_export')
-          try { const { title, tracks } = JSON.parse(pending); runSpotifyExport(title, tracks) } catch {}
-        } else {
-          pushToast('success', 'Spotify connected.')
-        }
-      } else if (spotifyParam === 'denied') {
-        pushToast('error', 'Spotify connection cancelled.')
-      } else {
-        pushToast('error', 'Failed to connect Spotify.')
-      }
-      params.delete('spotify')
-      const qs = params.toString()
-      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time on mount: reads the OAuth redirect query param and clears it, not meant to re-run
-  }, [])
   // Curve point count should reflect how many tracks the set will actually have —
   // resample (not reset) so the drawn shape survives a length change instead of
   // reverting to a preset. Adjusted during render (React's sanctioned pattern for
@@ -299,6 +274,7 @@ export default function AppPage() {
     const lockedTracks = keepLocks && set ? [...locked].map(i => set.tracks[i]).filter(Boolean) : []
     if (!keepLocks) setLocked(new Set())
     setSet(null); setWhyData({}); setOpenWhy(new Set())
+    setActiveSetId(null); setFeedback({})
     try {
       const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
           genre: effectiveGenre, crowd, familiarity, vibe, refArtist,
@@ -364,33 +340,12 @@ export default function AppPage() {
       const data = await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error||'Save failed.'); return }
       setLibrary(prev => [data.set,...prev]); setSavedFlash(true); setTimeout(()=>setSavedFlash(false),2000)
+      setActiveSetId(data.set.id); setFeedback({})
       if (shareToTeamOnSave && teamSetsLoaded) loadTeamSets()
     } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setSaving(false) }
   }
 
-  async function runSpotifyExport(title: string, tracks: { artist:string; title:string; spotifyId?:string }[]) {
-    setSpotifyExporting(true)
-    try {
-      const res = await fetch('/api/spotify/export', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, tracks }) })
-      const data = await res.json()
-      if (!res.ok) { pushToast('error', data.error || 'Export failed.'); return }
-      pushToast('success', `Exported to Spotify (${data.matchedCount}/${data.totalCount} tracks matched).`)
-      window.open(data.playlistUrl, '_blank')
-    } catch { pushToast('error', 'Network error during export.') }
-    finally { setSpotifyExporting(false) }
-  }
-
-  function exportToSpotify() {
-    if (!set) return
-    const tracks = set.tracks.map(t => ({ artist: t.artist, title: t.title, spotifyId: t.spotifyId }))
-    if (!spotifyConnected) {
-      sessionStorage.setItem('sf_pending_spotify_export', JSON.stringify({ title: set.title, tracks }))
-      window.location.href = '/api/spotify/login'
-      return
-    }
-    runSpotifyExport(set.title, tracks)
-  }
 
   // ── Library ───────────────────────────────────────────────
   async function loadLibrary() {
@@ -469,9 +424,41 @@ export default function AppPage() {
       if (!res.ok) { pushToast('error', data.error||'Load failed.'); return }
       const saved: SetData = data.set.set_data; setSet(saved)
       if (saved._meta) { setGenre(saved._meta.genre||genre); setCrowd(saved._meta.crowd||crowd); setFamiliarity(saved._meta.familiarity||'Balanced Mix'); setVibe(saved._meta.vibe||''); setRefArtist(saved._meta.refArtist||'') }
+      setActiveSetId(id)
+      fetch(`/api/library/feedback?setId=${id}`).then(r => r.json()).then(d => {
+        if (d.error) return
+        const map: Record<number,'hit'|'miss'> = {}
+        for (const f of d.feedback ?? []) map[f.track_n] = f.rating
+        setFeedback(map)
+      }).catch(() => {})
       if (isMobile) { setView('forge'); setMobileShowResults(true) }
     } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setLibLoading(false) }
+  }
+
+  // Cycles a track's crowd rating: unrated → hit → miss → unrated. Feeds
+  // future generations via lib/track-feedback.ts's proven/avoid signal.
+  async function rateTrack(t: Track) {
+    if (!activeSetId) { pushToast('error', 'Save this set first to rate tracks.'); return }
+    const current = feedback[t.n]
+    const next: 'hit' | 'miss' | undefined = current === 'hit' ? 'miss' : current === 'miss' ? undefined : 'hit'
+
+    if (next === undefined) {
+      setFeedback(prev => { const n = { ...prev }; delete n[t.n]; return n })
+      try {
+        const res = await fetch(`/api/library/feedback/item?setId=${activeSetId}&trackN=${t.n}`, { method: 'DELETE' })
+        if (!res.ok) throw new Error()
+      } catch { pushToast('error', 'Failed to clear rating.') }
+    } else {
+      setFeedback(prev => ({ ...prev, [t.n]: next }))
+      try {
+        const res = await fetch('/api/library/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+          setId: activeSetId, trackN: t.n, artist: t.artist, title: t.title, genre: set?._meta?.genre || genre, rating: next,
+        }) })
+        const data = await res.json()
+        if (!res.ok) { pushToast('error', data.error || 'Failed to save rating.'); setFeedback(prev => { const n = { ...prev }; delete n[t.n]; return n }) }
+      } catch { pushToast('error', 'Network error.') }
+    }
   }
 
   async function deleteSet(id: string) {
@@ -1303,9 +1290,6 @@ export default function AppPage() {
                     <button onClick={exportSerato}    className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:0, fontSize:10, borderRight:'none' }} title="Serato M3U">SRT</button>
                     <button onClick={exportTraktor}   className="sf-btn-ghost" style={{ padding:'6px 9px', borderRadius:'0 8px 8px 0', fontSize:10 }} title="Traktor NML">NML</button>
                   </div>
-                  <button onClick={exportToSpotify} disabled={spotifyExporting} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11 }} title={spotifyConnected ? 'Create a real Spotify playlist from this set' : 'Connect Spotify, then export'}>
-                    {spotifyExporting ? 'EXPORTING…' : spotifyConnected ? '🎧 EXPORT TO SPOTIFY' : '🎧 CONNECT SPOTIFY'}
-                  </button>
                 </div>
               </div>
 
@@ -1348,7 +1332,7 @@ export default function AppPage() {
                       style={isMobile ? { display:'flex', flexDirection:'column', gap:8, background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'12px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }
-                        : { display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
+                        : { display:'grid', gridTemplateColumns:'18px 28px 1fr auto auto auto auto auto auto', gap:10, alignItems:'center', background:'#0a0a14',
                         border: dragOverIndex===i && dragIndex!==i ? `1px solid ${C}` : locked.has(i) ? '1px solid #f59e0b44' : '1px solid #16162a',
                         borderRadius: (openWhy.has(i) || editingIndex===i || previewOpen.has(i)) ? '10px 10px 0 0' : 10, padding:'10px 14px', opacity: dragIndex===i ? 0.35 : swapping===i ? 0.45 : 1, transition:'.15s' }}>
                       {/* ── Header: drag handle + number + title (+ BPM/key/energy on mobile) ── */}
@@ -1470,6 +1454,9 @@ export default function AppPage() {
                       <div style={isMobile ? { display:'flex', gap:8 } : { display:'contents' }}>
                         <button onClick={()=>toggleLike(t)} title={likedKeys.has(trackKey(t.artist,t.title))?'Unlike':'Like'} aria-label={likedKeys.has(trackKey(t.artist,t.title))?`Unlike track ${i+1}`:`Like track ${i+1}`} aria-pressed={likedKeys.has(trackKey(t.artist,t.title))} style={{ background:'transparent', border:`1px solid ${likedKeys.has(trackKey(t.artist,t.title))?M:'#23233a'}`, color:likedKeys.has(trackKey(t.artist,t.title))?M:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:likedKeys.has(trackKey(t.artist,t.title))?`0 0 8px ${M}44`:'none', ...(isMobile?{flex:1}:{}) }}>
                           {likedKeys.has(trackKey(t.artist,t.title))?'♥':'♡'}
+                        </button>
+                        <button onClick={()=>rateTrack(t)} title={activeSetId ? (feedback[t.n]==='hit'?'Hit with the crowd — tap to mark as missed':feedback[t.n]==='miss'?'Missed with the crowd — tap to clear':'Rate how this track landed with the crowd') : 'Save this set first to rate tracks'} aria-label={`Rate crowd reaction for track ${i+1}`} aria-pressed={!!feedback[t.n]} style={{ background:'transparent', border:`1px solid ${feedback[t.n]==='hit'?C:feedback[t.n]==='miss'?M:'#23233a'}`, color:feedback[t.n]==='hit'?C:feedback[t.n]==='miss'?M:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:feedback[t.n]==='hit'?`0 0 8px ${C}44`:feedback[t.n]==='miss'?`0 0 8px ${M}44`:'none', ...(isMobile?{flex:1}:{}) }}>
+                          {feedback[t.n]==='hit'?'👍':feedback[t.n]==='miss'?'👎':'📊'}
                         </button>
                         <button onClick={()=>toggleLock(i)} title={locked.has(i)?'Unlock':'Lock'} aria-label={locked.has(i)?`Unlock track ${i+1}`:`Lock track ${i+1}`} aria-pressed={locked.has(i)} style={{ background:'transparent', border:`1px solid ${locked.has(i)?'#f59e0b':'#23233a'}`, color:locked.has(i)?'#f59e0b':'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, boxShadow:locked.has(i)?'0 0 8px #f59e0b44':'none', ...(isMobile?{flex:1}:{}) }}>
                           {locked.has(i)?'🔒':'🔓'}

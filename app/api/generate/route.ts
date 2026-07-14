@@ -9,6 +9,7 @@ import anthropic, { CLAUDE_MODEL } from '@/lib/anthropic'
 import { checkSubscription, recordUsage } from '@/lib/subscription'
 import { enrichTracks, type EnrichableTrack } from '@/lib/track-enrichment'
 import { getTrendingTracksForGenre, type TrendingTrack } from '@/lib/trending'
+import { getFeedbackSignal, type FeedbackTrack } from '@/lib/track-feedback'
 import { logError } from '@/lib/log-error'
 import { camelotCompatibility } from '@/lib/mix-utils'
 
@@ -70,6 +71,8 @@ async function generateChunk(params: {
   recentTracks?: string[]
   libraryTracks?: { artist:string; title:string; bpm?:number; key?:string }[]
   trendingTracks?: TrendingTrack[]
+  provenTracks?: FeedbackTrack[]
+  avoidFeedbackTracks?: FeedbackTrack[]
 }): Promise<{ title: string; summary: string; tracks: unknown[] }> {
 
   const {
@@ -77,7 +80,7 @@ async function generateChunk(params: {
     bpmLow, bpmHigh, keyMatch,
     targetCount, energyStart, energyEnd, energyCurve,
     position, includeMixingNotes = true, lockedTracks, prevTracks, setTitle, recentTracks = [],
-    libraryTracks = [], trendingTracks = [],
+    libraryTracks = [], trendingTracks = [], provenTracks = [], avoidFeedbackTracks = [],
   } = params
 
   const vibeLine    = vibe?.trim()      ? `\n- Vibe / mood: ${vibe.trim()}`              : ''
@@ -115,6 +118,17 @@ async function generateChunk(params: {
       }`
     : ''
 
+  // Real crowd outcomes this DJ has logged after past gigs (supabase/set-feedback-schema.sql)
+  // — the one signal no competitor can replicate without the same usage history.
+  const provenBlock = provenTracks.length
+    ? `\n\nPROVEN CROWD-PLEASERS for this DJ (tracks that have actually hit with their real crowds before — strongly prefer including a few of these where they fit the brief):\n${
+        provenTracks.map(t => `- "${t.artist} — ${t.title}"${t.misses ? ` (hit ${t.hits}x, missed ${t.misses}x)` : ` (hit ${t.hits}x)`}`).join('\n')
+      }`
+    : ''
+  const avoidFeedbackBlock = avoidFeedbackTracks.length
+    ? `\n\nAVOID — flopped with this DJ's actual crowd before:\n${avoidFeedbackTracks.map(t => `- "${t.artist} — ${t.title}"`).join('\n')}`
+    : ''
+
   // Illustrative key/BPM used in the schema example and rules text below are randomized
   // per request — a fixed example (e.g. always "8A") measurably biases the model toward
   // reproducing that exact value and its neighbors across generated sets.
@@ -137,7 +151,7 @@ Parameters:
 - Harmonic key matching: ${keyMatch ? 'YES — adjacent Camelot keys must be compatible (same number, ±1, or A↔B)' : 'not required'}
 - Track count: ${targetCount} tracks
 - Energy: start ${energyStart}/10 → end ${energyEnd}/10
-- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}${trendingBlock}
+- Custom energy per position: ${curveStr}${positionNote}${contextBlock}${lockedBlock}${avoidBlock}${libraryBlock}${trendingBlock}${provenBlock}${avoidFeedbackBlock}
 
 Respond ONLY with valid JSON, no markdown, no preamble (the field values below are placeholder illustrations, not suggested values):
 {
@@ -321,6 +335,7 @@ export async function POST(req: Request) {
     const baseParams = { genre, crowd, familiarity: familiarity || 'Balanced Mix', vibe: vibe||'', refArtist: refArtist||'', bpmLow, bpmHigh, keyMatch }
 
     const trendingTracks = await getTrendingTracksForGenre(genre)
+    const feedbackSignal = await getFeedbackSignal(userId, genre)
 
     const CHUNK_SIZE = 13
 
@@ -340,6 +355,8 @@ export async function POST(req: Request) {
         recentTracks,
         libraryTracks,
         trendingTracks,
+        provenTracks: feedbackSignal.proven,
+        avoidFeedbackTracks: feedbackSignal.avoid,
       })
 
     } else {
@@ -369,6 +386,8 @@ export async function POST(req: Request) {
         recentTracks,
         libraryTracks,
         trendingTracks,
+        provenTracks: feedbackSignal.proven,
+        avoidFeedbackTracks: feedbackSignal.avoid,
       })
 
       // Chunk 2: closing, seeded from chunk 1's last 2 tracks
@@ -390,6 +409,8 @@ export async function POST(req: Request) {
         recentTracks: [...recentTracks, ...chunk1Used],
         libraryTracks,
         trendingTracks,
+        provenTracks: feedbackSignal.proven,
+        avoidFeedbackTracks: feedbackSignal.avoid,
       })
 
       // Renumber chunk 2 tracks

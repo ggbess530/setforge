@@ -30,10 +30,9 @@ LEMON_SQUEEZY_STORE_ID=402701
 LEMON_SQUEEZY_VARIANT_PRO=1820113
 LEMON_SQUEEZY_VARIANT_TEAM=1820124
 ADMIN_USER_IDS=user_xxx               # comma-separated Clerk user IDs for unlimited access
-SPOTIFY_CLIENT_ID                      # same app creds, used for Client Credentials (track verification), the admin's own Authorization Code login (trend ingestion), AND per-user Authorization Code (set export)
+SPOTIFY_CLIENT_ID                      # same app creds, used for both Client Credentials (track verification) and Authorization Code (trend ingestion)
 SPOTIFY_CLIENT_SECRET
-SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback       # admin-only trend-ingestion login — must exactly match a URI registered in the Spotify Developer Dashboard
-SPOTIFY_USER_REDIRECT_URI=https://setforge.online/api/spotify/callback        # per-user "export set to Spotify" login — a SEPARATE registered URI (apps can have more than one); requested scopes: playlist-modify-public playlist-modify-private
+SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback  # must exactly match the URI registered in the Spotify Developer Dashboard
 CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
 SENTRY_DSN                             # server/edge error reporting — unset means Sentry is a no-op, nothing breaks
 NEXT_PUBLIC_SENTRY_DSN                 # same, for browser-side errors
@@ -73,7 +72,10 @@ app/
 │   │   └── export/route.ts           # Export analysis as txt
 │   ├── library/
 │   │   ├── route.ts                  # GET list + POST save sets
-│   │   └── item/route.ts             # GET/PATCH/DELETE single set (query params, no [id] folder)
+│   │   ├── item/route.ts             # GET/PATCH/DELETE single set (query params, no [id] folder) — GET also allows a teammate loading a team-shared set
+│   │   └── feedback/
+│   │       ├── route.ts              # GET a saved set's crowd ratings / POST upsert one track's hit-or-miss
+│   │       └── item/route.ts         # DELETE clear a track's rating (query params, no [id] folder)
 │   ├── user-library/route.ts         # Persistent DJ library (tracks + crates)
 │   ├── track-history/route.ts        # Track usage history
 │   ├── why/route.ts                  # "Why this track" explanations
@@ -85,12 +87,6 @@ app/
 │   ├── admin/spotify/
 │   │   ├── login/route.ts            # Redirects to Spotify's Authorization Code login
 │   │   └── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_auth table
-│   ├── spotify/                      # Per-user "export set to Spotify" — separate OAuth flow from admin/spotify above
-│   │   ├── login/route.ts            # Redirects to Spotify login with playlist-modify scopes (any signed-in user)
-│   │   ├── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_user_auth table (per user_id)
-│   │   ├── status/route.ts           # GET whether the current user has connected
-│   │   ├── export/route.ts           # POST { title, tracks } → creates a real Spotify playlist, returns its URL
-│   │   └── disconnect/route.ts       # POST removes the stored connection
 │   ├── community/
 │   │   ├── posts/route.ts            # GET paginated feed (compound created_at+id cursor) / POST blog post
 │   │   ├── posts/item/route.ts       # DELETE own post (query param, no [id] folder)
@@ -115,13 +111,13 @@ lib/
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
 ├── team.ts                           # Team seat resolution — getRiddenTeam()/getOwnedTeam()/getMyTeamId(), SEAT_LIMIT
 ├── notifications.ts                  # notify() — fire-and-forget writer called from likes/comments/team routes
+├── track-feedback.ts                  # getFeedbackSignal() — aggregates set_feedback into a genre-scoped proven/avoid list for generate/route.ts
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
 ├── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
 ├── spotify-user-auth.ts              # Admin's own singleton Spotify login (spotify_auth table, no scopes) — see gotcha below
-├── spotify-export.ts                  # Per-user Spotify login + playlist export (spotify_user_auth table, playlist-modify scopes)
-├── track-match.ts                     # findSpotifyTrack() fuzzy-match cascade + Camelot mapping — shared by metadata enrichment AND spotify-export.ts's fallback search
+├── track-match.ts                     # findSpotifyTrack() fuzzy-match cascade + Camelot mapping, used by the metadata enrichment pipeline
 ├── mix-utils.ts                      # Camelot/BPM compatibility scoring shared by inline sim, /mix, and Community mix cards
 ├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
 ├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
@@ -210,12 +206,14 @@ CREATE TABLE notifications (
   read boolean DEFAULT false, created_at timestamptz
 );
 
--- Per-user Spotify export login (supabase/spotify-user-auth-schema.sql) — NOT
--- the admin's singleton `spotify_auth` table above; separate OAuth app
--- registration (playlist-modify scopes vs. none), separate callback route.
-CREATE TABLE spotify_user_auth (
-  user_id text PK, refresh_token text, spotify_user_id text,
-  connected_at timestamptz, updated_at timestamptz
+-- Crowd feedback (supabase/set-feedback-schema.sql) — tied to a SAVED set +
+-- track position, not track_history (a loose per-generation log with no
+-- stable id to update later). artist/title denormalized so lib/track-feedback.ts
+-- can aggregate across every set the DJ has ever played, not just this one.
+CREATE TABLE set_feedback (
+  id uuid PK, set_id uuid REFERENCES sets, user_id text, track_n integer,
+  artist text, title text, genre text, rating text CHECK (rating in ('hit','miss')),
+  created_at timestamptz, updated_at timestamptz, UNIQUE(set_id, track_n)
 );
 
 -- Team seats: one paying "owner" (their own row in `subscriptions`, tier='team')
@@ -281,24 +279,15 @@ Reduces any crate (up to 500 tracks) to ≤30 candidates:
 ### History-aware generation
 `recentTracks` array (up to 60 tracks from user's history) sent with every generate call. Prompt instructs Claude to avoid all tracks in the list. Prevents repeat songs across sessions.
 
+### Crowd-feedback-aware generation
+After a gig, the DJ rates individual tracks in a *saved* set as hit/miss (👍/👎 button per track, only active once a set has a stable id — i.e. saved, not just generated) from `/app`. `generate/route.ts` calls `getFeedbackSignal(userId, genre)` (`lib/track-feedback.ts`) alongside the existing trending-tracks fetch, aggregates `set_feedback` by artist+title within that genre, and injects two prompt blocks the same way `trendingBlock`/`libraryBlock` already work: a "PROVEN CROWD-PLEASERS" list (net hits > misses) Claude is told to prefer, and an "AVOID" list (net misses > hits) it's told to skip. This is the one signal genuinely specific to each DJ's own real gig history rather than generic popularity data.
+
 ### Trend-grounded generation
 `GET /api/cron/refresh-trends` (daily, Vercel Cron) scans 10 seeded Spotify editorial playlists (one per major genre, `lib/trend-sources.ts`), resolves real bpm/key via ReccoBeats, and upserts into Supabase `trending_tracks` — durability-scored via `times_seen` (bumped each scan a track reappears) and decayed via `last_seen_at` (ignored after 14 days stale). Also piggybacks `track_metadata_cache` so trending tracks are pre-verified before Claude ever picks them. `generate/route.ts` fetches up to 20 trending tracks per request (`getTrendingTracksForGenre`) and injects them into the prompt as a "TRENDING NOW" block, same mechanism as the existing library-tracks injection — biases picks toward currently-popular real tracks without forcing them.
 
 Admins can check pipeline health and force a scan without touching curl/Vercel logs at `/admin` — reads `getTrendStatus()` (per-genre counts + last-refreshed time) and can trigger `refreshTrendingTracks()` directly via a signed-in-admin-gated POST, as an alternative to the CRON_SECRET-gated cron endpoint.
 
 **Gotcha:** Spotify blocks its own editorial playlists (`37i9dQZF1DX...`) from being read via the Client Credentials flow (no-login, app-only token) — returns 403 for apps without Extended Quota Mode approval. `lib/track-match.ts`'s `getSpotifyToken()` (Client Credentials) still works fine for track search/verification, but playlist reads for trend ingestion need a *real logged-in* Spotify user token instead. `lib/spotify-user-auth.ts` implements the Authorization Code flow for this — admin visits `/admin`, clicks "Connect Spotify" once, and the resulting refresh token is stored in the `spotify_auth` table (schema in that file's header comment) and auto-refreshed thereafter. `trend-ingest.ts` uses `getUserAccessToken()`, not `getSpotifyToken()`. Requires `SPOTIFY_REDIRECT_URI` registered exactly in the Spotify Developer Dashboard.
-
-**There are TWO separate Spotify Authorization Code logins in this app — don't conflate them:**
-| | Admin trend login | Per-user export login |
-|---|---|---|
-| Table | `spotify_auth` (singleton, `id=1`) | `spotify_user_auth` (keyed by Clerk `user_id`) |
-| Routes | `/api/admin/spotify/login` + `.../callback` | `/api/spotify/login` + `.../callback` |
-| Scopes | none (public playlist reads only) | `playlist-modify-public playlist-modify-private` |
-| Redirect URI env var | `SPOTIFY_REDIRECT_URI` | `SPOTIFY_USER_REDIRECT_URI` |
-| Who connects | admin only, once, from `/admin` | any signed-in user, from `/app`'s "Export to Spotify" button |
-| Purpose | scan editorial playlists for `trend-ingest.ts` | push a generated set into the user's own account as a playlist |
-
-Same `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` app creds power both — Spotify apps support multiple registered Redirect URIs, so `SPOTIFY_USER_REDIRECT_URI` just needs adding as a second entry in the Spotify Developer Dashboard, not a second app.
 
 ## App Features (all live)
 **Core:**
@@ -321,7 +310,6 @@ Same `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` app creds power both — Spotif
 **Track Actions:**
 - Save to library, copy tracklist (with SetForge watermark), export .txt, share public link
 - Export as Rekordbox XML / Serato M3U / Traktor NML (`lib/export-utils.ts`)
-- Export to Spotify — creates a real (private) playlist on the DJ's own Spotify account via `lib/spotify-export.ts`; reuses each track's verified `spotifyId` from generation when present, falls back to `findSpotifyTrack()`'s fuzzy-match cascade otherwise. First click redirects to `/api/spotify/login` (separate per-user OAuth from the admin's trend-ingestion login — see Environment Variables and the Gotcha below); the in-progress set is stashed in `sessionStorage` across that redirect and export fires automatically on return.
 - Lock tracks → Reforge around them
 - Drag to reorder (HTML5 native, handle-only drag)
 
