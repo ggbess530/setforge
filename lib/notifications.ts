@@ -6,7 +6,7 @@
 
 import { createAdminClient } from './supabase'
 
-export type NotificationType = 'like' | 'comment' | 'reply' | 'team_invite' | 'team_accepted'
+export type NotificationType = 'like' | 'comment' | 'reply' | 'team_invite' | 'team_accepted' | 'follow'
 
 interface NotifyParams {
   userId:      string          // recipient

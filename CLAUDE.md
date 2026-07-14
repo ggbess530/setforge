@@ -52,6 +52,8 @@ app/
 │   └── page.tsx                      # Community feed — blog posts + 2-track mix uploads (/community)
 ├── team/
 │   └── page.tsx                      # Team seat management — invite/accept/leave/remove (/team)
+├── u/
+│   └── page.tsx                      # Public profile (/u?handle=xxx, or /u?me=1 for your own) — query param, not [handle] folder
 ├── admin/
 │   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
@@ -103,15 +105,20 @@ app/
 │   │   ├── invite/item/route.ts      # DELETE revoke pending invite (query param, owner-only)
 │   │   ├── claim/route.ts            # POST accept/decline a pending invite matching my Clerk email
 │   │   └── member/route.ts           # DELETE remove teammate (owner) or leave (self)
-│   └── notifications/
-│       ├── route.ts                  # GET recent notifications + unread count (polled by NotificationBell.tsx)
-│       └── read/route.ts             # POST mark all as read (fires when the bell dropdown opens)
+│   ├── notifications/
+│   │   ├── route.ts                  # GET recent notifications + unread count (polled by NotificationBell.tsx)
+│   │   └── read/route.ts             # POST mark all as read (fires when the bell dropdown opens)
+│   ├── profile/
+│   │   ├── route.ts                  # GET ?handle=xxx — public profile (Clerk identity, Community posts, public sets, follow counts)
+│   │   └── me/route.ts               # GET the caller's own handle, auto-provisioning one
+│   └── follow/route.ts               # POST { userId } — toggle follow/unfollow, notifies on new follow
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
 ├── team.ts                           # Team seat resolution — getRiddenTeam()/getOwnedTeam()/getMyTeamId(), SEAT_LIMIT
 ├── notifications.ts                  # notify() — fire-and-forget writer called from likes/comments/team routes
 ├── track-feedback.ts                  # getFeedbackSignal() — aggregates set_feedback into a genre-scoped proven/avoid list for generate/route.ts
+├── profile.ts                         # getOrCreateHandle()/getExistingHandle()/getUserIdForHandle() — public profile handles
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
@@ -232,6 +239,20 @@ CREATE TABLE team_invites (
 );
 -- sets.shared_to_team_id (nullable, additive) — a set shared to a team is
 -- visible to every member of that team; ALTER TABLE in supabase/team-schema.sql
+
+-- Public profiles + follow graph (supabase/profiles-schema.sql). Handles are
+-- auto-provisioned (lib/profile.ts) the first time a user posts to Community
+-- or visits their own profile — never a signup-time step.
+CREATE TABLE profile_handles (
+  user_id text PK, handle text UNIQUE, created_at timestamptz, updated_at timestamptz
+);
+CREATE TABLE follows (
+  id uuid PK, follower_id text, followee_id text,
+  UNIQUE(follower_id, followee_id), created_at timestamptz
+);
+-- community_posts.author_handle (additive) — same denormalized-snapshot
+-- pattern as author_name/author_image, set at post-creation time
+-- notifications.type CHECK widened to add 'follow'
 ```
 
 ## Pricing Model
@@ -362,6 +383,13 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Triggers: someone likes/comments on your post, someone replies to your comment (notifies whoever they're actually replying to, not necessarily the post owner), a team invite lands for an email that already has a SetForge account, someone accepts your team invite
 - `NotificationBell.tsx` polls `GET /api/notifications` every 45s for the badge count; opening the dropdown fires `POST /api/notifications/read` (marks all read — no per-notification granularity)
 - No shared layout/header in this app — the bell is manually dropped into each page's own inline nav (`/`, `/app`, `/community`, `/team`)
+
+**Public profiles + follow (/u):**
+- `/u?handle=xxx` — Clerk name/avatar, follower/following counts, their Community posts + public sets (`sets.is_public`, the same flag `/api/share` flips); `/u?me=1` resolves to the caller's own handle via `GET /api/profile/me` and swaps the URL to the canonical `?handle=` form
+- Handles are auto-provisioned at post-creation time (not signup) via `lib/profile.ts`'s `getOrCreateHandle()` — no customization UI yet, just a slugified Clerk username/name with a numeric suffix on collision
+- Follow/unfollow via `POST /api/follow`; notifies the followee (type `'follow'`)
+- Community's tab bar has a "Following only" toggle (`scope=following` on `GET /api/community/posts`) alongside the existing All/Posts/Mixes type filter — independent axes, combinable
+- Community post authors link to `/u?handle=...` when `author_handle` is present (older posts created before this feature don't have one and just render as plain text)
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)

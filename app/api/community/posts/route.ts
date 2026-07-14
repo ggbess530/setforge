@@ -7,6 +7,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse }      from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { getOrCreateHandle } from '@/lib/profile'
 import { logError }          from '@/lib/log-error'
 
 const PAGE_SIZE = 20
@@ -21,13 +22,23 @@ export async function GET(req: Request) {
     const { userId } = await auth()
     const url       = new URL(req.url)
     const type      = url.searchParams.get('type')       // 'blog' | 'mix' | null (all)
+    const scope     = url.searchParams.get('scope')       // 'following' | null
     const before    = url.searchParams.get('before')      // created_at half of the cursor for "load more"
     const beforeId  = url.searchParams.get('beforeId')     // id half — ties break on this (created_at alone isn't unique, e.g. a bulk insert)
 
     const db = createAdminClient()
+
+    let followeeIds: string[] | null = null
+    if (scope === 'following') {
+      if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      const { data: follows } = await db.from('follows').select('followee_id').eq('follower_id', userId)
+      followeeIds = (follows ?? []).map(f => f.followee_id)
+      if (!followeeIds.length) return NextResponse.json({ posts: [], likedIds: [], nextCursor: null, nextCursorId: null })
+    }
+
     let query = db
       .from('community_posts')
-      .select('id, user_id, author_name, author_image, type, title, body, track1_artist, track1_title, track1_bpm, track1_key, track2_artist, track2_title, track2_bpm, track2_key, audio_path, audio_duration_sec, like_count, comment_count, created_at')
+      .select('id, user_id, author_name, author_image, author_handle, type, title, body, track1_artist, track1_title, track1_bpm, track1_key, track2_artist, track2_title, track2_bpm, track2_key, audio_path, audio_duration_sec, like_count, comment_count, created_at')
       .eq('status', 'published')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -35,6 +46,7 @@ export async function GET(req: Request) {
 
     if (type === 'blog' || type === 'mix') query = query.eq('type', type)
     if (before && beforeId) query = query.or(`created_at.lt.${before},and(created_at.eq.${before},id.lt.${beforeId})`)
+    if (followeeIds) query = query.in('user_id', followeeIds)
 
     const { data: posts, error } = await query
     if (error) throw error
@@ -91,12 +103,14 @@ export async function POST(req: Request) {
     }
 
     const user = await currentUser()
+    const handle = await getOrCreateHandle(userId)
     const { data: post, error } = await db
       .from('community_posts')
       .insert({
         user_id:      userId,
         author_name:  user?.fullName || user?.username || 'DJ',
         author_image: user?.imageUrl || null,
+        author_handle: handle,
         type:         'blog',
         title:        title.trim(),
         body:         body.trim(),

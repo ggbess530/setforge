@@ -15,7 +15,7 @@ const M = '#ff1e8a'
 // ── Types ─────────────────────────────────────────────────────
 type TrackInfo = { artist: string; title: string; bpm: number | null; key: string | null }
 type Post = {
-  id: string; user_id: string; author_name: string | null; author_image: string | null
+  id: string; user_id: string; author_name: string | null; author_image: string | null; author_handle: string | null
   type: 'blog' | 'mix'; title: string; body: string | null
   track1_artist: string | null; track1_title: string | null; track1_bpm: number | null; track1_key: string | null
   track2_artist: string | null; track2_title: string | null; track2_bpm: number | null; track2_key: string | null
@@ -400,7 +400,9 @@ function PostCard({ post, liked, isOwn, currentUserId, isSignedIn, pushToast, on
           ? <img src={post.author_image} alt="" width={30} height={30} style={{ borderRadius: '50%', flexShrink: 0 }} />
           : <div style={{ width: 30, height: 30, borderRadius: '50%', background: `linear-gradient(135deg,${M},${C})`, flexShrink: 0 }} />}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#e8e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.author_name || 'DJ'}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#e8e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {post.author_handle ? <Link href={`/u?handle=${post.author_handle}`} style={{ color: 'inherit', textDecoration: 'none' }}>{post.author_name || 'DJ'}</Link> : (post.author_name || 'DJ')}
+          </div>
           <div style={{ fontSize: 10, color: '#4a4a66' }}>{timeAgo(post.created_at)} · {post.type === 'mix' ? '🎧 mix' : '✎ post'}</div>
         </div>
         {isOwn && (
@@ -465,6 +467,7 @@ export default function CommunityPage() {
   const [likedIds, setLikedIds]   = useState<Set<string>>(new Set())
   const [nextCursor, setCursor]   = useState<{ createdAt: string; id: string } | null>(null)
   const [tab, setTab]             = useState<'all' | 'blog' | 'mix'>('all')
+  const [followingOnly, setFollowingOnly] = useState(false)
   const [loading, setLoading]     = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -490,6 +493,7 @@ export default function CommunityPage() {
   const loadFeed = useCallback(() => {
     const params = new URLSearchParams()
     if (tab !== 'all') params.set('type', tab)
+    if (followingOnly) params.set('scope', 'following')
     fetch(`/api/community/posts?${params}`)
       .then(r => r.json())
       .then(d => {
@@ -499,7 +503,7 @@ export default function CommunityPage() {
         setCursor(d.nextCursor && d.nextCursorId ? { createdAt: d.nextCursor, id: d.nextCursorId } : null)
       })
       .finally(() => setLoading(false))
-  }, [tab])
+  }, [tab, followingOnly])
 
   useEffect(() => { loadFeed() }, [loadFeed])
 
@@ -508,11 +512,17 @@ export default function CommunityPage() {
     setTab(t)
   }
 
+  function toggleFollowingOnly() {
+    setLoading(true)
+    setFollowingOnly(f => !f)
+  }
+
   function loadMore() {
     if (!nextCursor) return
     setLoadingMore(true)
     const params = new URLSearchParams()
     if (tab !== 'all') params.set('type', tab)
+    if (followingOnly) params.set('scope', 'following')
     params.set('before', nextCursor.createdAt)
     params.set('beforeId', nextCursor.id)
     fetch(`/api/community/posts?${params}`)
@@ -599,6 +609,7 @@ export default function CommunityPage() {
           <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center' }}>
             <Link href="/app" style={{ textDecoration: 'none' }}><button className="sf-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>⚡{!isMobile && ' Forge'}</button></Link>
             <Link href="/mix" style={{ textDecoration: 'none' }}><button className="sf-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>🎛️{!isMobile && ' Mix'}</button></Link>
+            {isSignedIn && <Link href="/u?me=1" style={{ textDecoration: 'none' }}><button className="sf-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>👤{!isMobile && ' Profile'}</button></Link>}
             {isSignedIn && <NotificationBell />}
             {isSignedIn ? <UserButton /> : <Link href="/sign-in"><button className="sf-btn-primary" style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12 }}>Sign in</button></Link>}
           </div>
@@ -616,12 +627,19 @@ export default function CommunityPage() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'inline-flex', border: '1px solid #1f1f33', borderRadius: 10, overflow: 'hidden' }}>
-            {([['all', 'All'], ['blog', '✎ Posts'], ['mix', '🎧 Mixes']] as const).map(([v, label]) => (
-              <button key={v} onClick={() => selectTab(v)} style={{ padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'JetBrains Mono,monospace', background: tab === v ? `linear-gradient(100deg,${M},${C})` : 'transparent', color: tab === v ? '#06060c' : '#8a8aa8' }}>
-                {label}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'inline-flex', border: '1px solid #1f1f33', borderRadius: 10, overflow: 'hidden' }}>
+              {([['all', 'All'], ['blog', '✎ Posts'], ['mix', '🎧 Mixes']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => selectTab(v)} style={{ padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'JetBrains Mono,monospace', background: tab === v ? `linear-gradient(100deg,${M},${C})` : 'transparent', color: tab === v ? '#06060c' : '#8a8aa8' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {isSignedIn && (
+              <button onClick={toggleFollowingOnly} className="sf-btn-ghost" style={{ padding: '8px 16px', borderRadius: 10, fontSize: 12, borderColor: followingOnly ? C : undefined, color: followingOnly ? C : undefined }}>
+                {followingOnly ? '★ Following' : '☆ Following only'}
               </button>
-            ))}
+            )}
           </div>
           <button onClick={openComposer} className="sf-btn-primary" style={{ padding: '9px 18px', borderRadius: 9, fontSize: 12, letterSpacing: 1 }}>+ NEW POST</button>
         </div>

@@ -7,6 +7,7 @@ import { auth, currentUser }   from '@clerk/nextjs/server'
 import { NextResponse }        from 'next/server'
 import { createAdminClient }   from '@/lib/supabase'
 import { checkMixUploadQuota } from '@/lib/subscription'
+import { getOrCreateHandle }   from '@/lib/profile'
 import { logError }            from '@/lib/log-error'
 
 const MAX_TITLE   = 120
@@ -64,12 +65,14 @@ export async function POST(req: Request) {
     }
 
     const user = await currentUser()
+    const handle = await getOrCreateHandle(userId)
     const { data: post, error } = await db
       .from('community_posts')
       .insert({
         user_id:            userId,
         author_name:        user?.fullName || user?.username || 'DJ',
         author_image:       user?.imageUrl || null,
+        author_handle:      handle,
         type:               'mix',
         title:              title.trim(),
         body:               body?.trim() || null,
