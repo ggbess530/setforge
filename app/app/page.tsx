@@ -1470,7 +1470,7 @@ export default function AppPage() {
                         <button onClick={()=>editingIndex===i ? cancelEdit() : startEdit(i)} title="Edit track details" aria-label={`Edit track ${i+1} details`} aria-expanded={editingIndex===i} style={{ background:'transparent', border:`1px solid ${editingIndex===i?C:'#23233a'}`, color:editingIndex===i?C:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
                           ✎
                         </button>
-                        <button className="sf-delete-track" onClick={()=>deleteTrack(i)} title="Remove track" aria-label={`Remove track ${i+1} from set`} style={{ background:'transparent', border:'1px solid #23233a', color:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, ...(isMobile?{flex:1}:{}) }}>
+                        <button className="sf-delete-track" onClick={()=>deleteTrack(i)} title="Remove track" aria-label={`Remove track ${i+1} from set`} style={{ background:'transparent', border:'1px solid #23233a', color:'#5a5a78', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', transition:'.18s', flexShrink:0, marginLeft:8, ...(isMobile?{flex:1}:{}) }}>
                           🗑
                         </button>
                       </div>
