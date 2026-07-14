@@ -39,7 +39,8 @@ const M = '#ff1e8a'
 // ── Types ─────────────────────────────────────────────────────
 type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean; spotifyId?:string; path?:string }
 type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
-type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string }
+type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string; shared_to_team_id?:string|null }
+type TeamSetItem = { id:string; title:string; meta:Record<string,string|number>; sharedBy:string; isOwn:boolean; updatedAt:string }
 type Suggestion = Track & { label:string }
 type LikedTrack = { id:string; artist:string; title:string; bpm?:number; key?:string; energy?:number; genre?:string }
 
@@ -155,13 +156,18 @@ export default function AppPage() {
   const [view,        setView]        = useState<'forge'|'library'|'import'>(() => { try { return new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'forge' } catch { return 'forge' } })
   const [library,     setLibrary]     = useState<LibItem[]>([])
   const [libLoaded,   setLibLoaded]   = useState(false)
-  const [libSubTab,   setLibSubTab]   = useState<'sets'|'liked'>('sets')
+  const [libSubTab,   setLibSubTab]   = useState<'sets'|'liked'|'team'>('sets')
   const [likedTracks, setLikedTracks] = useState<LikedTrack[]>([])
   const [likedLoaded, setLikedLoaded] = useState(false)
   const likedKeys = new Set(likedTracks.map(t => trackKey(t.artist, t.title)))
   const [saving,      setSaving]      = useState(false)
   const [savedFlash,  setSavedFlash]  = useState(false)
   const [libLoading,  setLibLoading]  = useState(false)
+  const [myTeamId,    setMyTeamId]    = useState<string|null>(null)
+  const [shareToTeamOnSave, setShareToTeamOnSave] = useState(false)
+  const [teamSets,    setTeamSets]    = useState<TeamSetItem[]>([])
+  const [teamSetsLoaded, setTeamSetsLoaded] = useState(false)
+  const [sharingTeamId, setSharingTeamId] = useState<string|null>(null)
   const [importLoading,  setImportLoading]  = useState(false)
   const [importSubTab,   setImportSubTab]   = useState<'library'|'scanner'>('library')
   const [deleteConf,  setDeleteConf]  = useState<string|null>(null)
@@ -227,6 +233,9 @@ export default function AppPage() {
   useEffect(() => { loadLikedTracks() }, [])
   useEffect(() => {
     fetch('/api/quota').then(r => r.json()).then(d => { if (!d.error) setQuota(d) }).catch(() => {})
+  }, [])
+  useEffect(() => {
+    fetch('/api/team').then(r => r.json()).then(d => { if (!d.error) setMyTeamId(d.team?.id ?? null) }).catch(() => {})
   }, [])
   // Curve point count should reflect how many tracks the set will actually have —
   // resample (not reset) so the drawn shape survives a length change instead of
@@ -323,10 +332,11 @@ export default function AppPage() {
   async function saveSet() {
     if (!set||saving) return; setSaving(true)
     try {
-      const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, familiarity:set._meta?.familiarity||familiarity, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() } }) })
+      const res  = await fetch('/api/library', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:set.title, setData:set, meta:{ genre:set._meta?.genre||genre, crowd:set._meta?.crowd||crowd, familiarity:set._meta?.familiarity||familiarity, vibe:set._meta?.vibe||vibe, refArtist:set._meta?.refArtist||refArtist, trackCount:set.tracks.length, savedAt:Date.now() }, shareToTeam: myTeamId ? shareToTeamOnSave : false }) })
       const data = await parseJsonResponse(res)
       if (!res.ok) { pushToast('error', data.error||'Save failed.'); return }
       setLibrary(prev => [data.set,...prev]); setSavedFlash(true); setTimeout(()=>setSavedFlash(false),2000)
+      if (shareToTeamOnSave && teamSetsLoaded) loadTeamSets()
     } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
     finally   { setSaving(false) }
   }
@@ -335,6 +345,24 @@ export default function AppPage() {
   async function loadLibrary() {
     try { const res=await fetch('/api/library'); const data=await res.json(); if (res.ok) setLibrary(data.sets||[]) } catch {}
     finally { setLibLoaded(true) }
+  }
+
+  async function loadTeamSets() {
+    try { const res=await fetch('/api/team/sets'); const data=await res.json(); if (res.ok) setTeamSets(data.sets||[]) } catch {}
+    finally { setTeamSetsLoaded(true) }
+  }
+
+  async function toggleShareSet(id: string, currentlyShared: boolean) {
+    setSharingTeamId(id)
+    try {
+      const res = await fetch(`/api/library/item?id=${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ shareToTeam: !currentlyShared }) })
+      const data = await parseJsonResponse(res)
+      if (!res.ok) { pushToast('error', data.error||'Failed to update sharing.'); return }
+      setLibrary(prev => prev.map(s => s.id===id ? { ...s, shared_to_team_id: data.set.shared_to_team_id } : s))
+      pushToast('success', currentlyShared ? 'Unshared from team.' : 'Shared with team.')
+      if (teamSetsLoaded) loadTeamSets()
+    } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Network error.') }
+    finally { setSharingTeamId(null) }
   }
 
   async function loadLikedTracks() {
@@ -803,6 +831,9 @@ export default function AppPage() {
           <Link href="/community" style={{ textDecoration:'none' }}>
             <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>👥{!isMobile && ' COMMUNITY'}</button>
           </Link>
+          <Link href="/team" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>🤝{!isMobile && ' TEAM'}</button>
+          </Link>
           <UserButton />
         </div>
       </nav>
@@ -947,14 +978,14 @@ export default function AppPage() {
             {view==='library' && (
               <div>
                 <div style={{ display:'flex', border:'1px solid #1f1f33', borderRadius:8, overflow:'hidden', marginBottom:14 }}>
-                  {(['sets','liked'] as const).map(t => (
-                    <button key={t} onClick={()=>setLibSubTab(t)}
+                  {(myTeamId ? ['sets','liked','team'] as const : ['sets','liked'] as const).map(t => (
+                    <button key={t} onClick={()=>{ setLibSubTab(t); if (t==='team' && !teamSetsLoaded) loadTeamSets() }}
                       style={{ flex:1, padding:'7px 0', border:'none', cursor:'pointer', fontSize:9.5,
                         fontFamily:"'JetBrains Mono',monospace", letterSpacing:.5, fontWeight:700, transition:'.15s',
                         background: libSubTab===t ? `linear-gradient(100deg,${M}22,${C}22)` : '#0d0d18',
                         color:      libSubTab===t ? C : '#6a6a8a',
                         borderBottom: `2px solid ${libSubTab===t?C:'transparent'}` }}>
-                      {t==='sets' ? '◈ SAVED SETS' : `♥ LIKED SONGS${likedTracks.length>0?` (${likedTracks.length})`:''}`}
+                      {t==='sets' ? '◈ SAVED SETS' : t==='liked' ? `♥ LIKED SONGS${likedTracks.length>0?` (${likedTracks.length})`:''}` : `🤝 TEAM SETS${teamSets.length>0?` (${teamSets.length})`:''}`}
                     </button>
                   ))}
                 </div>
@@ -995,6 +1026,36 @@ export default function AppPage() {
                       ))}
                     </div>
                   )
+                ) : libSubTab==='team' ? (
+                  !teamSetsLoaded ? (
+                    <div style={{ textAlign:'center', padding:40, color:'#6a6a8a', fontSize:11, animation:'pulse 1.2s infinite' }}>LOADING TEAM SETS…</div>
+                  ) : teamSets.length===0 ? (
+                    <div style={{ textAlign:'center', padding:40 }}>
+                      <div style={{ fontSize:28, opacity:.3, marginBottom:8 }}>🤝</div>
+                      <div style={{ fontSize:12, color:'#6a6a8a' }}>No team sets yet.</div>
+                      <div style={{ fontSize:11, color:'#4a4a66', marginTop:4 }}>Share a saved set with your team — or wait for a teammate to.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {teamSets.map((item,i)=>(
+                        <div key={item.id} className="sf-row lib-card" style={{ animationDelay:`${i*0.04}s`, background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:12 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
+                            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, letterSpacing:.5, color:C, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} className="sf-glow-c">{item.title}</div>
+                          </div>
+                          <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6, alignItems:'center' }}>
+                            <span style={{ fontSize:9, color:'#8a8aa8', border:`1px solid ${C}33`, borderRadius:999, padding:'1px 7px' }}>{item.isOwn ? 'you' : item.sharedBy}</span>
+                            {[item.meta?.genre, item.meta?.crowd].map(tag=>tag&&(
+                              <span key={String(tag)} style={{ fontSize:9, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'1px 7px' }}>{String(tag)}</span>
+                            ))}
+                            {item.meta?.trackCount && <span style={{ fontSize:9, color:'#4a4a66', border:'1px solid #1f1f33', borderRadius:999, padding:'1px 7px' }}>{item.meta.trackCount} tracks</span>}
+                          </div>
+                          <button onClick={()=>loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, width:'100%' }}>
+                            {libLoading?'…':'▶ LOAD'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 ) : !libLoaded ? (
                   <div style={{ textAlign:'center', padding:40, color:'#6a6a8a', fontSize:11, animation:'pulse 1.2s infinite' }}>LOADING LIBRARY…</div>
                 ) : library.length===0 ? (
@@ -1028,6 +1089,11 @@ export default function AppPage() {
                           <button onClick={()=>shareSet(item.id)} disabled={sharingId!==null} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, color:copiedId===item.id?C:undefined, borderColor:copiedId===item.id?C:undefined, flex:1 }}>
                             {sharingId===item.id?'…':copiedId===item.id?'✓ COPIED':'⤴ SHARE'}
                           </button>
+                          {myTeamId && (
+                            <button onClick={()=>toggleShareSet(item.id, !!item.shared_to_team_id)} disabled={sharingTeamId===item.id} className="sf-btn-ghost" title={item.shared_to_team_id?'Unshare from team':'Share with team'} style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1, color:item.shared_to_team_id?C:undefined, borderColor:item.shared_to_team_id?C:undefined }}>
+                              {sharingTeamId===item.id?'…':item.shared_to_team_id?'🤝 SHARED':'🤝 TEAM'}
+                            </button>
+                          )}
                           <button onClick={()=>loadSet(item.id)} disabled={libLoading} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1 }}>
                             {libLoading?'…':'▶ LOAD'}
                           </button>
@@ -1170,6 +1236,12 @@ export default function AppPage() {
                   <button onClick={saveSet} disabled={saving} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11, animation:savedFlash?'flash .6s ease':'none', color:savedFlash?C:undefined, borderColor:savedFlash?C:undefined }}>
                     {saving?'SAVING…':savedFlash?'✓ SAVED':'◈ SAVE'}
                   </button>
+                  {myTeamId && (
+                    <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, color:'#8a8aa8', fontFamily:"'JetBrains Mono',monospace", cursor:'pointer', padding:'0 4px' }}>
+                      <input type="checkbox" checked={shareToTeamOnSave} onChange={e=>setShareToTeamOnSave(e.target.checked)} style={{ accentColor:C }} />
+                      🤝 SHARE WITH TEAM
+                    </label>
+                  )}
                   <button onClick={copyTracklist} className="sf-btn-ghost" style={{ padding:'8px 14px', borderRadius:8, fontSize:11, color:copied?C:undefined, borderColor:copied?C:undefined }}>
                     {copied?'✓ COPIED':'⧉ COPY LIST'}
                   </button>

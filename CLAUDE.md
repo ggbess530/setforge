@@ -48,6 +48,10 @@ app/
 │   └── page.tsx                      # Set analyser standalone page (/analyse)
 ├── s/
 │   └── page.tsx                      # Public shared set page (/s?id=xxx)
+├── community/
+│   └── page.tsx                      # Community feed — blog posts + 2-track mix uploads (/community)
+├── team/
+│   └── page.tsx                      # Team seat management — invite/accept/leave/remove (/team)
 ├── admin/
 │   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
@@ -76,17 +80,32 @@ app/
 │   ├── webhooks/lemon-squeezy/route.ts  # Subscription webhook handler
 │   ├── cron/refresh-trends/route.ts  # Daily Vercel Cron — refreshes trending_tracks (CRON_SECRET-gated)
 │   ├── admin/trends/route.ts         # GET status / POST manual refresh for /admin (ADMIN_USER_IDS-gated)
-│   └── admin/spotify/
-│       ├── login/route.ts            # Redirects to Spotify's Authorization Code login
-│       └── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_auth table
+│   ├── admin/spotify/
+│   │   ├── login/route.ts            # Redirects to Spotify's Authorization Code login
+│   │   └── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_auth table
+│   ├── community/
+│   │   ├── posts/route.ts            # GET paginated feed (compound created_at+id cursor) / POST blog post
+│   │   ├── posts/item/route.ts       # DELETE own post (query param, no [id] folder)
+│   │   ├── likes/route.ts            # POST toggle like (query param postId)
+│   │   ├── mixes/route.ts            # POST finalize a mix post after audio upload
+│   │   ├── mixes/upload-url/route.ts # POST signed Supabase Storage upload URL (quota + file checks)
+│   │   └── mixes/quota/route.ts      # GET remaining mix-upload quota for composer UI
+│   └── team/
+│       ├── route.ts                  # GET full team status (role, roster, seats, pending invite)
+│       ├── invite/route.ts           # POST invite teammate by email (lazily creates the team row)
+│       ├── invite/item/route.ts      # DELETE revoke pending invite (query param, owner-only)
+│       ├── claim/route.ts            # POST accept/decline a pending invite matching my Clerk email
+│       └── member/route.ts           # DELETE remove teammate (owner) or leave (self)
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
-├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass
+├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
+├── team.ts                           # Team seat resolution — getRiddenTeam()/getOwnedTeam(), SEAT_LIMIT
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
 ├── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
 ├── spotify-user-auth.ts              # Spotify Authorization Code flow (spotify_auth table) — see gotcha below
+├── mix-utils.ts                      # Camelot/BPM compatibility scoring shared by inline sim, /mix, and Community mix cards
 ├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
 ├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
 └── log-error.ts                      # logError() — console.error + Sentry.captureException/Message
@@ -156,6 +175,23 @@ CREATE TABLE community_likes (
   id uuid PK, post_id uuid REFERENCES community_posts, user_id text,
   UNIQUE(post_id, user_id), created_at timestamptz
 );
+
+-- Team seats: one paying "owner" (their own row in `subscriptions`, tier='team')
+-- invites up to SEAT_LIMIT-1 teammates who ride that subscription (supabase/team-schema.sql)
+CREATE TABLE teams (
+  id uuid PK, owner_id text UNIQUE, name text DEFAULT 'My Team',
+  seat_limit integer DEFAULT 5, created_at timestamptz, updated_at timestamptz
+);
+CREATE TABLE team_members (   -- invited members ONLY — owner is teams.owner_id, never a row here
+  id uuid PK, team_id uuid REFERENCES teams, user_id text UNIQUE, joined_at timestamptz
+);
+CREATE TABLE team_invites (
+  id uuid PK, team_id uuid REFERENCES teams, email text, invited_by text,
+  status text DEFAULT 'pending' CHECK (status in ('pending','accepted','revoked')),
+  created_at timestamptz, expires_at timestamptz, UNIQUE(team_id, email)
+);
+-- sets.shared_to_team_id (nullable, additive) — a set shared to a team is
+-- visible to every member of that team; ALTER TABLE in supabase/team-schema.sql
 ```
 
 ## Pricing Model
@@ -163,11 +199,12 @@ CREATE TABLE community_likes (
 |------|-------|--------|
 | Free | $0/forever | 5 sets/month, all features |
 | Pro | $9/month | Unlimited sets |
-| Team | $19/month | Pro + team access |
+| Team | $19/month | Pro + up to 5 seats + shared team sets |
 
 - 7-day Pro trial auto-created on first signup
 - Trial expires → auto-downgraded to free (never fully blocked)
 - `ADMIN_USER_IDS` env var gives unlimited Pro access to specified Clerk user IDs
+- Team tier: the paying user ("owner") invites up to 4 teammates from `/team`; invited members ride the owner's subscription (`checkSubscription()` resolves this via `lib/team.ts`'s `getRiddenTeam()`) — no separate billing, no personal trial row created for them. If the owner's subscription lapses, members silently fall back to their own free/trial status next time `checkSubscription()` runs — never fully blocked, same philosophy as the free tier.
 
 ## Subscription Flow
 ```
@@ -261,6 +298,19 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Public set page at `/s?id=xxx`
 - Share page shows full set + "Forge Your Own" CTA
 - Share links created/managed via `/api/share`
+
+**Community (/community):**
+- Feed of blog posts (tips/questions) and 2-track "mix" uploads (audio blend + Camelot/BPM compatibility badge via `lib/mix-utils.ts`)
+- Tabs: All / Posts / Mixes; cursor-paginated (compound `created_at`+`id` cursor — ties on `created_at` alone silently drop rows, so both are required)
+- Mix uploads go straight to the `community-audio` Storage bucket via a signed upload URL (keeps large audio off the Vercel request path); tiered quota via `checkMixUploadQuota()` in `lib/subscription.ts` (free: 3 lifetime / pro,team: 20 per month)
+- Like/unlike via `increment_like_count` Postgres function (atomic, avoids a read-then-write race)
+- Delete own post (cascades to likes + removes the audio object from Storage)
+
+**Team (/team):**
+- Team-tier subscriber ("owner") invites up to 4 teammates by email from `/team`; no email is actually sent (no email provider in this stack) — the teammate signs in with that exact email and accepts from `/team` themselves
+- Invited members get unlimited generations riding the owner's subscription — see Pricing Model above and `lib/team.ts`
+- Owner can revoke a pending invite or remove a member; a member can leave on their own
+- `sets.shared_to_team_id` (nullable) lets a saved set be shared with the whole team — not yet wired into the Library tab UI (schema/API only so far)
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)

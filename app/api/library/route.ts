@@ -4,6 +4,7 @@ import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { checkSubscription } from '@/lib/subscription'
+import { getMyTeamId }  from '@/lib/team'
 import { logError } from '@/lib/log-error'
 
 // ── GET /api/library — fetch all sets for the current user ────
@@ -18,7 +19,7 @@ export async function GET() {
 
     const { data: sets, error } = await db
       .from('sets')
-      .select('id, title, meta, created_at, updated_at')
+      .select('id, title, meta, created_at, updated_at, shared_to_team_id')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
 
@@ -48,13 +49,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No active subscription.' }, { status: 403 })
     }
 
-    const { title, setData, meta } = await req.json()
+    const { title, setData, meta, shareToTeam } = await req.json()
 
     if (!title || !setData) {
       return NextResponse.json({ error: 'Missing title or set data.' }, { status: 400 })
     }
 
     const db = createAdminClient()
+    const teamId = shareToTeam ? await getMyTeamId(userId) : null
 
     const { data: saved, error } = await db
       .from('sets')
@@ -63,8 +65,9 @@ export async function POST(req: Request) {
         title:    title.trim(),
         set_data: setData,
         meta:     meta ?? {},
+        shared_to_team_id: teamId,
       })
-      .select('id, title, meta, created_at')
+      .select('id, title, meta, created_at, shared_to_team_id')
       .single()
 
     if (error) throw error

@@ -1,6 +1,7 @@
 // ▸ Place at: lib/subscription.ts
 
 import { createAdminClient } from './supabase'
+import { getRiddenTeam }     from './team'
 
 export type Tier = 'free' | 'pro' | 'team'
 
@@ -50,6 +51,14 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
   // Admin bypass — unlimited agency-level access
   if (isAdmin(userId)) {
     return { active: true, tier: 'pro', remainingGenerations: null }
+  }
+
+  // Invited team member riding an active Team owner's subscription — no
+  // separate billing, no personal trial row needed. Falls through to normal
+  // per-user logic below if the owner's sub lapses (never fully blocked).
+  const riddenTeam = await getRiddenTeam(userId)
+  if (riddenTeam) {
+    return { active: true, tier: 'team', remainingGenerations: null }
   }
 
   const db = createAdminClient()

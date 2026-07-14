@@ -5,13 +5,14 @@
 import { auth }         from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { getMyTeamId }  from '@/lib/team'
 import { logError } from '@/lib/log-error'
 
 function getId(req: Request): string | null {
   return new URL(req.url).searchParams.get('id')
 }
 
-// GET /api/library/item?id=xxx — load full set
+// GET /api/library/item?id=xxx — load full set (your own, or one a teammate shared to your team)
 export async function GET(req: Request) {
   try {
     const { userId } = await auth()
@@ -21,14 +22,16 @@ export async function GET(req: Request) {
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const db = createAdminClient()
-    const { data: set, error } = await db
-      .from('sets')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single()
-
+    const { data: set, error } = await db.from('sets').select('*').eq('id', id).single()
     if (error || !set) return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
+
+    if (set.user_id !== userId) {
+      const teamId = set.shared_to_team_id && await getMyTeamId(userId)
+      if (!teamId || teamId !== set.shared_to_team_id) {
+        return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
+      }
+    }
+
     return NextResponse.json({ set })
 
   } catch (err) {
@@ -37,7 +40,7 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH /api/library/item?id=xxx — rename set
+// PATCH /api/library/item?id=xxx — rename set, and/or toggle team sharing
 export async function PATCH(req: Request) {
   try {
     const { userId } = await auth()
@@ -46,16 +49,33 @@ export async function PATCH(req: Request) {
     const id = getId(req)
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    const { title } = await req.json()
-    if (!title?.trim()) return NextResponse.json({ error: 'Title cannot be empty.' }, { status: 400 })
+    const { title, shareToTeam } = await req.json()
+    if (title === undefined && shareToTeam === undefined) {
+      return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
+    }
+    if (title !== undefined && !title.trim()) {
+      return NextResponse.json({ error: 'Title cannot be empty.' }, { status: 400 })
+    }
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (title !== undefined) patch.title = title.trim()
+    if (shareToTeam !== undefined) {
+      if (shareToTeam) {
+        const teamId = await getMyTeamId(userId)
+        if (!teamId) return NextResponse.json({ error: 'You are not on a team.' }, { status: 403 })
+        patch.shared_to_team_id = teamId
+      } else {
+        patch.shared_to_team_id = null
+      }
+    }
 
     const db = createAdminClient()
     const { data: updated, error } = await db
       .from('sets')
-      .update({ title: title.trim(), updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('id', id)
       .eq('user_id', userId)
-      .select('id, title, updated_at')
+      .select('id, title, updated_at, shared_to_team_id')
       .single()
 
     if (error || !updated) return NextResponse.json({ error: 'Set not found.' }, { status: 404 })
@@ -63,7 +83,7 @@ export async function PATCH(req: Request) {
 
   } catch (err) {
     logError('[PATCH /api/library/item]', err)
-    return NextResponse.json({ error: 'Failed to rename set.' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update set.' }, { status: 500 })
   }
 }
 
