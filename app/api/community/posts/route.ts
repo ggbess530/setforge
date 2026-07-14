@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const db = createAdminClient()
     let query = db
       .from('community_posts')
-      .select('id, user_id, author_name, author_image, type, title, body, track1_artist, track1_title, track1_bpm, track1_key, track2_artist, track2_title, track2_bpm, track2_key, audio_path, audio_duration_sec, like_count, created_at')
+      .select('id, user_id, author_name, author_image, type, title, body, track1_artist, track1_title, track1_bpm, track1_key, track2_artist, track2_title, track2_bpm, track2_key, audio_path, audio_duration_sec, like_count, comment_count, created_at')
       .eq('status', 'published')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })

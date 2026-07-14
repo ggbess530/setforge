@@ -19,9 +19,14 @@ type Post = {
   track1_artist: string | null; track1_title: string | null; track1_bpm: number | null; track1_key: string | null
   track2_artist: string | null; track2_title: string | null; track2_bpm: number | null; track2_key: string | null
   audioUrl: string | null; audio_duration_sec: number | null
-  like_count: number; created_at: string
+  like_count: number; comment_count: number; created_at: string
 }
 type MixQuota = { allowed: boolean; remaining: number; maxFileBytes: number; maxDurationSec: number }
+type CommentItem = {
+  id: string; post_id: string; parent_id: string | null
+  user_id: string; author_name: string | null; author_image: string | null
+  body: string; created_at: string; replies?: CommentItem[]
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 function timeAgo(iso: string): string {
@@ -238,12 +243,152 @@ function Composer({ mixQuota, onPosted, onClose, pushToast }: {
   )
 }
 
+// ── Comment row (top-level or reply) ────────────────────────────
+function CommentRow({ comment, isOwn, isReply, onReply, onDelete }: {
+  comment: CommentItem; isOwn: boolean; isReply: boolean
+  onReply?: () => void; onDelete: () => void
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      {comment.author_image
+        ? <img src={comment.author_image} alt="" width={22} height={22} style={{ borderRadius: '50%', flexShrink: 0, marginTop: 1 }} />
+        : <div style={{ width: 22, height: 22, borderRadius: '50%', background: `linear-gradient(135deg,${M},${C})`, flexShrink: 0 }} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11 }}>
+          <span style={{ fontWeight: 700, color: '#e8e8f0' }}>{comment.author_name || 'DJ'}</span>
+          <span style={{ color: '#4a4a66', marginLeft: 6 }}>{timeAgo(comment.created_at)}</span>
+        </div>
+        <div style={{ fontSize: 12, color: '#c8c8e0', lineHeight: 1.5, whiteSpace: 'pre-wrap', marginTop: 2 }}>{comment.body}</div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+          {!isReply && onReply && <button onClick={onReply} style={{ background: 'none', border: 'none', color: '#5a5a78', fontSize: 10, cursor: 'pointer', padding: 0, fontFamily: 'JetBrains Mono,monospace' }}>reply</button>}
+          {isOwn && (
+            confirmDelete ? (
+              <span style={{ display: 'flex', gap: 8 }}>
+                <button onClick={onDelete} style={{ background: 'none', border: 'none', color: M, fontSize: 10, cursor: 'pointer', padding: 0, fontFamily: 'JetBrains Mono,monospace' }}>confirm</button>
+                <button onClick={() => setConfirmDelete(false)} style={{ background: 'none', border: 'none', color: '#5a5a78', fontSize: 10, cursor: 'pointer', padding: 0, fontFamily: 'JetBrains Mono,monospace' }}>cancel</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} style={{ background: 'none', border: 'none', color: '#5a5a78', fontSize: 10, cursor: 'pointer', padding: 0, fontFamily: 'JetBrains Mono,monospace' }}>delete</button>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Comments section (lazy-loaded, one level of replies) ────────
+function CommentsSection({ postId, currentUserId, isSignedIn, pushToast, onCountChange }: {
+  postId: string; currentUserId: string | null; isSignedIn: boolean | undefined
+  pushToast: (type: 'success' | 'error', msg: string) => void
+  onCountChange: (delta: number) => void
+}) {
+  const [comments, setComments] = useState<CommentItem[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [posting, setPosting] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replyPosting, setReplyPosting] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/community/comments?postId=${postId}`).then(r => r.json()).then(d => { if (!d.error) setComments(d.comments ?? []) }).finally(() => setLoaded(true))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per mount (section is unmounted/remounted on collapse/expand, not re-fetched on prop churn)
+  }, [])
+
+  async function submitComment() {
+    if (!isSignedIn) { pushToast('error', 'Sign in to comment.'); return }
+    if (!newComment.trim()) return
+    setPosting(true)
+    try {
+      const res = await fetch('/api/community/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId, body: newComment.trim() }) })
+      const data = await res.json()
+      if (!res.ok) { pushToast('error', data.error || 'Failed to comment.'); return }
+      setComments(prev => [...prev, { ...data.comment, replies: [] }])
+      setNewComment('')
+      onCountChange(1)
+    } catch { pushToast('error', 'Network error.') }
+    finally { setPosting(false) }
+  }
+
+  async function submitReply(parentId: string) {
+    if (!isSignedIn) { pushToast('error', 'Sign in to reply.'); return }
+    if (!replyText.trim()) return
+    setReplyPosting(true)
+    try {
+      const res = await fetch('/api/community/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId, body: replyText.trim(), parentId }) })
+      const data = await res.json()
+      if (!res.ok) { pushToast('error', data.error || 'Failed to reply.'); return }
+      setComments(prev => prev.map(c => c.id === parentId ? { ...c, replies: [...(c.replies ?? []), data.comment] } : c))
+      setReplyText(''); setReplyingTo(null)
+      onCountChange(1)
+    } catch { pushToast('error', 'Network error.') }
+    finally { setReplyPosting(false) }
+  }
+
+  async function deleteComment(id: string, parentId: string | null) {
+    try {
+      const res = await fetch(`/api/community/comments/item?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      if (parentId) {
+        setComments(prev => prev.map(c => c.id === parentId ? { ...c, replies: (c.replies ?? []).filter(r => r.id !== id) } : c))
+        onCountChange(-1)
+      } else {
+        const removed = comments.find(c => c.id === id)
+        setComments(prev => prev.filter(c => c.id !== id))
+        onCountChange(-(1 + (removed?.replies?.length ?? 0)))
+      }
+    } catch { pushToast('error', 'Failed to delete comment.') }
+  }
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #16162a', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {!loaded ? (
+        <div style={{ fontSize: 11, color: '#4a4a66' }}>Loading comments…</div>
+      ) : comments.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#4a4a66' }}>No comments yet — be the first to say something.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {comments.map(c => (
+            <div key={c.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <CommentRow comment={c} isOwn={c.user_id === currentUserId} isReply={false}
+                onReply={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
+                onDelete={() => deleteComment(c.id, null)} />
+              {(c.replies ?? []).map(r => (
+                <div key={r.id} style={{ marginLeft: 30 }}>
+                  <CommentRow comment={r} isOwn={r.user_id === currentUserId} isReply
+                    onDelete={() => deleteComment(r.id, c.id)} />
+                </div>
+              ))}
+              {replyingTo === c.id && (
+                <div style={{ marginLeft: 30, display: 'flex', gap: 6 }}>
+                  <input className="sf-input" placeholder={`Reply to ${c.author_name || 'DJ'}…`} value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitReply(c.id)} maxLength={2000} style={{ fontSize: 12, padding: '6px 10px' }} autoFocus />
+                  <button onClick={() => submitReply(c.id)} disabled={replyPosting || !replyText.trim()} className="sf-btn-ghost" style={{ padding: '6px 12px', borderRadius: 7, fontSize: 10, whiteSpace: 'nowrap' }}>{replyPosting ? '…' : 'REPLY'}</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input className="sf-input" placeholder={isSignedIn ? 'Add a comment…' : 'Sign in to comment'} value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()} maxLength={2000} disabled={!isSignedIn} style={{ fontSize: 12, padding: '7px 10px' }} />
+        <button onClick={submitComment} disabled={posting || !newComment.trim() || !isSignedIn} className="sf-btn-ghost" style={{ padding: '7px 14px', borderRadius: 7, fontSize: 10, whiteSpace: 'nowrap' }}>{posting ? '…' : 'POST'}</button>
+      </div>
+    </div>
+  )
+}
+
 // ── Post card ─────────────────────────────────────────────────
-function PostCard({ post, liked, isOwn, onLike, onDelete }: {
-  post: Post; liked: boolean; isOwn: boolean
+function PostCard({ post, liked, isOwn, currentUserId, isSignedIn, pushToast, onLike, onDelete }: {
+  post: Post; liked: boolean; isOwn: boolean; currentUserId: string | null; isSignedIn: boolean | undefined
+  pushToast: (type: 'success' | 'error', msg: string) => void
   onLike: (id: string) => void; onDelete: (id: string) => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [commentCount, setCommentCount] = useState(post.comment_count)
   const track1: TrackInfo = { artist: post.track1_artist ?? '', title: post.track1_title ?? '', bpm: post.track1_bpm, key: post.track1_key }
   const track2: TrackInfo = { artist: post.track2_artist ?? '', title: post.track2_title ?? '', bpm: post.track2_bpm, key: post.track2_key }
 
@@ -293,11 +438,19 @@ function PostCard({ post, liked, isOwn, onLike, onDelete }: {
         <div style={{ fontSize: 13, color: '#c8c8e0', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{post.body}</div>
       )}
 
-      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #16162a' }}>
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #16162a', display: 'flex', gap: 8 }}>
         <button onClick={() => onLike(post.id)} className="sf-btn-ghost" style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, borderColor: liked ? M : undefined, color: liked ? M : undefined }}>
           {liked ? '♥' : '♡'} {post.like_count}
         </button>
+        <button onClick={() => setCommentsOpen(o => !o)} className="sf-btn-ghost" style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, borderColor: commentsOpen ? C : undefined, color: commentsOpen ? C : undefined }}>
+          💬 {commentCount}
+        </button>
       </div>
+
+      {commentsOpen && (
+        <CommentsSection postId={post.id} currentUserId={currentUserId} isSignedIn={isSignedIn} pushToast={pushToast}
+          onCountChange={delta => setCommentCount(n => Math.max(0, n + delta))} />
+      )}
     </div>
   )
 }
@@ -480,7 +633,9 @@ export default function CommunityPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {posts.map(p => (
-              <PostCard key={p.id} post={p} liked={likedIds.has(p.id)} isOwn={p.user_id === currentUserId} onLike={toggleLike} onDelete={deletePost} />
+              <PostCard key={p.id} post={p} liked={likedIds.has(p.id)} isOwn={p.user_id === currentUserId}
+                currentUserId={currentUserId} isSignedIn={isSignedIn} pushToast={pushToast}
+                onLike={toggleLike} onDelete={deletePost} />
             ))}
           </div>
         )}

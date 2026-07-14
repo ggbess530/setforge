@@ -89,7 +89,9 @@ app/
 │   │   ├── likes/route.ts            # POST toggle like (query param postId)
 │   │   ├── mixes/route.ts            # POST finalize a mix post after audio upload
 │   │   ├── mixes/upload-url/route.ts # POST signed Supabase Storage upload URL (quota + file checks)
-│   │   └── mixes/quota/route.ts      # GET remaining mix-upload quota for composer UI
+│   │   ├── mixes/quota/route.ts      # GET remaining mix-upload quota for composer UI
+│   │   ├── comments/route.ts         # GET nested comments for a post / POST comment or reply (flattened to 1 level)
+│   │   └── comments/item/route.ts    # DELETE own comment (query param, no [id] folder) — cascades to its replies
 │   └── team/
 │       ├── route.ts                  # GET full team status (role, roster, seats, pending invite)
 │       ├── invite/route.ts           # POST invite teammate by email (lazily creates the team row)
@@ -175,6 +177,14 @@ CREATE TABLE community_likes (
   id uuid PK, post_id uuid REFERENCES community_posts, user_id text,
   UNIQUE(post_id, user_id), created_at timestamptz
 );
+-- community_posts.comment_count (additive) + community_comments (supabase/community-comments-schema.sql)
+CREATE TABLE community_comments (
+  id uuid PK, post_id uuid REFERENCES community_posts, parent_id uuid REFERENCES community_comments,
+  user_id text, author_name text, author_image text, body text,
+  status text DEFAULT 'published', created_at timestamptz
+);
+-- parent_id null = top-level; set = reply, always re-parented to the top-level
+-- comment by the API (flattened to 1 level deep — never a reply-to-a-reply row)
 
 -- Team seats: one paying "owner" (their own row in `subscriptions`, tier='team')
 -- invites up to SEAT_LIMIT-1 teammates who ride that subscription (supabase/team-schema.sql)
@@ -305,6 +315,7 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Mix uploads go straight to the `community-audio` Storage bucket via a signed upload URL (keeps large audio off the Vercel request path); tiered quota via `checkMixUploadQuota()` in `lib/subscription.ts` (free: 3 lifetime / pro,team: 20 per month)
 - Like/unlike via `increment_like_count` Postgres function (atomic, avoids a read-then-write race)
 - Delete own post (cascades to likes + removes the audio object from Storage)
+- Comments + one level of replies per post, lazy-loaded on expand (not fetched with the feed); a reply to a reply gets re-parented to the original top-level comment rather than nesting further; `increment_comment_count` mirrors the like-count function's atomic-bump pattern
 
 **Team (/team):**
 - Team-tier subscriber ("owner") invites up to 4 teammates by email from `/team`; no email is actually sent (no email provider in this stack) — the teammate signs in with that exact email and accepts from `/team` themselves
