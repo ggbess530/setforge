@@ -1,9 +1,10 @@
 // ▸ Place at: app/api/community/likes/route.ts
 // POST /api/community/likes?postId=xxx — toggle like on/off (idempotent, no body needed)
 
-import { auth }              from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse }      from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { notify }            from '@/lib/notifications'
 import { logError }          from '@/lib/log-error'
 
 export async function POST(req: Request) {
@@ -31,6 +32,18 @@ export async function POST(req: Request) {
     const { error } = await db.from('community_likes').insert({ post_id: postId, user_id: userId })
     if (error) throw error
     await db.rpc('increment_like_count', { p_post_id: postId, p_delta: 1 })
+
+    const { data: post } = await db.from('community_posts').select('user_id, title').eq('id', postId).maybeSingle()
+    if (post && post.user_id !== userId) {
+      const liker = await currentUser()
+      await notify({
+        userId: post.user_id, type: 'like',
+        actorName: liker?.fullName || liker?.username || 'A DJ', actorImage: liker?.imageUrl,
+        message: `${liker?.fullName || liker?.username || 'A DJ'} liked your ${post.title ? `"${post.title}"` : 'post'}`,
+        link: '/community',
+      })
+    }
+
     return NextResponse.json({ liked: true })
 
   } catch (err) {

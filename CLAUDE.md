@@ -30,9 +30,10 @@ LEMON_SQUEEZY_STORE_ID=402701
 LEMON_SQUEEZY_VARIANT_PRO=1820113
 LEMON_SQUEEZY_VARIANT_TEAM=1820124
 ADMIN_USER_IDS=user_xxx               # comma-separated Clerk user IDs for unlimited access
-SPOTIFY_CLIENT_ID                      # same app creds, used for both Client Credentials (track verification) and Authorization Code (trend ingestion)
+SPOTIFY_CLIENT_ID                      # same app creds, used for Client Credentials (track verification), the admin's own Authorization Code login (trend ingestion), AND per-user Authorization Code (set export)
 SPOTIFY_CLIENT_SECRET
-SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback  # must exactly match the URI registered in the Spotify Developer Dashboard
+SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback       # admin-only trend-ingestion login — must exactly match a URI registered in the Spotify Developer Dashboard
+SPOTIFY_USER_REDIRECT_URI=https://setforge.online/api/spotify/callback        # per-user "export set to Spotify" login — a SEPARATE registered URI (apps can have more than one); requested scopes: playlist-modify-public playlist-modify-private
 CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
 SENTRY_DSN                             # server/edge error reporting — unset means Sentry is a no-op, nothing breaks
 NEXT_PUBLIC_SENTRY_DSN                 # same, for browser-side errors
@@ -60,7 +61,8 @@ app/
 │   ├── EnergyEditor.tsx              # Interactive SVG energy curve (5 draggable points)
 │   ├── OnboardingWizard.tsx          # First-time user 5-step wizard
 │   ├── UserLibrary.tsx               # Persistent library with crate browser
-│   └── LibraryImporter.tsx           # One-time import (older, superseded by UserLibrary)
+│   ├── LibraryImporter.tsx           # One-time import (older, superseded by UserLibrary)
+│   └── NotificationBell.tsx          # Bell dropdown, dropped into each page's own nav (no shared layout in this app)
 ├── api/
 │   ├── generate/route.ts             # Main set generation (chunked, history-aware)
 │   ├── swap/route.ts                 # Hot-swap single track
@@ -83,6 +85,12 @@ app/
 │   ├── admin/spotify/
 │   │   ├── login/route.ts            # Redirects to Spotify's Authorization Code login
 │   │   └── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_auth table
+│   ├── spotify/                      # Per-user "export set to Spotify" — separate OAuth flow from admin/spotify above
+│   │   ├── login/route.ts            # Redirects to Spotify login with playlist-modify scopes (any signed-in user)
+│   │   ├── callback/route.ts         # Exchanges code → refresh_token, stores in spotify_user_auth table (per user_id)
+│   │   ├── status/route.ts           # GET whether the current user has connected
+│   │   ├── export/route.ts           # POST { title, tracks } → creates a real Spotify playlist, returns its URL
+│   │   └── disconnect/route.ts       # POST removes the stored connection
 │   ├── community/
 │   │   ├── posts/route.ts            # GET paginated feed (compound created_at+id cursor) / POST blog post
 │   │   ├── posts/item/route.ts       # DELETE own post (query param, no [id] folder)
@@ -92,21 +100,28 @@ app/
 │   │   ├── mixes/quota/route.ts      # GET remaining mix-upload quota for composer UI
 │   │   ├── comments/route.ts         # GET nested comments for a post / POST comment or reply (flattened to 1 level)
 │   │   └── comments/item/route.ts    # DELETE own comment (query param, no [id] folder) — cascades to its replies
-│   └── team/
-│       ├── route.ts                  # GET full team status (role, roster, seats, pending invite)
-│       ├── invite/route.ts           # POST invite teammate by email (lazily creates the team row)
-│       ├── invite/item/route.ts      # DELETE revoke pending invite (query param, owner-only)
-│       ├── claim/route.ts            # POST accept/decline a pending invite matching my Clerk email
-│       └── member/route.ts           # DELETE remove teammate (owner) or leave (self)
+│   ├── team/
+│   │   ├── route.ts                  # GET full team status (role, roster, seats, pending invite)
+│   │   ├── sets/route.ts             # GET sets any teammate shared to the team
+│   │   ├── invite/route.ts           # POST invite teammate by email (lazily creates the team row)
+│   │   ├── invite/item/route.ts      # DELETE revoke pending invite (query param, owner-only)
+│   │   ├── claim/route.ts            # POST accept/decline a pending invite matching my Clerk email
+│   │   └── member/route.ts           # DELETE remove teammate (owner) or leave (self)
+│   └── notifications/
+│       ├── route.ts                  # GET recent notifications + unread count (polled by NotificationBell.tsx)
+│       └── read/route.ts             # POST mark all as read (fires when the bell dropdown opens)
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
-├── team.ts                           # Team seat resolution — getRiddenTeam()/getOwnedTeam(), SEAT_LIMIT
+├── team.ts                           # Team seat resolution — getRiddenTeam()/getOwnedTeam()/getMyTeamId(), SEAT_LIMIT
+├── notifications.ts                  # notify() — fire-and-forget writer called from likes/comments/team routes
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
 ├── trend-ingest.ts                   # scans playlists, resolves bpm/key, upserts trending_tracks
-├── spotify-user-auth.ts              # Spotify Authorization Code flow (spotify_auth table) — see gotcha below
+├── spotify-user-auth.ts              # Admin's own singleton Spotify login (spotify_auth table, no scopes) — see gotcha below
+├── spotify-export.ts                  # Per-user Spotify login + playlist export (spotify_user_auth table, playlist-modify scopes)
+├── track-match.ts                     # findSpotifyTrack() fuzzy-match cascade + Camelot mapping — shared by metadata enrichment AND spotify-export.ts's fallback search
 ├── mix-utils.ts                      # Camelot/BPM compatibility scoring shared by inline sim, /mix, and Community mix cards
 ├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
 ├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
@@ -186,6 +201,23 @@ CREATE TABLE community_comments (
 -- parent_id null = top-level; set = reply, always re-parented to the top-level
 -- comment by the API (flattened to 1 level deep — never a reply-to-a-reply row)
 
+-- In-app notifications (supabase/notifications-schema.sql). message/link are
+-- precomputed server-side at insert time — frontend never joins back to
+-- posts/comments/teams to render one.
+CREATE TABLE notifications (
+  id uuid PK, user_id text, type text CHECK (type in ('like','comment','reply','team_invite','team_accepted')),
+  actor_name text, actor_image text, message text, link text,
+  read boolean DEFAULT false, created_at timestamptz
+);
+
+-- Per-user Spotify export login (supabase/spotify-user-auth-schema.sql) — NOT
+-- the admin's singleton `spotify_auth` table above; separate OAuth app
+-- registration (playlist-modify scopes vs. none), separate callback route.
+CREATE TABLE spotify_user_auth (
+  user_id text PK, refresh_token text, spotify_user_id text,
+  connected_at timestamptz, updated_at timestamptz
+);
+
 -- Team seats: one paying "owner" (their own row in `subscriptions`, tier='team')
 -- invites up to SEAT_LIMIT-1 teammates who ride that subscription (supabase/team-schema.sql)
 CREATE TABLE teams (
@@ -256,6 +288,18 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 
 **Gotcha:** Spotify blocks its own editorial playlists (`37i9dQZF1DX...`) from being read via the Client Credentials flow (no-login, app-only token) — returns 403 for apps without Extended Quota Mode approval. `lib/track-match.ts`'s `getSpotifyToken()` (Client Credentials) still works fine for track search/verification, but playlist reads for trend ingestion need a *real logged-in* Spotify user token instead. `lib/spotify-user-auth.ts` implements the Authorization Code flow for this — admin visits `/admin`, clicks "Connect Spotify" once, and the resulting refresh token is stored in the `spotify_auth` table (schema in that file's header comment) and auto-refreshed thereafter. `trend-ingest.ts` uses `getUserAccessToken()`, not `getSpotifyToken()`. Requires `SPOTIFY_REDIRECT_URI` registered exactly in the Spotify Developer Dashboard.
 
+**There are TWO separate Spotify Authorization Code logins in this app — don't conflate them:**
+| | Admin trend login | Per-user export login |
+|---|---|---|
+| Table | `spotify_auth` (singleton, `id=1`) | `spotify_user_auth` (keyed by Clerk `user_id`) |
+| Routes | `/api/admin/spotify/login` + `.../callback` | `/api/spotify/login` + `.../callback` |
+| Scopes | none (public playlist reads only) | `playlist-modify-public playlist-modify-private` |
+| Redirect URI env var | `SPOTIFY_REDIRECT_URI` | `SPOTIFY_USER_REDIRECT_URI` |
+| Who connects | admin only, once, from `/admin` | any signed-in user, from `/app`'s "Export to Spotify" button |
+| Purpose | scan editorial playlists for `trend-ingest.ts` | push a generated set into the user's own account as a playlist |
+
+Same `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` app creds power both — Spotify apps support multiple registered Redirect URIs, so `SPOTIFY_USER_REDIRECT_URI` just needs adding as a second entry in the Spotify Developer Dashboard, not a second app.
+
 ## App Features (all live)
 **Core:**
 - Genre selector (42 genres in 7 groups) + custom genre text input
@@ -276,6 +320,8 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 
 **Track Actions:**
 - Save to library, copy tracklist (with SetForge watermark), export .txt, share public link
+- Export as Rekordbox XML / Serato M3U / Traktor NML (`lib/export-utils.ts`)
+- Export to Spotify — creates a real (private) playlist on the DJ's own Spotify account via `lib/spotify-export.ts`; reuses each track's verified `spotifyId` from generation when present, falls back to `findSpotifyTrack()`'s fuzzy-match cascade otherwise. First click redirects to `/api/spotify/login` (separate per-user OAuth from the admin's trend-ingestion login — see Environment Variables and the Gotcha below); the in-progress set is stashed in `sessionStorage` across that redirect and export fires automatically on return.
 - Lock tracks → Reforge around them
 - Drag to reorder (HTML5 native, handle-only drag)
 
@@ -321,7 +367,13 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Team-tier subscriber ("owner") invites up to 4 teammates by email from `/team`; no email is actually sent (no email provider in this stack) — the teammate signs in with that exact email and accepts from `/team` themselves
 - Invited members get unlimited generations riding the owner's subscription — see Pricing Model above and `lib/team.ts`
 - Owner can revoke a pending invite or remove a member; a member can leave on their own
-- `sets.shared_to_team_id` (nullable) lets a saved set be shared with the whole team — not yet wired into the Library tab UI (schema/API only so far)
+- `sets.shared_to_team_id` (nullable) lets a saved set be shared with the whole team — wired into the Library tab in `/app` (share toggle on save + per-card, "TEAM SETS" sub-tab via `getMyTeamId()`/`GET /api/team/sets`)
+
+**Notifications (bell icon, all authenticated nav bars):**
+- `lib/notifications.ts`'s `notify()` is a fire-and-forget write, called from the routes that trigger each event — never blocks or fails the caller's main action if it errors
+- Triggers: someone likes/comments on your post, someone replies to your comment (notifies whoever they're actually replying to, not necessarily the post owner), a team invite lands for an email that already has a SetForge account, someone accepts your team invite
+- `NotificationBell.tsx` polls `GET /api/notifications` every 45s for the badge count; opening the dropdown fires `POST /api/notifications/read` (marks all read — no per-notification granularity)
+- No shared layout/header in this app — the bell is manually dropped into each page's own inline nav (`/`, `/app`, `/community`, `/team`)
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)

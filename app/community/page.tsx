@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth, useUser, UserButton } from '@clerk/nextjs'
 import { calcBridge } from '@/lib/mix-utils'
+import NotificationBell from '../components/NotificationBell'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
@@ -598,6 +599,7 @@ export default function CommunityPage() {
           <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center' }}>
             <Link href="/app" style={{ textDecoration: 'none' }}><button className="sf-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>⚡{!isMobile && ' Forge'}</button></Link>
             <Link href="/mix" style={{ textDecoration: 'none' }}><button className="sf-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>🎛️{!isMobile && ' Mix'}</button></Link>
+            {isSignedIn && <NotificationBell />}
             {isSignedIn ? <UserButton /> : <Link href="/sign-in"><button className="sf-btn-primary" style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12 }}>Sign in</button></Link>}
           </div>
         </div>

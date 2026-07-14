@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useAuth, UserButton } from '@clerk/nextjs'
+import NotificationBell from '../components/NotificationBell'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
@@ -145,6 +146,7 @@ export default function TeamPage() {
           </div>
           <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center' }}>
             <Link href="/app" style={{ textDecoration: 'none' }}><button className="tm-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12 }}>⚡{!isMobile && ' Forge'}</button></Link>
+            {isSignedIn && <NotificationBell />}
             {isSignedIn ? <UserButton /> : <Link href="/sign-in"><button className="tm-btn-primary" style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12 }}>Sign in</button></Link>}
           </div>
         </div>

@@ -7,6 +7,7 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse }      from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { getOwnedTeam }      from '@/lib/team'
+import { notify }            from '@/lib/notifications'
 import { logError }          from '@/lib/log-error'
 
 export async function POST(req: Request) {
@@ -43,6 +44,16 @@ export async function POST(req: Request) {
     if (joinErr) throw joinErr
 
     await db.from('team_invites').update({ status: 'accepted' }).eq('id', invite.id)
+
+    const { data: team } = await db.from('teams').select('owner_id').eq('id', invite.team_id).maybeSingle()
+    if (team) {
+      const joinerName = me?.fullName || me?.username || 'A DJ'
+      await notify({
+        userId: team.owner_id, type: 'team_accepted',
+        actorName: joinerName, actorImage: me?.imageUrl,
+        message: `${joinerName} joined your team`, link: '/team',
+      })
+    }
 
     return NextResponse.json({ joined: true })
 

@@ -5,10 +5,11 @@
 // the owner shares the news out of band; the teammate signs in with that
 // exact email and accepts from /team.
 
-import { auth }               from '@clerk/nextjs/server'
+import { auth, currentUser, clerkClient } from '@clerk/nextjs/server'
 import { NextResponse }       from 'next/server'
 import { createAdminClient }  from '@/lib/supabase'
 import { getOwnedTeam, SEAT_LIMIT } from '@/lib/team'
+import { notify }             from '@/lib/notifications'
 import { logError }           from '@/lib/log-error'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -57,6 +58,20 @@ export async function POST(req: Request) {
     if (error) {
       if (error.code === '23505') return NextResponse.json({ error: 'That email already has a pending invite.' }, { status: 409 })
       throw error
+    }
+
+    // If the invitee already has a SetForge account, notify them immediately
+    // instead of waiting for them to stumble onto /team on their own.
+    const client = await clerkClient()
+    const { data: existingUsers } = await client.users.getUserList({ emailAddress: [cleanEmail] })
+    if (existingUsers[0]) {
+      const inviter = await currentUser()
+      const inviterName = inviter?.fullName || inviter?.username || 'A DJ'
+      await notify({
+        userId: existingUsers[0].id, type: 'team_invite',
+        actorName: inviterName, actorImage: inviter?.imageUrl,
+        message: `${inviterName} invited you to join their team`, link: '/team',
+      })
     }
 
     return NextResponse.json({ invite }, { status: 201 })

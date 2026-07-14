@@ -5,6 +5,7 @@ import { useAuth, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import ExampleGallery from './components/ExampleGallery'
+import NotificationBell from './components/NotificationBell'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
@@ -445,6 +446,7 @@ export default function LandingPage() {
                   </>
                 )}
                 <Link href="/app"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Open App' : 'Open App →'}</button></Link>
+                <NotificationBell />
                 <UserButton />
               </>
             ) : (

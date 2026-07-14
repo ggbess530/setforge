@@ -8,6 +8,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse }      from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { notify }            from '@/lib/notifications'
 import { logError }          from '@/lib/log-error'
 
 const MAX_BODY = 2000
@@ -63,14 +64,18 @@ export async function POST(req: Request) {
 
     const db = createAdminClient()
 
-    const { data: post } = await db.from('community_posts').select('id, status').eq('id', postId).maybeSingle()
+    const { data: post } = await db.from('community_posts').select('id, user_id, title, status').eq('id', postId).maybeSingle()
     if (!post || post.status !== 'published') return NextResponse.json({ error: 'Post not found.' }, { status: 404 })
 
     let resolvedParentId: string | null = null
+    let replyNotifyTarget: { user_id: string } | null = null
     if (parentId) {
-      const { data: parent } = await db.from('community_comments').select('id, post_id, parent_id').eq('id', parentId).maybeSingle()
+      const { data: parent } = await db.from('community_comments').select('id, post_id, parent_id, user_id').eq('id', parentId).maybeSingle()
       if (!parent || parent.post_id !== postId) return NextResponse.json({ error: 'Comment not found.' }, { status: 404 })
       resolvedParentId = parent.parent_id ?? parent.id   // flatten: reply-to-a-reply re-parents to the top-level comment
+      // Notify whoever wrote the comment actually being replied to, not
+      // necessarily the top-level author once flattening kicks in.
+      replyNotifyTarget = { user_id: parent.user_id }
     }
 
     const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0)
@@ -99,6 +104,23 @@ export async function POST(req: Request) {
     if (error) throw error
 
     await db.rpc('increment_comment_count', { p_post_id: postId, p_delta: 1 })
+
+    const commenterName = user?.fullName || user?.username || 'A DJ'
+    if (replyNotifyTarget) {
+      if (replyNotifyTarget.user_id !== userId) {
+        await notify({
+          userId: replyNotifyTarget.user_id, type: 'reply',
+          actorName: commenterName, actorImage: user?.imageUrl,
+          message: `${commenterName} replied to your comment`, link: '/community',
+        })
+      }
+    } else if (post.user_id !== userId) {
+      await notify({
+        userId: post.user_id, type: 'comment',
+        actorName: commenterName, actorImage: user?.imageUrl,
+        message: `${commenterName} commented on your ${post.title ? `"${post.title}"` : 'post'}`, link: '/community',
+      })
+    }
 
     return NextResponse.json({ comment }, { status: 201 })
 
