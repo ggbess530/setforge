@@ -364,7 +364,7 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Public set page at `/s?id=xxx`
 - Share page shows full set + "Forge Your Own" CTA
 - Share links created/managed via `/api/share` (`POST` makes public + generates a `share_id`, `DELETE ?setId=` makes private again — clears `share_id`, so the old link 404s immediately rather than just being unlisted)
-- Library tab reflects this: a shared set shows a "🌐 PUBLIC" badge (click to copy the link again) plus a 🔒 button to make it private (confirm required); an unshared set shows the original "⤴ SHARE" button
+- Visibility toggle lives inside the set's edit mode in the Library tab (click ✎ next to the title — same place renaming happens), not a standalone button: shows "🌐 PUBLIC · copy link" + a confirm-gated "Make private" when public, or "🔒 PRIVATE · make public" when not. A small 🌐 badge next to the title (outside edit mode) shows current visibility at a glance.
 - `/s?id=xxx` has a "VIEW AS PDF" button — `lib/pdf-export.ts`'s `generateSetPdf()` builds a print-friendly (light theme, not the app's dark UI) PDF client-side via jsPDF and opens it in a new tab; no server round-trip, same philosophy as the Rekordbox/Serato/Traktor exporters. Public sets linked from a DJ's profile (`/u`) route through this same `/s` page rather than duplicating the PDF button there.
 
 **Community (/community):**

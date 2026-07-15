@@ -1124,14 +1124,40 @@ export default function AppPage() {
                     {library.map((item,i)=>(
                       <div key={item.id} className="sf-row lib-card" style={{ animationDelay:`${i*0.04}s`, background:'#0a0a14', border:'1px solid #16162a', borderRadius:10, padding:12 }}>
                         {renamingId===item.id ? (
-                          <div style={{ display:'flex', gap:6, marginBottom:8 }}>
-                            <input ref={renameRef} className="sf-input" value={renameVal} onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') commitRename(item.id); if(e.key==='Escape'){ setRenamingId(null); setRenameVal('') } }} style={{ fontSize:12 }} />
-                            <button onClick={()=>commitRename(item.id)} style={{ background:C, color:'#06060c', border:'none', padding:'0 10px', borderRadius:6, fontSize:10, cursor:'pointer', fontFamily:'inherit', fontWeight:700, flexShrink:0 }}>SAVE</button>
+                          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:8 }}>
+                            <div style={{ display:'flex', gap:6 }}>
+                              <input ref={renameRef} className="sf-input" value={renameVal} onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') commitRename(item.id); if(e.key==='Escape'){ setRenamingId(null); setRenameVal(''); setUnshareConf(null) } }} style={{ fontSize:12 }} />
+                              <button onClick={()=>commitRename(item.id)} style={{ background:C, color:'#06060c', border:'none', padding:'0 10px', borderRadius:6, fontSize:10, cursor:'pointer', fontFamily:'inherit', fontWeight:700, flexShrink:0 }}>SAVE</button>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                              <span style={{ fontSize:9, color:'#6a6a8a', letterSpacing:.5 }}>VISIBILITY:</span>
+                              {item.is_public ? (
+                                <>
+                                  <button onClick={()=>{ navigator.clipboard.writeText(`${window.location.origin}/s?id=${item.share_id}`); setCopiedId(item.id); setTimeout(()=>setCopiedId(null),2500) }} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, color:C, borderColor:C }} title="Copy public link">
+                                    {copiedId===item.id ? '✓ COPIED' : '🌐 PUBLIC · copy link'}
+                                  </button>
+                                  {unshareConf===item.id ? (
+                                    <>
+                                      <button onClick={()=>unshareSet(item.id)} disabled={sharingId===item.id} style={{ background:M, color:'#06060c', border:'none', padding:'4px 8px', borderRadius:6, fontSize:9, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>{sharingId===item.id?'…':'CONFIRM'}</button>
+                                      <button className="sf-del-btn" onClick={()=>setUnshareConf(null)}>CANCEL</button>
+                                    </>
+                                  ) : (
+                                    <button className="sf-del-btn" onClick={()=>setUnshareConf(item.id)}>Make private</button>
+                                  )}
+                                </>
+                              ) : (
+                                <button onClick={()=>shareSet(item.id)} disabled={sharingId!==null} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9 }}>
+                                  {sharingId===item.id?'…':'🔒 PRIVATE · make public'}
+                                </button>
+                              )}
+                            </div>
+                            <button className="sf-del-btn" onClick={()=>{ setRenamingId(null); setRenameVal(''); setUnshareConf(null) }} style={{ alignSelf:'flex-start' }}>Close</button>
                           </div>
                         ) : (
-                          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                             <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, letterSpacing:.5, color:C, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} className="sf-glow-c">{item.title}</div>
-                            <button className="sf-rename-btn" onClick={()=>{ setRenamingId(item.id); setRenameVal(item.title) }} title="Rename" aria-label={`Rename "${item.title}"`}>✏</button>
+                            {item.is_public && <span title="Public — anyone with the link can view" style={{ fontSize:10, color:C }}>🌐</span>}
+                            <button className="sf-rename-btn" onClick={()=>{ setRenamingId(item.id); setRenameVal(item.title) }} title="Edit" aria-label={`Edit "${item.title}"`}>✎</button>
                           </div>
                         )}
                         <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6 }}>
@@ -1141,25 +1167,6 @@ export default function AppPage() {
                           {item.meta?.trackCount && <span style={{ fontSize:9, color:'#4a4a66', border:'1px solid #1f1f33', borderRadius:999, padding:'1px 7px' }}>{item.meta.trackCount} tracks</span>}
                         </div>
                         <div style={{ display:'flex', gap:5, alignItems:'center' }}>
-                          {item.is_public ? (
-                            <>
-                              <button onClick={()=>{ navigator.clipboard.writeText(`${window.location.origin}/s?id=${item.share_id}`); setCopiedId(item.id); setTimeout(()=>setCopiedId(null),2500) }} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, color:C, borderColor:C, flex:1 }} title="Copy public link">
-                                {copiedId===item.id ? '✓ COPIED' : '🌐 PUBLIC'}
-                              </button>
-                              {unshareConf===item.id ? (
-                                <>
-                                  <button onClick={()=>unshareSet(item.id)} disabled={sharingId===item.id} style={{ background:M, color:'#06060c', border:'none', padding:'4px 8px', borderRadius:6, fontSize:9, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>{sharingId===item.id?'…':'YES'}</button>
-                                  <button className="sf-del-btn" onClick={()=>setUnshareConf(null)}>NO</button>
-                                </>
-                              ) : (
-                                <button className="sf-del-btn" onClick={()=>setUnshareConf(item.id)} title="Make private">🔒</button>
-                              )}
-                            </>
-                          ) : (
-                            <button onClick={()=>shareSet(item.id)} disabled={sharingId!==null} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1 }}>
-                              {sharingId===item.id?'…':'⤴ SHARE'}
-                            </button>
-                          )}
                           {myTeamId && (
                             <button onClick={()=>toggleShareSet(item.id, !!item.shared_to_team_id)} disabled={sharingTeamId===item.id} className="sf-btn-ghost" title={item.shared_to_team_id?'Unshare from team':'Share with team'} style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1, color:item.shared_to_team_id?C:undefined, borderColor:item.shared_to_team_id?C:undefined }}>
                               {sharingTeamId===item.id?'…':item.shared_to_team_id?'🤝 SHARED':'🤝 TEAM'}
@@ -1178,7 +1185,7 @@ export default function AppPage() {
                               <button className="sf-del-btn" onClick={()=>setDeleteConf(null)}>NO</button>
                             </>
                           ) : (
-                            <button className="sf-del-btn" onClick={()=>{ setDeleteConf(item.id); setRenamingId(null) }} title="Delete" aria-label={`Delete "${item.title}"`}>✕</button>
+                            <button className="sf-del-btn" onClick={()=>{ setDeleteConf(item.id); setRenamingId(null); setUnshareConf(null) }} title="Delete" aria-label={`Delete "${item.title}"`}>✕</button>
                           )}
                         </div>
                       </div>
