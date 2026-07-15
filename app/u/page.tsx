@@ -24,7 +24,7 @@ type ProfilePost = {
   audioUrl: string | null; audio_duration_sec: number | null
   like_count: number; comment_count: number; created_at: string
 }
-type PublicSet = { id: string; title: string; meta: Record<string, string | number>; created_at: string }
+type PublicSet = { id: string; title: string; meta: Record<string, string | number>; created_at: string; share_id: string | null }
 type ProfileData = {
   userId: string; handle: string; name: string; imageUrl: string | null
   isMe: boolean; isFollowing: boolean; followerCount: number; followingCount: number
@@ -219,7 +219,7 @@ function ProfilePageInner() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {profile.publicSets.map(s => (
-                    <div key={s.id} className="up-card" style={{ background: '#0a0a14', border: '1px solid #1a1a2e', borderRadius: 12, padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <Link key={s.id} href={`/s?id=${s.share_id}`} className="up-card" style={{ background: '#0a0a14', border: '1px solid #1a1a2e', borderRadius: 12, padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit' }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: .5, color: C, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
                         <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
@@ -228,7 +228,7 @@ function ProfilePageInner() {
                           ))}
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )

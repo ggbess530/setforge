@@ -40,7 +40,7 @@ const M = '#ff1e8a'
 // ── Types ─────────────────────────────────────────────────────
 type Track      = { n:number; artist:string; title:string; bpm:number; key:string; energy:number; transition:string; verified?:boolean; spotifyId?:string; path?:string }
 type SetData    = { title:string; summary:string; tracks:Track[]; _meta?:Record<string,string> }
-type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string; shared_to_team_id?:string|null }
+type LibItem    = { id:string; title:string; meta:Record<string,string|number>; created_at:string; shared_to_team_id?:string|null; is_public?:boolean; share_id?:string|null }
 type TeamSetItem = { id:string; title:string; meta:Record<string,string|number>; sharedBy:string; isOwn:boolean; updatedAt:string }
 type Suggestion = Track & { label:string }
 type LikedTrack = { id:string; artist:string; title:string; bpm?:number; key?:string; energy?:number; genre?:string }
@@ -176,6 +176,7 @@ export default function AppPage() {
   const [deleteConf,  setDeleteConf]  = useState<string|null>(null)
   const [sharingId,   setSharingId]   = useState<string|null>(null)
   const [copiedId,    setCopiedId]    = useState<string|null>(null)
+  const [unshareConf, setUnshareConf] = useState<string|null>(null)
   const [renamingId,  setRenamingId]  = useState<string|null>(null)
   const [renameVal,   setRenameVal]   = useState('')
 
@@ -480,8 +481,20 @@ export default function AppPage() {
       if (!res.ok) { pushToast('error', data.error||'Share failed.'); return }
       await navigator.clipboard.writeText(`${window.location.origin}/s?id=${data.shareId}`)
       setCopiedId(setId); setTimeout(()=>setCopiedId(null),2500)
+      setLibrary(prev => prev.map(s => s.id===setId ? { ...s, is_public:true, share_id:data.shareId } : s))
     } catch (err) { pushToast('error', err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'Your session expired — please sign in again.' : 'Share failed.') }
     finally   { setSharingId(null) }
+  }
+
+  async function unshareSet(setId: string) {
+    setSharingId(setId)
+    try {
+      const res = await fetch(`/api/share?setId=${setId}`, { method:'DELETE' })
+      if (!res.ok) throw new Error()
+      setLibrary(prev => prev.map(s => s.id===setId ? { ...s, is_public:false, share_id:null } : s))
+      pushToast('success', 'Set made private.')
+    } catch { pushToast('error', 'Failed to make set private.') }
+    finally { setSharingId(null); setUnshareConf(null) }
   }
 
   async function commitRename(id: string) {
@@ -1128,9 +1141,25 @@ export default function AppPage() {
                           {item.meta?.trackCount && <span style={{ fontSize:9, color:'#4a4a66', border:'1px solid #1f1f33', borderRadius:999, padding:'1px 7px' }}>{item.meta.trackCount} tracks</span>}
                         </div>
                         <div style={{ display:'flex', gap:5, alignItems:'center' }}>
-                          <button onClick={()=>shareSet(item.id)} disabled={sharingId!==null} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, color:copiedId===item.id?C:undefined, borderColor:copiedId===item.id?C:undefined, flex:1 }}>
-                            {sharingId===item.id?'…':copiedId===item.id?'✓ COPIED':'⤴ SHARE'}
-                          </button>
+                          {item.is_public ? (
+                            <>
+                              <button onClick={()=>{ navigator.clipboard.writeText(`${window.location.origin}/s?id=${item.share_id}`); setCopiedId(item.id); setTimeout(()=>setCopiedId(null),2500) }} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, color:C, borderColor:C, flex:1 }} title="Copy public link">
+                                {copiedId===item.id ? '✓ COPIED' : '🌐 PUBLIC'}
+                              </button>
+                              {unshareConf===item.id ? (
+                                <>
+                                  <button onClick={()=>unshareSet(item.id)} disabled={sharingId===item.id} style={{ background:M, color:'#06060c', border:'none', padding:'4px 8px', borderRadius:6, fontSize:9, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>{sharingId===item.id?'…':'YES'}</button>
+                                  <button className="sf-del-btn" onClick={()=>setUnshareConf(null)}>NO</button>
+                                </>
+                              ) : (
+                                <button className="sf-del-btn" onClick={()=>setUnshareConf(item.id)} title="Make private">🔒</button>
+                              )}
+                            </>
+                          ) : (
+                            <button onClick={()=>shareSet(item.id)} disabled={sharingId!==null} className="sf-btn-ghost" style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1 }}>
+                              {sharingId===item.id?'…':'⤴ SHARE'}
+                            </button>
+                          )}
                           {myTeamId && (
                             <button onClick={()=>toggleShareSet(item.id, !!item.shared_to_team_id)} disabled={sharingTeamId===item.id} className="sf-btn-ghost" title={item.shared_to_team_id?'Unshare from team':'Share with team'} style={{ padding:'4px 8px', borderRadius:6, fontSize:9, flex:1, color:item.shared_to_team_id?C:undefined, borderColor:item.shared_to_team_id?C:undefined }}>
                               {sharingTeamId===item.id?'…':item.shared_to_team_id?'🤝 SHARED':'🤝 TEAM'}

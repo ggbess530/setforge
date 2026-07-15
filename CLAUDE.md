@@ -126,6 +126,7 @@ lib/
 ├── spotify-user-auth.ts              # Admin's own singleton Spotify login (spotify_auth table, no scopes) — see gotcha below
 ├── track-match.ts                     # findSpotifyTrack() fuzzy-match cascade + Camelot mapping, used by the metadata enrichment pipeline
 ├── mix-utils.ts                      # Camelot/BPM compatibility scoring shared by inline sim, /mix, and Community mix cards
+├── pdf-export.ts                      # generateSetPdf()/viewPdfInNewTab() — client-side PDF via jsPDF, no server round-trip
 ├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
 ├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
 └── log-error.ts                      # logError() — console.error + Sentry.captureException/Message
@@ -362,7 +363,9 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 **Sharing:**
 - Public set page at `/s?id=xxx`
 - Share page shows full set + "Forge Your Own" CTA
-- Share links created/managed via `/api/share`
+- Share links created/managed via `/api/share` (`POST` makes public + generates a `share_id`, `DELETE ?setId=` makes private again — clears `share_id`, so the old link 404s immediately rather than just being unlisted)
+- Library tab reflects this: a shared set shows a "🌐 PUBLIC" badge (click to copy the link again) plus a 🔒 button to make it private (confirm required); an unshared set shows the original "⤴ SHARE" button
+- `/s?id=xxx` has a "VIEW AS PDF" button — `lib/pdf-export.ts`'s `generateSetPdf()` builds a print-friendly (light theme, not the app's dark UI) PDF client-side via jsPDF and opens it in a new tab; no server round-trip, same philosophy as the Rekordbox/Serato/Traktor exporters. Public sets linked from a DJ's profile (`/u`) route through this same `/s` page rather than duplicating the PDF button there.
 
 **Community (/community):**
 - Feed of blog posts (tips/questions) and 2-track "mix" uploads (audio blend + Camelot/BPM compatibility badge via `lib/mix-utils.ts`)

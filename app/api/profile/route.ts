@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       client.users.getUser(profileUserId).catch(() => null),
       db.from('community_posts').select('id, type, title, body, track1_artist, track1_title, track1_bpm, track1_key, track2_artist, track2_title, track2_bpm, track2_key, audio_path, audio_duration_sec, like_count, comment_count, created_at')
         .eq('user_id', profileUserId).eq('status', 'published').order('created_at', { ascending: false }).limit(50),
-      db.from('sets').select('id, title, meta, created_at').eq('user_id', profileUserId).eq('is_public', true).order('created_at', { ascending: false }).limit(50),
+      db.from('sets').select('id, title, meta, created_at, share_id').eq('user_id', profileUserId).eq('is_public', true).order('created_at', { ascending: false }).limit(50),
       db.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', profileUserId),
       db.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', profileUserId),
       viewerId ? db.from('follows').select('id').eq('follower_id', viewerId).eq('followee_id', profileUserId).maybeSingle() : Promise.resolve({ data: null }),

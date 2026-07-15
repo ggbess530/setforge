@@ -19,7 +19,7 @@ export async function GET() {
 
     const { data: sets, error } = await db
       .from('sets')
-      .select('id, title, meta, created_at, updated_at, shared_to_team_id')
+      .select('id, title, meta, created_at, updated_at, shared_to_team_id, is_public, share_id')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
 
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
         meta:     meta ?? {},
         shared_to_team_id: teamId,
       })
-      .select('id, title, meta, created_at, shared_to_team_id')
+      .select('id, title, meta, created_at, shared_to_team_id, is_public, share_id')
       .single()
 
     if (error) throw error

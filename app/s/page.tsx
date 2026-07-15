@@ -7,6 +7,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { generateSetPdf, viewPdfInNewTab } from '@/lib/pdf-export'
 
 const C = '#00f0ff'
 const M = '#ff1e8a'
@@ -21,6 +22,16 @@ function SharedSetContent() {
   const [set,     setSet]     = useState<{ title:string; set_data:{ title:string; summary:string; tracks:Track[] }; meta:Record<string,string|number> } | null>(null)
   const [loading, setLoading] = useState(() => !!shareId)
   const [error,   setError]   = useState<string|null>(() => shareId ? null : 'Invalid share link.')
+  const [pdfBusy, setPdfBusy] = useState(false)
+
+  function viewPdf() {
+    if (!set) return
+    setPdfBusy(true)
+    try {
+      const blob = generateSetPdf(set.set_data.title, set.set_data.summary, set.set_data.tracks, [set.meta?.genre, set.meta?.crowd, set.meta?.familiarity || set.meta?.arc])
+      viewPdfInNewTab(blob)
+    } finally { setPdfBusy(false) }
+  }
 
   useEffect(() => {
     if (!shareId) return
@@ -93,11 +104,14 @@ function SharedSetContent() {
               <p style={{ fontSize:13, color:'#9a9ab8', maxWidth:480, margin:'10px auto 14px', lineHeight:1.6 }}>
                 {set.set_data.summary}
               </p>
-              <div style={{ display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
+              <div style={{ display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap', marginBottom:16 }}>
                 {[set.meta?.genre, set.meta?.crowd, set.meta?.familiarity || set.meta?.arc].map(tag => tag && (
                   <span key={String(tag)} style={{ fontSize:10, color:'#6a6a8a', border:'1px solid #1f1f33', borderRadius:999, padding:'3px 10px' }}>{String(tag)}</span>
                 ))}
               </div>
+              <button onClick={viewPdf} disabled={pdfBusy} className="btn-primary" style={{ padding:'8px 20px', borderRadius:8, fontSize:11 }}>
+                {pdfBusy ? 'GENERATING…' : '📄 VIEW AS PDF'}
+              </button>
             </div>
 
             {/* energy bar */}
