@@ -443,6 +443,7 @@ export default function LandingPage() {
                     <Link href="/planner" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Planner</button></Link>
                     <Link href="/community" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Community</button></Link>
                     <Link href="/team" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Team</button></Link>
+                    <Link href="/stats" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Stats</button></Link>
                   </>
                 )}
                 <Link href="/app"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Open App' : 'Open App →'}</button></Link>

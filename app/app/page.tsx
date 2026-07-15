@@ -888,6 +888,9 @@ export default function AppPage() {
           <Link href="/u?me=1" style={{ textDecoration:'none' }}>
             <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>👤{!isMobile && ' PROFILE'}</button>
           </Link>
+          <Link href="/stats" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>📊{!isMobile && ' STATS'}</button>
+          </Link>
           <NotificationBell />
           <UserButton />
         </div>

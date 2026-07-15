@@ -54,6 +54,8 @@ app/
 │   └── page.tsx                      # Team seat management — invite/accept/leave/remove (/team)
 ├── u/
 │   └── page.tsx                      # Public profile (/u?handle=xxx, or /u?me=1 for your own) — query param, not [handle] folder
+├── stats/
+│   └── page.tsx                      # Personal stats dashboard (/stats) — own data only, auth-gated, not public like /u
 ├── admin/
 │   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
@@ -111,7 +113,8 @@ app/
 │   ├── profile/
 │   │   ├── route.ts                  # GET ?handle=xxx — public profile (Clerk identity, Community posts, public sets, follow counts)
 │   │   └── me/route.ts               # GET the caller's own handle, auto-provisioning one
-│   └── follow/route.ts               # POST { userId } — toggle follow/unfollow, notifies on new follow
+│   ├── follow/route.ts               # POST { userId } — toggle follow/unfollow, notifies on new follow
+│   └── stats/route.ts                # GET personal stats dashboard payload — see App Features
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
@@ -393,6 +396,13 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Follow/unfollow via `POST /api/follow`; notifies the followee (type `'follow'`)
 - Community's tab bar has a "Following only" toggle (`scope=following` on `GET /api/community/posts`) alongside the existing All/Posts/Mixes type filter — independent axes, combinable
 - Community post authors link to `/u?handle=...` when `author_handle` is present (older posts created before this feature don't have one and just render as plain text)
+
+**Personal stats dashboard (/stats):**
+- Own data only, auth-gated — unlike `/u`, never public. All aggregation happens in JS from raw rows in `app/api/stats/route.ts` (same pattern as `/api/track-history` and `lib/track-feedback.ts` — appropriate at this data volume, not millions of rows)
+- Hero figure: lifetime generation count (`usage` table, action=`generate`) — not just saved sets, so it reflects real usage even for sets never saved
+- Crowd hit rate meter + hit/miss-by-month chart + top proven/avoid track lists, straight from `set_feedback` (the crowd-feedback-loop feature) — this is the one view that makes that data visible at all; empty states explain how to start building it if a DJ hasn't rated anything yet
+- Genre breakdown (from saved `sets.meta.genre`) and 12-month activity chart (from `usage`) — both zero-filled for months/genres with no data, never a compressed/skipped timeline
+- Colors: hit/miss uses a validated status pair (`#0ca30c`/`#d03b3b`, checked via the dataviz skill's `validate_palette.js` against this app's `#0a0a14` card surface) rather than the brand cyan/magenta, since it's a genuine good/bad state, not a decorative series; genre and activity charts use a single brand-cyan hue since they're magnitude comparisons with the category identity already carried by a direct text label, not by color
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)
