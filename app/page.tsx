@@ -186,7 +186,7 @@ function PlannerPreview() {
 const TICKER_ITEMS = [
   '✦ No DJ experience needed',
   '✦ AI harmonic key matching',
-  '✦ 42 genres available',
+  '✦ 70+ genres available',
   '✦ Free forever plan',
   '✦ Rekordbox & Serato import',
   '✦ Real tracks from real artists',
@@ -774,6 +774,7 @@ export default function LandingPage() {
           <p style={{ fontSize:13, color:'#3a3a58', letterSpacing:.5 }}>
             © {new Date().getFullYear()} SetForge · AI-powered DJ set creation for everyone
           </p>
+          <Link href="/feedback" style={{ fontSize:12, color:'#6a6a8a', textDecoration:'underline', marginTop:8, display:'inline-block' }}>Share feedback</Link>
         </footer>
 
       </div>

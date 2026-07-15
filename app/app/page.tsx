@@ -15,13 +15,14 @@ import OnboardingWizard, { WizardResult } from '../components/OnboardingWizard'
 
 // ── Constants ─────────────────────────────────────────────────
 const GENRE_GROUPS: Record<string, string[]> = {
-  'House':          ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House'],
-  'Techno':         ['Techno','Melodic Techno','Peak Time Techno','Minimal / Deep Tech','Hard Techno','Industrial Techno','Dub Techno'],
-  'Bass & Breaks':  ['Drum & Bass','Dubstep','UK Garage / UKG','Breakbeat','Jungle','Bassline','Future Bass'],
-  'Trance':         ['Trance','Progressive Trance','Psytrance','Uplifting Trance','Hard Trance'],
-  'Urban / Hip Hop':['Hip Hop','Trap','R&B','Afrobeats','Amapiano','Reggaeton','Dancehall'],
-  'Classic / Groove':['Disco / Funk','Nu-Disco','Funky House','Acid House','Old School / 90s','Italo Disco'],
+  'House':          ['House','Tech House','Deep House','Progressive House','Afro House','Melodic House','Soulful House','Tribal House','Bass House','Future House','Tropical House','Electro House','Organic House','Latin House'],
+  'Techno':         ['Techno','Melodic Techno','Peak Time Techno','Minimal / Deep Tech','Hard Techno','Industrial Techno','Dub Techno','Acid Techno','Detroit Techno'],
+  'Bass & Breaks':  ['Drum & Bass','Dubstep','UK Garage / UKG','Breakbeat','Jungle','Bassline','Future Bass','Liquid DnB','Jersey Club','Footwork / Juke','Grime'],
+  'Trance':         ['Trance','Progressive Trance','Psytrance','Uplifting Trance','Hard Trance','Goa Trance','Tech Trance'],
+  'Urban / Hip Hop':['Hip Hop','Trap','R&B','Afrobeats','Amapiano','Reggaeton','Dancehall','Gqom','Baile Funk','Moombahton','Soca','Drill'],
+  'Classic / Groove':['Disco / Funk','Nu-Disco','Funky House','Acid House','Old School / 90s','Italo Disco','Boogie / Soul','Motown','Eurodance / 90s Dance'],
   'Open Format':    ['Open Format / Multi-Genre','Top 40 / Pop','Latin','Reggae / Dub'],
+  'Chill / Ambient':['Ambient','Downtempo','Chillout / Lounge','Trip Hop','Deep Ambient'],
 }
 const CROWDS  = ['Club Peak Hour','Warm-Up Set','Festival Main Stage','Wedding','House Party','Rooftop / Lounge']
 const FAMILIARITY_OPTIONS = ['Popular Hits','Balanced Mix','Deep Cuts / Underground']
@@ -890,6 +891,9 @@ export default function AppPage() {
           </Link>
           <Link href="/stats" style={{ textDecoration:'none' }}>
             <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>📊{!isMobile && ' STATS'}</button>
+          </Link>
+          <Link href="/feedback" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }} title="Feedback">💬{!isMobile && ' FEEDBACK'}</button>
           </Link>
           <NotificationBell />
           <UserButton />

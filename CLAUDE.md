@@ -36,6 +36,9 @@ SPOTIFY_REDIRECT_URI=https://setforge.online/api/admin/spotify/callback  # must 
 CRON_SECRET                            # bearer token Vercel Cron sends; rejects unauthenticated hits to /api/cron/*
 SENTRY_DSN                             # server/edge error reporting — unset means Sentry is a no-op, nothing breaks
 NEXT_PUBLIC_SENTRY_DSN                 # same, for browser-side errors
+RESEND_API_KEY                         # only email-sending dependency in this stack — unset means feedback still saves to the DB, just skips the email (lib/feedback-email.ts)
+FEEDBACK_TO_EMAIL                      # inbox that /feedback submissions are sent to
+FEEDBACK_FROM_EMAIL=SetForge Feedback <feedback@setforge.online>  # requires that sending domain verified in the Resend dashboard (SPF/DKIM at the registrar) — Resend's unverified default sender can only deliver to the Resend account's own signup email, not an arbitrary inbox
 ```
 
 ## Key File Structure
@@ -56,6 +59,8 @@ app/
 │   └── page.tsx                      # Public profile (/u?handle=xxx, or /u?me=1 for your own) — query param, not [handle] folder
 ├── stats/
 │   └── page.tsx                      # Personal stats dashboard (/stats) — own data only, auth-gated, not public like /u
+├── feedback/
+│   └── page.tsx                      # Feedback form (/feedback) — no auth required, linked from every nav + landing footer
 ├── admin/
 │   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
@@ -114,7 +119,8 @@ app/
 │   │   ├── route.ts                  # GET ?handle=xxx — public profile (Clerk identity, Community posts, public sets, follow counts)
 │   │   └── me/route.ts               # GET the caller's own handle, auto-provisioning one
 │   ├── follow/route.ts               # POST { userId } — toggle follow/unfollow, notifies on new follow
-│   └── stats/route.ts                # GET personal stats dashboard payload — see App Features
+│   ├── stats/route.ts                # GET personal stats dashboard payload — see App Features
+│   └── feedback/route.ts             # POST feedback (no auth required) — persists + emails via Resend, see App Features
 lib/
 ├── anthropic.ts                      # Singleton Anthropic client
 ├── subscription.ts                   # Free/Pro/Team tier logic + admin bypass + team-seat pass-through
@@ -122,6 +128,7 @@ lib/
 ├── notifications.ts                  # notify() — fire-and-forget writer called from likes/comments/team routes
 ├── track-feedback.ts                  # getFeedbackSignal() — aggregates set_feedback into a genre-scoped proven/avoid list for generate/route.ts
 ├── profile.ts                         # getOrCreateHandle()/getExistingHandle()/getUserIdForHandle() — public profile handles
+├── feedback-email.ts                   # sendFeedbackEmail() — the only real email-sending in this stack (Resend)
 ├── supabase.ts                       # Admin client
 ├── trending.ts                       # trending_tracks schema + getTrendingTracksForGenre()
 ├── trend-sources.ts                  # genre → Spotify editorial playlist ID config (10 seeded)
@@ -257,6 +264,13 @@ CREATE TABLE follows (
 -- community_posts.author_handle (additive) — same denormalized-snapshot
 -- pattern as author_name/author_image, set at post-creation time
 -- notifications.type CHECK widened to add 'follow'
+
+-- Feedback (supabase/feedback-schema.sql) — source of truth regardless of
+-- whether the Resend email actually sends; email_sent tracks that separately.
+CREATE TABLE feedback_submissions (
+  id uuid PK, user_id text, user_name text, user_email text,
+  message text, page_url text, email_sent boolean DEFAULT false, created_at timestamptz
+);
 ```
 
 ## Pricing Model
@@ -316,7 +330,7 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 
 ## App Features (all live)
 **Core:**
-- Genre selector (42 genres in 7 groups) + custom genre text input
+- Genre selector (71 genres in 8 groups, incl. Chill/Ambient for warm-up & lounge sets) + custom genre text input
 - Crowd, energy arc selectors
 - Vibe/mood + reference artists (optional)
 - Interactive energy curve (EnergyEditor SVG, 5 draggable points, Catmull-Rom spline)
@@ -403,6 +417,12 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - Crowd hit rate meter + hit/miss-by-month chart + top proven/avoid track lists, straight from `set_feedback` (the crowd-feedback-loop feature) — this is the one view that makes that data visible at all; empty states explain how to start building it if a DJ hasn't rated anything yet
 - Genre breakdown (from saved `sets.meta.genre`) and 12-month activity chart (from `usage`) — both zero-filled for months/genres with no data, never a compressed/skipped timeline
 - Colors: hit/miss uses a validated status pair (`#0ca30c`/`#d03b3b`, checked via the dataviz skill's `validate_palette.js` against this app's `#0a0a14` card surface) rather than the brand cyan/magenta, since it's a genuine good/bad state, not a decorative series; genre and activity charts use a single brand-cyan hue since they're magnitude comparisons with the category identity already carried by a direct text label, not by color
+
+**Feedback (/feedback):**
+- No auth required — signed-out visitors can submit too (pulls real name/email from Clerk when signed in; asks for an optional email otherwise so there's a way to follow up)
+- Always persisted to `feedback_submissions` regardless of whether the Resend email send succeeds — `email_sent` tracks that separately, so nothing is lost if `RESEND_API_KEY`/`FEEDBACK_TO_EMAIL` are unset or Resend has an outage
+- Rate-limited by overall submission volume (20 / 10 min), not per-user, since anonymous submissions have no stable identity to key on
+- Linked from every authenticated nav plus the signed-out landing page's footer (the only feature-nav link shown to signed-out visitors — everything else lives behind the signed-in nav)
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)
