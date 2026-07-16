@@ -517,7 +517,7 @@ export default function LandingPage() {
             <div style={{ maxWidth:820, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:14 }}>
               {[
                 { raw:'60', suffix:'s', label:'to generate your first set', numeric:true },
-                { raw:'42', suffix:'',  label:'genres to choose from',       numeric:true },
+                { raw:'71', suffix:'',  label:'genres to choose from',       numeric:true },
                 { raw:'0',  suffix:'',  label:'experience needed',            numeric:true },
                 { raw:'',   suffix:'Free', label:'forever plan available',   numeric:false },
               ].map((s, i) => (
