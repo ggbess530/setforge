@@ -444,6 +444,7 @@ export default function LandingPage() {
                     <Link href="/community" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Community</button></Link>
                     <Link href="/team" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Team</button></Link>
                     <Link href="/stats" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Stats</button></Link>
+                    <Link href="/wiki" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Wiki</button></Link>
                   </>
                 )}
                 <Link href="/app"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Open App' : 'Open App →'}</button></Link>
@@ -452,6 +453,9 @@ export default function LandingPage() {
               </>
             ) : (
               <>
+                {!isMobile && (
+                  <Link href="/wiki" style={{ textDecoration:'none' }}><button className="btn-ghost" style={{ padding:'7px 14px', borderRadius:8, fontSize:13 }}>Wiki</button></Link>
+                )}
                 <SignInButton mode="modal"><button className="btn-ghost" style={{ padding: isMobile ? '8px 12px' : '9px 18px', borderRadius:8, fontSize: isMobile ? 12 : 14 }}>Log in</button></SignInButton>
                 <SignUpButton mode="modal"><button className="btn-cta" style={{ padding: isMobile ? '8px 14px' : '9px 22px', borderRadius:8, fontSize: isMobile ? 12 : 14, whiteSpace:'nowrap' }}>{isMobile ? 'Start free' : 'Start free →'}</button></SignUpButton>
               </>
@@ -774,7 +778,10 @@ export default function LandingPage() {
           <p style={{ fontSize:13, color:'#3a3a58', letterSpacing:.5 }}>
             © {new Date().getFullYear()} SetForge · AI-powered DJ set creation for everyone
           </p>
-          <Link href="/feedback" style={{ fontSize:12, color:'#6a6a8a', textDecoration:'underline', marginTop:8, display:'inline-block' }}>Share feedback</Link>
+          <div style={{ display:'flex', justifyContent:'center', gap:16, marginTop:8 }}>
+            <Link href="/wiki" style={{ fontSize:12, color:'#6a6a8a', textDecoration:'underline' }}>DJ Wiki</Link>
+            <Link href="/feedback" style={{ fontSize:12, color:'#6a6a8a', textDecoration:'underline' }}>Share feedback</Link>
+          </div>
         </footer>
 
       </div>

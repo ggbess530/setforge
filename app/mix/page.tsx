@@ -178,6 +178,9 @@ export default function MixPage() {
             <Link href="/analyse" style={{ textDecoration:'none' }}>
               <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13, whiteSpace:'nowrap' }}>🔍{!isMobile && ' Analyse'}</button>
             </Link>
+            <Link href="/wiki" style={{ textDecoration:'none' }}>
+              <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13, whiteSpace:'nowrap' }}>📖{!isMobile && ' Wiki'}</button>
+            </Link>
             <UserButton />
           </div>
         </div>

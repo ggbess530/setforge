@@ -61,6 +61,8 @@ app/
 │   └── page.tsx                      # Personal stats dashboard (/stats) — own data only, auth-gated, not public like /u
 ├── feedback/
 │   └── page.tsx                      # Feedback form (/feedback) — no auth required, linked from every nav + landing footer
+├── wiki/
+│   └── page.tsx                      # DJ Wiki/glossary (/wiki) — no auth required, public SEO surface, static content from lib/glossary-data.ts, linked from every nav + landing footer
 ├── admin/
 │   └── page.tsx                      # Admin-only trending-tracks dashboard (status + manual refresh)
 ├── sign-in/[[...sign-in]]/page.tsx
@@ -139,6 +141,7 @@ lib/
 ├── pdf-export.ts                      # generateSetPdf()/viewPdfInNewTab() — client-side PDF via jsPDF, no server round-trip
 ├── fetch-timeout.ts                  # fetchWithTimeout() — bounds outbound Spotify/ReccoBeats calls
 ├── secure-compare.ts                 # timingSafeEqualStr() — constant-time secret comparison
+├── glossary-data.ts                  # DJ Wiki content (GLOSSARY array, CATEGORIES) — hand-authored, static, consumed by app/wiki/page.tsx
 └── log-error.ts                      # logError() — console.error + Sentry.captureException/Message
 ```
 
@@ -422,7 +425,13 @@ Admins can check pipeline health and force a scan without touching curl/Vercel l
 - No auth required — signed-out visitors can submit too (pulls real name/email from Clerk when signed in; asks for an optional email otherwise so there's a way to follow up)
 - Always persisted to `feedback_submissions` regardless of whether the Resend email send succeeds — `email_sent` tracks that separately, so nothing is lost if `RESEND_API_KEY`/`FEEDBACK_TO_EMAIL` are unset or Resend has an outage
 - Rate-limited by overall submission volume (20 / 10 min), not per-user, since anonymous submissions have no stable identity to key on
-- Linked from every authenticated nav plus the signed-out landing page's footer (the only feature-nav link shown to signed-out visitors — everything else lives behind the signed-in nav)
+- Linked from every authenticated nav plus the signed-out landing page's footer — one of only two feature-nav links (with Wiki) shown to signed-out visitors, everything else lives behind the signed-in nav
+
+**DJ Wiki (/wiki):**
+- Public glossary/reference page, no auth required — a content-marketing/SEO surface aimed at beginner DJs searching terms like "what is beatmatching," distinct from every other feature page which exists to serve signed-in users
+- Content is a static hand-authored data file (`lib/glossary-data.ts`, `GlossaryTerm[]`) grouped into 7 categories (Mixing Fundamentals, Harmony & Key, Track Anatomy, Gear & Software, Genres & Styles, Gigging & Business, SetForge Terms) — no DB, no API cost, edit the file directly to add/change terms
+- Client-side search (matches term + definition text) and category pill filter; deep-linkable via `#slug` — a link like `/wiki#camelot-wheel` scrolls to and briefly highlights that entry, so other pages or marketing copy can link straight to a specific term
+- Linked from every nav (signed-in and signed-out) plus the landing page footer — the second feature-nav link (with Feedback) visible to signed-out visitors
 
 ## Landing Page
 - Animated gradient blobs (CSS keyframes, no JS)

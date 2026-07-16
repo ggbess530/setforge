@@ -139,6 +139,7 @@ function ProfilePageInner() {
           </Link>
           <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center' }}>
             <Link href="/community" style={{ textDecoration: 'none' }}><button className="up-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12 }}>👥{!isMobile && ' Community'}</button></Link>
+            <Link href="/wiki" style={{ textDecoration: 'none' }}><button className="up-btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 14px', borderRadius: 8, fontSize: 12 }}>📖{!isMobile && ' Wiki'}</button></Link>
             {isSignedIn && <NotificationBell />}
             {isSignedIn ? <UserButton /> : <Link href="/sign-in"><button className="up-btn-primary" style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12 }}>Sign in</button></Link>}
           </div>

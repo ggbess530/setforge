@@ -427,6 +427,9 @@ export default function PlannerPage() {
           <Link href="/mix" style={{ textDecoration:'none' }}>
             <button className="btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 14px', borderRadius:7, fontSize:12, whiteSpace:'nowrap' }}>🎛️{!isMobile && ' Mix'}</button>
           </Link>
+          <Link href="/wiki" style={{ textDecoration:'none' }}>
+            <button className="btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 14px', borderRadius:7, fontSize:12, whiteSpace:'nowrap' }}>📖{!isMobile && ' Wiki'}</button>
+          </Link>
           <UserButton />
         </div>
       </nav>

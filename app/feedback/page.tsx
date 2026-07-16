@@ -58,6 +58,7 @@ export default function FeedbackPage() {
           </Link>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Link href="/app" className="fb-btn-ghost" style={{ padding: '7px 14px', borderRadius: 8, fontSize: 12 }}>⚡ Forge</Link>
+            <Link href="/wiki" className="fb-btn-ghost" style={{ padding: '7px 14px', borderRadius: 8, fontSize: 12 }}>📖 Wiki</Link>
             {isSignedIn && <NotificationBell />}
             {isSignedIn ? <UserButton /> : <Link href="/sign-in"><button className="fb-btn-primary" style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12 }}>Sign in</button></Link>}
           </div>

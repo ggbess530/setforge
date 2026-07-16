@@ -892,6 +892,9 @@ export default function AppPage() {
           <Link href="/stats" style={{ textDecoration:'none' }}>
             <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>📊{!isMobile && ' STATS'}</button>
           </Link>
+          <Link href="/wiki" style={{ textDecoration:'none' }}>
+            <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }} title="DJ Wiki">📖{!isMobile && ' WIKI'}</button>
+          </Link>
           <Link href="/feedback" style={{ textDecoration:'none' }}>
             <button className="sf-btn-ghost" style={{ padding: isMobile ? '5px 8px' : '5px 12px', borderRadius:8, fontSize:10, letterSpacing:1, fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }} title="Feedback">💬{!isMobile && ' FEEDBACK'}</button>
           </Link>

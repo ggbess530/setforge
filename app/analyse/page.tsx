@@ -314,6 +314,9 @@ export default function AnalysePage() {
             <Link href="/app" style={{ textDecoration:'none' }}>
               <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13 }}>⚡{!isMobile && ' Forge a set'}</button>
             </Link>
+            <Link href="/wiki" style={{ textDecoration:'none' }}>
+              <button className="btn-ghost" style={{ padding: isMobile ? '7px 10px' : '7px 16px', borderRadius:8, fontSize:13 }}>📖{!isMobile && ' Wiki'}</button>
+            </Link>
             <UserButton />
           </div>
         </div>
