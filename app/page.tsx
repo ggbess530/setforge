@@ -228,7 +228,7 @@ const TOOLS = [
   {
     icon: '⚡', name: 'Forge', href: '/app',
     title: 'Generate a complete DJ set from a description',
-    plain: 'The main event — start here if you’re new.',
+    plain: 'Where most people start.',
     desc: 'Pick a genre and crowd, shape the energy curve yourself (or type your own vibe in plain English) and SetForge builds a full tracklist: real songs, matched BPM, compatible musical keys, and notes on exactly how to mix each transition.',
     tag: 'No experience needed',
     preview: ForgePreview,
@@ -262,23 +262,22 @@ const TOOLS = [
 const FEATURES = [
   { icon:'🎵', title:'Picks the perfect tracks',        plain:'No more hours searching for songs that go together.', desc:"Our AI listens to your vibe — genre, mood, crowd — and selects real tracks that actually flow together. Like having a DJ friend who knows everything." },
   { icon:'🔗', title:'Songs that flow back-to-back',    plain:'Ever heard two songs clash when mixed? This stops that.', desc:"SetForge orders tracks so the musical keys are compatible. Every transition sounds intentional — even if you've never mixed before." },
-  { icon:'🔄', title:"Don't like a track? Swap it",     plain:"You're always in control.", desc:"If one track doesn't fit, hit swap. The AI replaces it with something matching the same energy — without breaking the flow." },
+  { icon:'🔄', title:"Don't like a track? Swap it",     plain:"You're always in control.", desc:"If one track doesn't fit, hit swap. The AI replaces it with something at the same energy, so the set keeps its flow." },
   { icon:'📈', title:'Sets that build to a peak',       plain:'Great DJ sets tell a story. Yours will too.', desc:'Choose how your set should feel — slow build, peak time, or cool-down. SetForge shapes every selection around that journey.' },
-  { icon:'☁️', title:'Your sets saved forever',         plain:'Come back any time and pick up where you left off.', desc:"Every set is saved to your personal cloud library. Rename them, load them, share them — they're yours forever." },
+  { icon:'☁️', title:'Your sets saved forever',         plain:'Come back any time and pick up where you left off.', desc:"Every set is saved to your personal cloud library. Rename it, reload it, or share it whenever you want." },
   { icon:'📤', title:'Ready for your DJ software',      plain:'Works with Rekordbox, Serato, Traktor, and more.', desc:'Export any set straight into your DJ software, or copy and paste it anywhere. One click to take it live.' },
 ]
 
 const WORKFLOW_FEATURES = [
   { icon:'📁', title:'Bring your own library',          plain:'Already have thousands of tracks tagged in Rekordbox or Serato?', desc:'Import your existing Rekordbox XML, Traktor NML, or Serato crates once — SetForge remembers it permanently and can build sets straight from your own music instead of only suggesting new tracks.' },
   { icon:'💡', title:'"Why this track?" — always explained', plain:'Never wonder why the AI picked something.', desc:'Every track in a generated set can be expanded to see exactly why it was chosen — how it fits the energy, the key, and the vibe you asked for. Nothing is a black box.' },
-  { icon:'📡', title:'Grounded in what’s trending right now', plain:'Not just historically famous tracks — what’s actually popping off today.', desc:'SetForge continuously tracks real, currently-charting tracks across genres and weaves relevant, current picks into your set alongside proven classics, so your sets don’t feel stuck in the past.' },
+  { icon:'📡', title:'Grounded in what’s trending right now', plain:'It picks up on what’s popping off today, not just the classics.', desc:'SetForge continuously tracks real, currently-charting tracks across genres and weaves relevant, current picks into your set alongside proven classics, so your sets don’t feel stuck in the past.' },
   { icon:'👍', title:'Learns what actually hits with your crowd', plain:'Rate tracks hit or miss after you play them.', desc:'Mark tracks from a saved set as a hit or miss after a real gig, and future sets lean on your proven crowd-pleasers while steering clear of what flopped. It gets sharper every time you play out.' },
-  { icon:'📊', title:'A dashboard for your own numbers',  plain:'See your habits at a glance, not buried in a spreadsheet.', desc:'A personal stats page tracks your lifetime sets, genre breakdown, monthly activity, and crowd hit-rate — pulled straight from your own history.' },
+  { icon:'📊', title:'A dashboard for your own numbers',  plain:'See your habits at a glance, not buried in a spreadsheet.', desc:'A personal stats page tracks your lifetime sets, genre breakdown, monthly activity, and crowd hit-rate, all pulled straight from your own history.' },
   { icon:'💬', title:'A community to share sets and mixes', plain:'Post, get feedback, follow other DJs.', desc:'Share blog-style posts or upload short mix/blend previews, like and comment on other members\' posts, and follow the DJs whose taste you trust.' },
-  { icon:'🌐', title:'A public profile that\'s actually yours', plain:'One link for your sets, mixes, and followers.', desc:'Every account gets a public profile showing shared sets, community posts, and follower count — link it in your bio, no separate portfolio needed.' },
-  { icon:'👥', title:'Team seats for crews and agencies', plain:'One subscription, up to five people.', desc:'Team-tier subscribers invite up to four teammates onto the same plan — shared library, shared sets feed, no separate billing per seat.' },
-  { icon:'📖', title:'A DJ glossary built right in',      plain:'Never Google "what\'s a Camelot wheel" mid-set.', desc:'A free, searchable Wiki covers mixing fundamentals, harmonic theory, gear, and terminology — no account needed, just a fast reference when you need one.' },
-  { icon:'🔗', title:'Share it like a mixtape',          plain:'Show off a set without sending a screenshot.', desc:'Every saved set gets a clean public link with the full tracklist and a "Forge Your Own" button — perfect for socials, group chats, or handing off to another DJ.' },
+  { icon:'🌐', title:'A public profile that\'s actually yours', plain:'One link for your sets, mixes, and followers.', desc:'Every account gets a public profile showing shared sets, community posts, and follower count. Link it in your bio and skip building a separate portfolio.' },
+  { icon:'👥', title:'Team seats for crews and agencies', plain:'One subscription, up to five people.', desc:'Team-tier subscribers invite up to four teammates onto the same plan, sharing one library and one sets feed with nobody billed separately.' },
+  { icon:'📖', title:'A DJ glossary built right in',      plain:'Never Google "what\'s a Camelot wheel" mid-set.', desc:'A free, searchable Wiki covers mixing fundamentals, harmonic theory, gear, and terminology. No account needed, just a quick answer when you need one.' },
 ]
 
 const FAQS = [
@@ -575,7 +574,7 @@ export default function LandingPage() {
                   You don&apos;t need to know anything<br />about DJing to start.
                 </h2>
                 <p style={{ fontSize:16, color:'#8a8aaa', maxWidth:600, lineHeight:1.8, marginBottom:32 }}>
-                  Most DJ tools assume you already have a tagged library, know your music theory, and have years behind the decks. SetForge doesn&apos;t assume any of that — tell it the vibe you&apos;re going for and it builds the whole set around it. Already run Rekordbox, Serato, or Traktor? Export your finished set straight into it with one click, no extra work either way.
+                  Most DJ tools assume you already have a tagged library, know your music theory, and have years behind the decks. SetForge doesn&apos;t assume any of that. Tell it the vibe you&apos;re going for and it builds the whole set around it. Already run Rekordbox, Serato, or Traktor? Export your finished set straight into it with one click, no extra work either way.
                 </p>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))', gap:12 }}>
                   {['No library to import','No music theory knowledge','No DJ software required','No experience necessary'].map(text => (
@@ -596,7 +595,7 @@ export default function LandingPage() {
               <div style={{ fontSize:12, color:M, fontWeight:700, letterSpacing:3, marginBottom:14, textTransform:'uppercase' }}>✦ Four tools, one platform</div>
               <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Everything from your first set to a full night</h2>
               <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:560, margin:'0 auto', lineHeight:1.7 }}>
-                Build a set, grade one, test a transition, or plan a whole night — four tools that cover the job end to end.
+                Start with Forge for a new set. Reach for Analyser, Mix &amp; Mashup Lab, or Night Planner when you need them.
               </p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:18 }}>
