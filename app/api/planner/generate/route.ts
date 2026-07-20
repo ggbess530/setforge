@@ -20,6 +20,14 @@ export async function POST(req: Request) {
     }
 
     const { slot, prevSlot, nextSlot, includeMixingNotes = true } = await req.json()
+    if (!slot?.genre || !slot?.duration) {
+      return NextResponse.json({ error: 'Missing slot details.' }, { status: 400 })
+    }
+
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
 
     const prevContext = prevSlot
       ? `\nPREVIOUS SET (${prevSlot.djName || 'Previous DJ'}): ${prevSlot.genre}, ${prevSlot.duration} min, ended at energy ${prevSlot.targetEnergy}/10. The first track of your set MUST flow naturally from this.`
@@ -66,7 +74,6 @@ Respond ONLY with valid JSON:
     const raw = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const set = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json({ set, quota: { tier: sub.tier, remaining: sub.remainingGenerations === null ? 'unlimited' : sub.remainingGenerations - 1 } })
 
   } catch (err) {

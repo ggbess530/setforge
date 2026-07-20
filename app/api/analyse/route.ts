@@ -68,6 +68,11 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const trackList = tracks
       .map(t => `${t.n}. ${t.artist} — ${t.title}${t.bpm ? ` [${t.bpm} BPM]` : ''}${t.key ? ` [${t.key}]` : ''}`)
       .join('\n')
@@ -170,8 +175,6 @@ IMPORTANT: Keep ALL text fields SHORT (1-2 sentences max). For trackNotes, only 
     if (!report.verdict)            report.verdict            = 'Keep practising!'
     if (!report.peakMoment)         report.peakMoment         = { trackN:1, artist:'', title:'', reason:'' }
     if (!report.weakestTransition)  report.weakestTransition  = { fromN:1, toN:2, fromTitle:'', toTitle:'', reason:'', fix:'' }
-
-    await recordUsage(userId, 'generate')
 
     // Save to track_history so it ties into the history feature
     if (tracks.length > 0) {

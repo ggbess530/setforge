@@ -266,6 +266,11 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole generation" to one DB write).
+    await recordUsage(userId, 'generate')
+
     // Energy curve for this set
     const energyCurve = energyPoints?.length === 5
       ? interpolateEnergy(energyPoints, targetTracks)
@@ -343,8 +348,6 @@ export async function POST(req: Request) {
     }
 
     finalSet.tracks = attachPaths(finalSet.tracks, rawTracks)
-
-    await recordUsage(userId, 'generate')
 
     return NextResponse.json({
       set: finalSet,

@@ -28,6 +28,11 @@ export async function POST(req: Request) {
 
     if (!track) return NextResponse.json({ error: 'No track provided.' }, { status: 400 })
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     // ── Key compatibility analysis ──────────────────────────────
     function keysCompatible(k1?: string, k2?: string): string {
       if (!k1 || !k2) return 'unknown'
@@ -92,8 +97,6 @@ Respond with JSON only:
 
     const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
-
-    await recordUsage(userId, 'generate')
 
     return NextResponse.json(data)
 

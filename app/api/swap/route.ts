@@ -23,6 +23,11 @@ export async function POST(req: Request) {
 
     if (!target) return NextResponse.json({ error: 'Missing target track' }, { status: 400 })
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const existingList = (existing ?? [])
       .map((t: { artist: string; title: string }) => `"${t.artist} — ${t.title}"`)
       .join(', ')
@@ -76,7 +81,6 @@ ${keyMatch ? `- Strict Camelot key rules: compatible keys for ${target.key} are 
       console.warn('[swap] metadata enrichment failed, keeping AI-guessed values', err)
     }
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json({ suggestions: data.suggestions })
 
   } catch (err: unknown) {

@@ -29,6 +29,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No track provided.' }, { status: 400 })
     }
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const prompt = `You are a world-class DJ. Write ONE short transition note (a single sentence, real DJ terminology) describing how to mix the following track into its position in a set.
 
 Track: "${track.artist} — ${track.title}"${track.bpm ? ` (${track.bpm} BPM)` : ''}${track.key ? ` (${track.key})` : ''}${track.energy ? `, energy ${track.energy}/10` : ''}
@@ -48,7 +53,6 @@ Respond ONLY with valid JSON, no markdown:
     const raw  = message.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json({ transition: data.transition || '' })
 
   } catch (err: unknown) {

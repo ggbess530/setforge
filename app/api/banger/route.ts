@@ -34,6 +34,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing current track.' }, { status: 400 })
     }
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const existingList = (existing ?? [])
       .map((t: { artist: string; title: string }) => `"${t.artist} — ${t.title}"`)
       .join(', ')
@@ -69,7 +74,6 @@ Respond ONLY with valid JSON, no markdown:
       console.warn('[banger] metadata enrichment failed, keeping AI-guessed values', err)
     }
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json({ track })
 
   } catch (err: unknown) {

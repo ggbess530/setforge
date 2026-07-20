@@ -17,6 +17,11 @@ export async function POST(req: Request) {
     const { artist, title } = await req.json()
     if (!artist || !title) return NextResponse.json({ bpm: null, key: null })
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const msg = await anthropic.messages.create({
       model:      CLAUDE_MODEL,
       max_tokens: 80,
@@ -39,7 +44,6 @@ Rules:
     const text = msg.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
     const data = JSON.parse(text)
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json({
       bpm: typeof data.bpm === 'number' ? Math.round(data.bpm) : null,
       key: typeof data.key === 'string' && /^\d+[AB]$/i.test(data.key) ? data.key.toUpperCase() : null,

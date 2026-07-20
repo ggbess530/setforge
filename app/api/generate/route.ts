@@ -316,6 +316,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Genre must be under 120 characters.' }, { status: 400 })
     }
 
+    // Record usage now, before the (multi-second) Anthropic call — checking
+    // the limit and recording it aren't atomic, so gap-between-them is the
+    // exploit window for firing parallel requests past the cap. Recording
+    // here instead of after success shrinks that window from "the whole
+    // generation" to "one DB write," at the cost of a failed generation
+    // still spending a credit.
+    await recordUsage(userId, 'generate')
+
     // How many tracks?
     const MAX_TRACKS = sub.isFree ? 15 : 50
     const targetTracks = Math.min(
@@ -424,8 +432,6 @@ export async function POST(req: Request) {
         tracks:  [...(chunk1.tracks || []), ...chunk2Tracks],
       }
     }
-
-    await recordUsage(userId, 'generate')
 
     const tracksArr = finalSet.tracks as (EnrichableTrack & { n: number; energy: number; transition?: string })[]
 

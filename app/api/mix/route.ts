@@ -18,6 +18,11 @@ export async function POST(req: Request) {
     const { track1, track2 } = await req.json()
     if (!track1 || !track2) return NextResponse.json({ error: 'Two tracks required.' }, { status: 400 })
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const bpmDelta = Math.round(((track2.bpm || 0) - (track1.bpm || 0)) * 10) / 10
 
     const prompt = `You are an expert DJ educator giving precise, practical mixing advice.
@@ -55,7 +60,6 @@ Return ONLY valid JSON, no markdown:
     const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json(data)
   } catch (err) {
     logError('[POST /api/mix]', err)

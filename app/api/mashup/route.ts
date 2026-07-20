@@ -20,6 +20,11 @@ export async function POST(req: Request) {
     const { artist, title, bpm, key, genres } = await req.json()
     if (!artist && !title) return NextResponse.json({ error: 'Track info required.' }, { status: 400 })
 
+    // Record usage now, before the Anthropic call — see generate/route.ts
+    // for why (check-then-record isn't atomic; recording early shrinks the
+    // parallel-request exploit window from "the whole call" to one DB write).
+    await recordUsage(userId, 'generate')
+
     const prompt = `You are an expert DJ and music producer specialising in mashups and creative track combinations.
 
 SOURCE TRACK: "${artist} — ${title}"${bpm ? ` [${bpm} BPM]` : ''}${key ? ` [${key} Camelot key]` : ''}
@@ -60,7 +65,6 @@ Return ONLY valid JSON, no markdown:
     const raw  = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
     const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    await recordUsage(userId, 'generate')
     return NextResponse.json(data)
   } catch (err) {
     logError('[POST /api/mashup]', err)
