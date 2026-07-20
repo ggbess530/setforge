@@ -279,14 +279,16 @@ CREATE TABLE feedback_submissions (
 ## Pricing Model
 | Tier | Price | Limits |
 |------|-------|--------|
-| Free | $0/forever | 5 sets/month, all features |
-| Pro | $9/month | Unlimited sets |
-| Team | $19/month | Pro + up to 5 seats + shared team sets |
+| Free | $0/forever | 5 generations/month |
+| Pro | $9/month | 150 generations/month (soft cap — reads as unlimited, bounds worst-case API spend) |
+| Team | $19/month | 400 generations/month, **pooled** across owner + up to 4 seats |
 
-- 7-day Pro trial auto-created on first signup
+- **"Generation" = any `recordUsage(userId, 'generate')` call** — covers `/generate`, `/swap`, `/analyse`, `/import`, `/why`, `/banger`, `/mix`, `/mashup`, `/transition-note`, `/track-info`, `/planner/generate`. All of these hit `claude-sonnet-4-6` ($3/$15 per MTok as of 2026-07); the pool exists to bound total Anthropic spend per account, not just "full set" creations.
+- `MONTHLY_LIMITS` in `lib/subscription.ts` is the single source of truth for the numbers above — update there, not just in landing-page copy (`app/page.tsx` `TIERS`) or the checkout receipt note (`app/api/checkout/route.ts`).
+- 7-day Pro trial auto-created on first signup — capped at `TRIAL_LIMIT` (30) generations, tracked from trial start (`trial_ends_at - 7 days`), not calendar month. No payment method required to start it, so the cap exists specifically to bound trial-abuse cost.
 - Trial expires → auto-downgraded to free (never fully blocked)
-- `ADMIN_USER_IDS` env var gives unlimited Pro access to specified Clerk user IDs
-- Team tier: the paying user ("owner") invites up to 4 teammates from `/team`; invited members ride the owner's subscription (`checkSubscription()` resolves this via `lib/team.ts`'s `getRiddenTeam()`) — no separate billing, no personal trial row created for them. If the owner's subscription lapses, members silently fall back to their own free/trial status next time `checkSubscription()` runs — never fully blocked, same philosophy as the free tier.
+- `ADMIN_USER_IDS` env var gives unlimited Pro access to specified Clerk user IDs (the only `remainingGenerations: null` case left in the codebase)
+- Team tier: the paying user ("owner") invites up to 4 teammates from `/team`; invited members ride the owner's subscription (`checkSubscription()` resolves this via `lib/team.ts`'s `getRiddenTeam()`) — no separate billing, no personal trial row created for them. The 400/month cap is **shared across the whole team** (`getTeamMonthlyUsage()` sums `usage` rows across owner + all `team_members` via `getTeamMemberIds()`) — a 5-seat team can't multiply the cap 5x by spreading generations across seats. If the owner's subscription lapses, members silently fall back to their own free/trial status next time `checkSubscription()` runs — never fully blocked, same philosophy as the free tier.
 
 ## Subscription Flow
 ```

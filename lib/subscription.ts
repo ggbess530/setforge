@@ -1,16 +1,27 @@
 // ▸ Place at: lib/subscription.ts
 
 import { createAdminClient } from './supabase'
-import { getRiddenTeam }     from './team'
+import { getRiddenTeam, getOwnedTeam, getTeamMemberIds } from './team'
 
 export type Tier = 'free' | 'pro' | 'team'
 
-// Monthly generation limits — null means unlimited
+// Monthly generation limits — null means unlimited. Pro/Team are soft caps,
+// not metered billing: sized well above real usage (typical DJs generate a
+// handful of sets a week) so they read as "unlimited" in practice, while
+// bounding worst-case Anthropic API spend per account per month. team is a
+// POOLED cap shared by the owner + all invited seats (see getTeamMonthlyUsage)
+// — otherwise a 5-seat team could multiply the cap 5x by spreading usage
+// across members.
 const MONTHLY_LIMITS: Record<Tier, number | null> = {
   free: 5,
-  pro:  null,
-  team: null,
+  pro:  150,
+  team: 400,
 }
+
+// 7-day trial gives full Pro access with no payment method on file — cap it
+// like a generous trial rather than truly unlimited, so a burst of signups
+// (or repeat trial abuse) can't run up API spend with zero revenue behind it.
+const TRIAL_LIMIT = 30
 
 export interface TrialInfo {
   active:   boolean
@@ -31,17 +42,50 @@ export function isAdmin(userId: string): boolean {
     .includes(userId)
 }
 
+function startOfMonth(): Date {
+  const d = new Date()
+  d.setDate(1)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 async function getMonthlyUsage(userId: string): Promise<number> {
   const db = createAdminClient()
-  const startOfMonth = new Date()
-  startOfMonth.setDate(1)
-  startOfMonth.setHours(0, 0, 0, 0)
   const { count } = await db
     .from('usage')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('action', 'generate')
-    .gte('created_at', startOfMonth.toISOString())
+    .gte('created_at', startOfMonth().toISOString())
+  return count ?? 0
+}
+
+// Sums 'generate' usage across every seat on a team (owner + invited members)
+// so the team-tier cap is a shared pool, not a per-seat multiplier.
+async function getTeamMonthlyUsage(teamId: string, ownerId: string): Promise<number> {
+  const db = createAdminClient()
+  const memberIds = await getTeamMemberIds(teamId, ownerId)
+  const { count } = await db
+    .from('usage')
+    .select('*', { count: 'exact', head: true })
+    .in('user_id', memberIds)
+    .eq('action', 'generate')
+    .gte('created_at', startOfMonth().toISOString())
+  return count ?? 0
+}
+
+// Usage since the trial started (trial is always exactly 7 days), not
+// calendar-month — a trial never spans a full month, so the monthly window
+// getMonthlyUsage uses would undercount it.
+async function getTrialUsage(userId: string, trialEndsAt: string): Promise<number> {
+  const db = createAdminClient()
+  const trialStart = new Date(new Date(trialEndsAt).getTime() - 7 * 24 * 60 * 60 * 1000)
+  const { count } = await db
+    .from('usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('action', 'generate')
+    .gte('created_at', trialStart.toISOString())
   return count ?? 0
 }
 
@@ -54,11 +98,15 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
   }
 
   // Invited team member riding an active Team owner's subscription — no
-  // separate billing, no personal trial row needed. Falls through to normal
-  // per-user logic below if the owner's sub lapses (never fully blocked).
+  // separate billing, no personal trial row needed. Shares the owner's team
+  // generation pool (see getTeamMonthlyUsage) rather than getting their own
+  // unlimited allotment. Falls through to normal per-user logic below if the
+  // owner's sub lapses (never fully blocked).
   const riddenTeam = await getRiddenTeam(userId)
   if (riddenTeam) {
-    return { active: true, tier: 'team', remainingGenerations: null }
+    const used      = await getTeamMonthlyUsage(riddenTeam.id, riddenTeam.ownerId)
+    const remaining = Math.max(0, (MONTHLY_LIMITS.team ?? 0) - used)
+    return { active: true, tier: 'team', remainingGenerations: remaining }
   }
 
   const db = createAdminClient()
@@ -78,7 +126,7 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
       trial_ends_at: trialEndsAt,
       updated_at:    new Date().toISOString(),
     })
-    return { active: true, tier: 'pro', remainingGenerations: null, trial: { active: true, daysLeft: 7 } }
+    return { active: true, tier: 'pro', remainingGenerations: TRIAL_LIMIT, trial: { active: true, daysLeft: 7 } }
   }
 
   // ── Active paid subscription ──────────────────────────────
@@ -86,6 +134,12 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
     const tier = (sub.tier ?? 'free') as Tier
     if (MONTHLY_LIMITS[tier] === null) {
       return { active: true, tier, remainingGenerations: null }
+    }
+    if (tier === 'team') {
+      const owned = await getOwnedTeam(userId)
+      const used      = owned ? await getTeamMonthlyUsage(owned.id, userId) : await getMonthlyUsage(userId)
+      const remaining = Math.max(0, (MONTHLY_LIMITS.team ?? 0) - used)
+      return { active: true, tier, remainingGenerations: remaining }
     }
     const used      = await getMonthlyUsage(userId)
     const remaining = Math.max(0, (MONTHLY_LIMITS[tier] ?? 5) - used)
@@ -98,8 +152,10 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
     const trialEnd = new Date(sub.trial_ends_at)
 
     if (now < trialEnd) {
-      const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-      return { active: true, tier: 'pro', remainingGenerations: null, trial: { active: true, daysLeft } }
+      const daysLeft  = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const used      = await getTrialUsage(userId, sub.trial_ends_at)
+      const remaining = Math.max(0, TRIAL_LIMIT - used)
+      return { active: true, tier: 'pro', remainingGenerations: remaining, trial: { active: true, daysLeft } }
     }
 
     // Trial just expired — auto-downgrade to free tier

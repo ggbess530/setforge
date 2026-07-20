@@ -46,7 +46,7 @@ export async function POST(req: Request) {
             },
             product_options: {
               redirect_url:       'https://setforge.online/app?upgraded=true',
-              receipt_thank_you_note: 'Thank you for upgrading to SetForge Pro — it genuinely means a lot.\n\nYou now have unlimited set generations, full library import, custom energy curves, and everything else Pro has to offer. No limits, no restrictions — just build.\n\nIf you ever run into anything or have an idea for a feature you\'d love to see, reply to this email directly. I read every one.\n\nNow go forge something great.\n\nGarrett\nFounder, SetForge',
+              receipt_thank_you_note: 'Thank you for upgrading to SetForge Pro — it genuinely means a lot.\n\nYou now have 150 set generations a month, full library import, custom energy curves, and everything else Pro has to offer — plenty for regular DJ work.\n\nIf you ever run into anything or have an idea for a feature you\'d love to see, reply to this email directly. I read every one.\n\nNow go forge something great.\n\nGarrett\nFounder, SetForge',
               receipt_button_text: 'Open SetForge',
               receipt_link_url:    'https://setforge.online/app',
             },

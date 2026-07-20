@@ -856,7 +856,7 @@ export default function AppPage() {
         <div style={{ display:'flex', alignItems:'center', gap: isMobile ? 6 : 14, flexShrink:0 }}>
           {quota?.trial?.active && !isMobile && (
             <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:`1px solid ${quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C}`, color:quota.trial.daysLeft<=2?M:quota.trial.daysLeft<=4?'#f59e0b':C }}>
-              {quota.trial.daysLeft}d left in trial
+              {quota.trial.daysLeft}d left in trial{typeof quota.remaining === 'number' ? ` · ${quota.remaining} left` : ''}
             </div>
           )}
           {quota?.isFree && !quota?.trial?.active && (
@@ -869,6 +869,14 @@ export default function AppPage() {
               <Link href="/#pricing" style={{ textDecoration:'none' }}>
                 <div style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, background:`linear-gradient(100deg,${M},${C})`, color:'#06060c', fontWeight:700, cursor:'pointer' }}>Upgrade</div>
               </Link>
+            </div>
+          )}
+          {!quota?.isFree && !quota?.trial?.active && typeof quota?.remaining === 'number' && !isMobile && (
+            <div
+              title={quota.tier==='team' ? "Shared across your whole team — resets on the 1st" : "Resets on the 1st"}
+              style={{ fontSize:10, fontFamily:"'JetBrains Mono',monospace", padding:'4px 10px', borderRadius:999, border:'1px solid #2a2a42', color: quota.remaining<=10 ? '#f59e0b' : '#9a9ab8' }}
+            >
+              {quota.remaining} generations left this month
             </div>
           )}
           <Link href="/analyse" style={{ textDecoration:'none' }}>

@@ -262,13 +262,13 @@ const FAQS = [
   { q:'Will the AI suggest real songs I can find?', a:"Yes. SetForge picks real, well-known tracks on Beatport, Spotify, and major platforms. Every track has direct search links so you can preview and buy instantly." },
   { q:'What is the energy curve and how do I use it?', a:'The energy curve is an interactive graph you drag to shape how your set builds over time — one point per track. Built-in presets cover common shapes (Slow Build, Peak Time, Cool Down, Rollercoaster, and more), or draw your own from scratch. When in doubt, Slow Build is the most crowd-pleasing.' },
   { q:'How is this different from a Spotify playlist?', a:"A Spotify playlist is just songs in a row. SetForge creates a DJ set — every track chosen for BPM, musical key, energy level, and how it flows into the next one. You also get transition notes telling you exactly how to mix. It's the difference between a list and a performance." },
-  { q:'Is there a free plan?', a:"Yes — 5 set generations every month, forever. No credit card, no expiry. You also get a 7-day Pro trial on signup to try unlimited generations before deciding." },
+  { q:'Is there a free plan?', a:"Yes — 5 set generations every month, forever. No credit card, no expiry. You also get a 7-day Pro trial on signup — 30 generations to try the full experience before deciding." },
 ]
 
 const TIERS = [
   { name:'Free',  price:'$0', period:'forever',  highlight:false, badge:null,          color:'#9a9ab8', desc:'Perfect for getting started.', perks:["5 set generations / month","Swap any track","Save to library","Export to DJ software","Share sets publicly"], cta:'Start free — no card needed' },
-  { name:'Pro',   price:'$9', period:'/month',   highlight:true,  badge:'Most popular', color:M,         desc:'For DJs creating sets regularly.', perks:['Unlimited set generations','Unlimited track swaps','Everything in Free','Priority generation speed','Early feature access'], cta:'Start 7-day free trial' },
-  { name:'Team',  price:'$19', period:'/month',  highlight:false, badge:null,          color:C,         desc:'For agencies and DJ teams.', perks:['Everything in Pro','Team member access','Custom export branding','Dedicated support'], cta:'Start 7-day free trial' },
+  { name:'Pro',   price:'$9', period:'/month',   highlight:true,  badge:'Most popular', color:M,         desc:'For DJs creating sets regularly.', perks:['150 generations / month','Everything in Free','Priority generation speed','Early feature access'], cta:'Start 7-day free trial' },
+  { name:'Team',  price:'$19', period:'/month',  highlight:false, badge:null,          color:C,         desc:'For agencies and DJ teams.', perks:['400 generations / month, shared','Everything in Pro','Team member access','Custom export branding','Dedicated support'], cta:'Start 7-day free trial' },
 ]
 
 export default function LandingPage() {

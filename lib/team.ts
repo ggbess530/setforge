@@ -68,3 +68,16 @@ export async function getMyTeamId(userId: string): Promise<string | null> {
   const ridden = await getRiddenTeam(userId)
   return ridden?.id ?? null
 }
+
+// Every human sharing a team's generation pool: the owner plus every invited
+// member. Used by lib/subscription.ts to sum usage across the whole team
+// rather than per-seat, so a 5-seat team can't multiply the team-tier cap by
+// 5x by spreading generations across members.
+export async function getTeamMemberIds(teamId: string, ownerId: string): Promise<string[]> {
+  const db = createAdminClient()
+  const { data: members } = await db
+    .from('team_members')
+    .select('user_id')
+    .eq('team_id', teamId)
+  return [ownerId, ...(members ?? []).map(m => m.user_id)]
+}

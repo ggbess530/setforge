@@ -290,8 +290,8 @@ export async function POST(req: Request) {
     if (sub.remainingGenerations !== null && sub.remainingGenerations <= 0) {
       return NextResponse.json({
         error: sub.isFree
-          ? "You've used all 5 free sets this month. Upgrade to Pro for unlimited sets."
-          : `Monthly limit reached. Upgrade for unlimited sets.`,
+          ? "You've used all 5 free sets this month. Upgrade to Pro for a lot more."
+          : "You've hit this month's generation cap. It resets on the 1st — need more sooner? Reach out via feedback.",
         code: 'LIMIT_REACHED', isFree: sub.isFree,
       }, { status: 429 })
     }
