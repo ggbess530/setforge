@@ -177,7 +177,7 @@ export default function TeamPage() {
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
               {status.pendingInviteForMe.invitedBy} invited you to join <span style={{ color: C }}>{status.pendingInviteForMe.teamName}</span>
             </div>
-            <div style={{ fontSize: 12, color: '#8a8aa8', marginBottom: 18 }}>Accepting gives you unlimited sets under their Team plan — no separate billing.</div>
+            <div style={{ fontSize: 12, color: '#8a8aa8', marginBottom: 18 }}>Accepting gives you access to their Team plan&apos;s 400 generations/month (shared across the team) — no separate billing.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => respondInvite(true)} disabled={inviting} className="tm-btn-primary" style={{ padding: '10px 24px', borderRadius: 9, fontSize: 12 }}>ACCEPT</button>
               <button onClick={() => respondInvite(false)} disabled={inviting} className="tm-btn-ghost" style={{ padding: '10px 24px', borderRadius: 9, fontSize: 12 }}>DECLINE</button>
