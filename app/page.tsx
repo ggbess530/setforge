@@ -95,6 +95,22 @@ function TypewriterGenre() {
   )
 }
 
+// ── Hero waveform accent ────────────────────────────────────────
+function HeroWaveform() {
+  const heights = [14, 26, 42, 56, 36, 62, 44, 24, 16]
+  return (
+    <div className="hero-item" style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:5, height:62, marginBottom:22, animationDelay:'0ms' }}>
+      {heights.map((h, i) => (
+        <span key={i} className="wave-bar" style={{
+          width:6, height:h, borderRadius:3,
+          background: i % 2 === 0 ? `linear-gradient(180deg,${C},${M})` : `linear-gradient(180deg,${M},${C})`,
+          animationDelay: `${i * 90}ms`,
+        }} />
+      ))}
+    </div>
+  )
+}
+
 // ── Tool card mini previews ────────────────────────────────────
 function ForgePreview() {
   const rows = [
@@ -188,7 +204,7 @@ const TICKER_ITEMS = [
   '✦ AI harmonic key matching',
   '✦ 70+ genres available',
   '✦ Free forever plan',
-  '✦ Rekordbox & Serato import',
+  '✦ Rekordbox, Serato & Traktor export',
   '✦ Real tracks from real artists',
   '✦ Custom energy curves',
   '✦ 7-day Pro trial',
@@ -199,6 +215,12 @@ const TICKER_ITEMS = [
   '✦ Tracks grounded in what’s trending',
   '✦ Drag to reorder tracks',
   '✦ Lock your favourite tracks',
+  '✦ Crowd feedback learns your hits',
+  '✦ Personal stats dashboard',
+  '✦ Public DJ profiles',
+  '✦ Community feed for mixes & tips',
+  '✦ Team seats for crews & agencies',
+  '✦ Built-in DJ Wiki & glossary',
   '✦ Works in any browser',
 ]
 
@@ -250,25 +272,31 @@ const WORKFLOW_FEATURES = [
   { icon:'📁', title:'Bring your own library',          plain:'Already have thousands of tracks tagged in Rekordbox or Serato?', desc:'Import your existing Rekordbox XML, Traktor NML, or Serato crates once — SetForge remembers it permanently and can build sets straight from your own music instead of only suggesting new tracks.' },
   { icon:'💡', title:'"Why this track?" — always explained', plain:'Never wonder why the AI picked something.', desc:'Every track in a generated set can be expanded to see exactly why it was chosen — how it fits the energy, the key, and the vibe you asked for. Nothing is a black box.' },
   { icon:'📡', title:'Grounded in what’s trending right now', plain:'Not just historically famous tracks — what’s actually popping off today.', desc:'SetForge continuously tracks real, currently-charting tracks across genres and weaves relevant, current picks into your set alongside proven classics, so your sets don’t feel stuck in the past.' },
+  { icon:'👍', title:'Learns what actually hits with your crowd', plain:'Rate tracks hit or miss after you play them.', desc:'Mark tracks from a saved set as a hit or miss after a real gig, and future sets lean on your proven crowd-pleasers while steering clear of what flopped. It gets sharper every time you play out.' },
+  { icon:'📊', title:'A dashboard for your own numbers',  plain:'See your habits at a glance, not buried in a spreadsheet.', desc:'A personal stats page tracks your lifetime sets, genre breakdown, monthly activity, and crowd hit-rate — pulled straight from your own history.' },
+  { icon:'💬', title:'A community to share sets and mixes', plain:'Post, get feedback, follow other DJs.', desc:'Share blog-style posts or upload short mix/blend previews, like and comment on other members\' posts, and follow the DJs whose taste you trust.' },
+  { icon:'🌐', title:'A public profile that\'s actually yours', plain:'One link for your sets, mixes, and followers.', desc:'Every account gets a public profile showing shared sets, community posts, and follower count — link it in your bio, no separate portfolio needed.' },
+  { icon:'👥', title:'Team seats for crews and agencies', plain:'One subscription, up to five people.', desc:'Team-tier subscribers invite up to four teammates onto the same plan — shared library, shared sets feed, no separate billing per seat.' },
+  { icon:'📖', title:'A DJ glossary built right in',      plain:'Never Google "what\'s a Camelot wheel" mid-set.', desc:'A free, searchable Wiki covers mixing fundamentals, harmonic theory, gear, and terminology — no account needed, just a fast reference when you need one.' },
   { icon:'🔗', title:'Share it like a mixtape',          plain:'Show off a set without sending a screenshot.', desc:'Every saved set gets a clean public link with the full tracklist and a "Forge Your Own" button — perfect for socials, group chats, or handing off to another DJ.' },
 ]
 
 const FAQS = [
   { q:'Do I need to be a DJ to use SetForge?', a:"Not at all. SetForge was built with beginners in mind. If you love music and want to build a set — even your first one ever — SetForge does the hard work. No experience needed." },
-  { q:'What’s the difference between Forge, Analyser, Mix, and Planner?', a:'Forge builds a brand-new set from scratch — start here. Analyser grades a tracklist you (or someone else) already made. Mix & Mashup Lab checks whether two specific tracks work together, or finds mashup candidates for one. Night Planner coordinates multiple back-to-back DJ sets for an event. Most people only ever need Forge — the others are there when you need them.' },
+  { q:'What’s the difference between Forge, Analyser, Mix, and Planner?', a:'Forge builds a brand-new set from scratch — start here. Analyser grades a tracklist you (or someone else) already made. Mix & Mashup Lab checks whether two specific tracks work together, or finds mashup candidates for one. Night Planner coordinates multiple back-to-back DJ sets for an event. Each one solves a different part of putting a set together, and they all work off the same track knowledge under the hood.' },
   { q:'What is BPM and why does it matter?', a:"BPM is Beats Per Minute — basically how fast a song is. Most club music sits between 120–130 BPM. Matching BPMs makes mixes smooth instead of jarring. SetForge handles this automatically." },
   { q:'What is harmonic mixing? Do I need to understand it?', a:"Harmonic mixing means choosing songs in compatible musical keys. Pro DJs spend years learning this. SetForge does it instantly for every track, so you get pro transitions without knowing any music theory." },
   { q:'Do I need DJ equipment or software?', a:"No. SetForge works in any browser on any device. If you have Rekordbox or Serato, you can export directly, or import your existing library so sets are built from music you already own. But you can also just use SetForge to plan and discover music." },
   { q:'Will the AI suggest real songs I can find?', a:"Yes. SetForge picks real, well-known tracks on Beatport, Spotify, and major platforms. Every track has direct search links so you can preview and buy instantly." },
   { q:'What is the energy curve and how do I use it?', a:'The energy curve is an interactive graph you drag to shape how your set builds over time — one point per track. Built-in presets cover common shapes (Slow Build, Peak Time, Cool Down, Rollercoaster, and more), or draw your own from scratch. When in doubt, Slow Build is the most crowd-pleasing.' },
   { q:'How is this different from a Spotify playlist?', a:"A Spotify playlist is just songs in a row. SetForge creates a DJ set — every track chosen for BPM, musical key, energy level, and how it flows into the next one. You also get transition notes telling you exactly how to mix. It's the difference between a list and a performance." },
-  { q:'Is there a free plan?', a:"Yes — 5 AI generations every month, forever (covers set creation, swaps, analyses, and other AI features). No credit card, no expiry. You also get a 7-day Pro trial on signup — 30 generations to try the full experience before deciding." },
+  { q:'Is there a free plan?', a:"Yes — 5 set generations every month, forever. No credit card, no expiry. You also get a 7-day Pro trial on signup — 30 generations to try the full experience before deciding." },
 ]
 
 const TIERS = [
-  { name:'Free',  price:'$0', period:'forever',  highlight:false, badge:null,          color:'#9a9ab8', desc:'Perfect for getting started.', perks:["5 AI generations / month","Sets up to 15 tracks","3 mix uploads (lifetime)","Save to library, export & share"], cta:'Start free — no card needed' },
-  { name:'Pro',   price:'$9', period:'/month',   highlight:true,  badge:'Most popular', color:M,         desc:'For DJs creating sets regularly.', perks:['150 AI generations / month','Sets up to 50 tracks','"Why this track?" explanations','20 mix uploads / month','Everything in Free'], cta:'Start 7-day free trial' },
-  { name:'Team',  price:'$19', period:'/month',  highlight:false, badge:null,          color:C,         desc:'For agencies and DJ teams.', perks:['400 AI generations / month, shared','Up to 5 team seats','Shared team library & sets','Everything in Pro'], cta:'Start 7-day free trial' },
+  { name:'Free',  price:'$0', period:'forever',  highlight:false, badge:null,          color:'#9a9ab8', desc:'Perfect for getting started.', perks:["5 set generations / month","Sets up to 15 tracks","3 mix uploads (lifetime)","Save to library, export & share"], cta:'Start free — no card needed' },
+  { name:'Pro',   price:'$9', period:'/month',   highlight:true,  badge:'Most popular', color:M,         desc:'For DJs creating sets regularly.', perks:['150 set generations / month','Sets up to 50 tracks','"Why this track?" explanations','20 mix uploads / month','Everything in Free'], cta:'Start 7-day free trial' },
+  { name:'Team',  price:'$19', period:'/month',  highlight:false, badge:null,          color:C,         desc:'For agencies and DJ teams.', perks:['400 set generations / month, shared','Up to 5 team seats','Shared team library & sets','Everything in Pro'], cta:'Start 7-day free trial' },
 ]
 
 export default function LandingPage() {
@@ -364,6 +392,10 @@ export default function LandingPage() {
         /* ── Typewriter cursor ── */
         @keyframes cursor-blink { 0%,45%{opacity:1} 50%,95%{opacity:0} 100%{opacity:1} }
         .typewriter-cursor { animation:cursor-blink 1s step-end infinite; color:${C}; font-weight:400; }
+
+        /* ── Hero waveform ── */
+        @keyframes wave-bounce { 0%,100%{transform:scaleY(.42)} 50%{transform:scaleY(1)} }
+        .wave-bar { transform-origin:bottom; animation:wave-bounce 1.15s ease-in-out infinite; display:inline-block; }
 
         /* ── Feature cards ── */
         .feature-card { transition:transform .25s,box-shadow .25s,border-color .25s; cursor:default; }
@@ -468,13 +500,12 @@ export default function LandingPage() {
 
         {/* ── HERO ── */}
         <section style={{ textAlign:'center', padding: isMobile ? '56px 18px 56px' : '100px 24px 80px', maxWidth:820, margin:'0 auto' }}>
-          {/* Floating 🎧 */}
-          <div className="float hero-item" style={{ fontSize:60, marginBottom:20, lineHeight:1, display:'inline-block', animationDelay:'0ms' }}>🎧</div>
+          <HeroWaveform />
 
           {/* Badge */}
           <div className="hero-item" style={{ display:'flex', justifyContent:'center', marginBottom:28, animationDelay:'80ms' }}>
             <div className="beginners-badge sf-mono" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'7px 18px', fontSize:12, color:C }}>
-              ✦ No DJ experience needed — seriously
+              ✦ No DJ experience needed
             </div>
           </div>
 
@@ -543,8 +574,8 @@ export default function LandingPage() {
                 <h2 style={{ fontSize:'clamp(24px,4vw,38px)', fontWeight:800, margin:'0 0 16px', lineHeight:1.2, letterSpacing:'-0.02em' }}>
                   You don&apos;t need to know anything<br />about DJing to start.
                 </h2>
-                <p style={{ fontSize:16, color:'#8a8aaa', maxWidth:580, lineHeight:1.8, marginBottom:32 }}>
-                  Setflow, Rekordbox, Traktor — those tools assume you have years of experience and a massive tagged library. SetForge assumes nothing. Just tell it what you like.
+                <p style={{ fontSize:16, color:'#8a8aaa', maxWidth:600, lineHeight:1.8, marginBottom:32 }}>
+                  Most DJ tools assume you already have a tagged library, know your music theory, and have years behind the decks. SetForge doesn&apos;t assume any of that — tell it the vibe you&apos;re going for and it builds the whole set around it. Already run Rekordbox, Serato, or Traktor? Export your finished set straight into it with one click, no extra work either way.
                 </p>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))', gap:12 }}>
                   {['No library to import','No music theory knowledge','No DJ software required','No experience necessary'].map(text => (
@@ -565,7 +596,7 @@ export default function LandingPage() {
               <div style={{ fontSize:12, color:M, fontWeight:700, letterSpacing:3, marginBottom:14, textTransform:'uppercase' }}>✦ Four tools, one platform</div>
               <h2 style={{ fontSize:'clamp(28px,4vw,46px)', fontWeight:800, margin:'0 0 12px', letterSpacing:'-0.02em' }}>Everything from your first set to a full night</h2>
               <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:560, margin:'0 auto', lineHeight:1.7 }}>
-                Most people only ever need Forge. The rest are here for when you outgrow a single generated set.
+                Build a set, grade one, test a transition, or plan a whole night — four tools that cover the job end to end.
               </p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:18 }}>
@@ -659,11 +690,11 @@ export default function LandingPage() {
               <p style={{ fontSize:16, color:'#6a6a8a', maxWidth:480, margin:'0 auto' }}>The details that matter once you&apos;re using SetForge regularly.</p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:18 }}>
-              {WORKFLOW_FEATURES.map(f => (
+              {WORKFLOW_FEATURES.map((f, i) => (
                 <div key={f.title} className="feature-card" style={{ background:'#0a0a14', border:'1px solid #1a1a2e', borderRadius:18, padding:30, backdropFilter:'blur(8px)' }}>
                   <div className="feature-icon" style={{ fontSize:36, marginBottom:16 }}>{f.icon}</div>
                   <div style={{ fontSize:17, fontWeight:700, marginBottom:6, color:'#e8e8f0' }}>{f.title}</div>
-                  <div style={{ fontSize:13, color:M, marginBottom:10, fontWeight:600 }}>{f.plain}</div>
+                  <div style={{ fontSize:13, color: i % 2 === 0 ? M : C, marginBottom:10, fontWeight:600 }}>{f.plain}</div>
                   <div style={{ fontSize:14, color:'#6a6a8a', lineHeight:1.75 }}>{f.desc}</div>
                 </div>
               ))}
@@ -760,7 +791,7 @@ export default function LandingPage() {
                 <div style={{ fontSize:12, color:C, fontWeight:700, letterSpacing:3, marginBottom:16, textTransform:'uppercase' }}>✦ Free forever plan</div>
                 <h2 style={{ fontSize:'clamp(28px,5vw,44px)', fontWeight:800, margin:'0 0 16px', lineHeight:1.2, letterSpacing:'-0.02em' }}>Ready to build your first set?</h2>
                 <p style={{ fontSize:16, color:'#6a6a8a', marginBottom:36, lineHeight:1.7 }}>
-                  Join DJs and music lovers using SetForge. Start free — no credit card, no time limit.
+                  Real tracks, real key matching, ready in about a minute. Start free — no credit card, no time limit.
                 </p>
                 <SignUpButton mode="modal">
                   <button className="btn-cta" style={{ padding:'18px 52px', borderRadius:14, fontSize:17, fontWeight:800 }}>Start free — no card needed →</button>
